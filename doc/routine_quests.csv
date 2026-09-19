@@ -1,0 +1,14 @@
+text,frequency_kind,frequency_spec,weekly_target,base_points,difficulty,intensity,flexible_within_week,counts_for_clear,is_active,degraded_text,auto_verify,launch_url,notes
+"Clean and tidy the apartment (vacuum, dishes, dust, litter box, water fountain)",weekly,SAT,1,25,E,medium,FALSE,TRUE,TRUE,Just the litter box and dishes,,,
+Take out the trash,weekly,"WED,SAT",2,5,E,low,FALSE,TRUE,TRUE,,,,"Must be done same-day, cannot be moved"
+"Cat grooming (brushing, nail trim, playtime)",weekly,SUN,1,15,E,low,FALSE,TRUE,TRUE,Just brushing and playtime,,,
+Change bedsheets,nthWeekdayOfMonth,1:SAT,1,15,M,low,TRUE,TRUE,TRUE,,,,First weekend of the month
+Grocery shopping and cleaning out the fridge,weekly,SAT,1,10,E,low,TRUE,TRUE,TRUE,,,,
+Review bills/statements,nthWeekdayOfMonth,-1:SAT,1,20,H,low,TRUE,TRUE,TRUE,"Just check credit card statement, skip full reconciliation",,,Last weekend of the month
+Workout: dumbbell training,weekly,"TUE,WED",2,20,M,medium,TRUE,TRUE,TRUE,"Light dumbbells or bodyweight, 20 minutes",calendar_workout:20,,
+Workout: running,weekly,FRI,1,25,M,high,TRUE,TRUE,TRUE,"Incline walk, 30 minutes",calendar_workout:25,,
+Workout: weight training,weekly,"SAT,SUN",2,30,M,high,TRUE,TRUE,TRUE,"Light weights or bodyweight circuit, 20 minutes",calendar_workout:40,,"May get bumped by social plans, counted weekly"
+Send job applications,weekly,"THU,SUN",2,25,M,low,TRUE,TRUE,TRUE,,,,
+"Study (examples, LeetCode, interview experience)",weekly,"MON,TUE,WED",3,20,M,low,TRUE,TRUE,TRUE,Just one easy problem,,,
+Work on project,weekly,"SAT,SUN",2,35,H,low,TRUE,TRUE,TRUE,"Just 30 minutes, no progress required",,,
+Go to the office,weekly,"MON,THU",2,5,E,low,FALSE,FALSE,FALSE,,,,"Disabled for now. Not counted toward full-clear or penalties, check-in only"

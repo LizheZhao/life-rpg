@@ -1,0 +1,22 @@
+# Xcode
+build/
+DerivedData/
+*.xcuserstate
+xcuserdata/
+*.xcscmblueprint
+*.xccheckout
+
+# Swift Package Manager
+.build/
+.swiftpm/
+
+# macOS
+.DS_Store
+
+# Claude Code
+.claude/settings.local.json
+CLAUDE.local.md
+
+# Secrets
+.env
+LifeRPG/Secrets/

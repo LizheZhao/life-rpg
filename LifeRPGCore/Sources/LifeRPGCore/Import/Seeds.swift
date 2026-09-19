@@ -1,0 +1,144 @@
+import Foundation
+
+public enum SeedError: Error, Equatable {
+    case missingColumn(String)
+    case invalidValue(row: Int, column: String, value: String)
+}
+
+public struct SideQuestSeed: Equatable, Sendable {
+    public var text: String
+    public var difficulty: Difficulty
+    public var intensity: Intensity
+    public var hiddenEligible: Bool
+    public var weekendOnly: Bool
+    public var cooldownDays: Int?
+    public var autoVerifyRule: String?
+    public var launchURLString: String?
+    public var variants: [String]
+    public var isActive: Bool
+}
+
+public struct RoutineSeed: Equatable, Sendable {
+    public var text: String
+    public var kind: RecurrenceKind
+    public var spec: String
+    public var weeklyTarget: Int
+    public var basePoints: Int
+    public var difficulty: Difficulty
+    public var intensity: Intensity
+    public var flexibleWithinWeek: Bool
+    public var countsForClear: Bool
+    public var isActive: Bool
+    public var degradedText: String?
+    public var autoVerifyRule: String?
+    public var launchURLString: String?
+}
+
+public enum SeedParser {
+    public static func sideQuests(csv: String) throws -> [SideQuestSeed] {
+        let (header, rows) = CSV.records(csv)
+        try require(["text", "difficulty", "intensity", "hidden_eligible", "weekend_only"], in: header)
+        return try rows.enumerated().map { i, r in
+            let line = i + 2   // 1-based, after header
+            let f = Fields(row: r, line: line)
+            return SideQuestSeed(
+                text: try f.nonEmpty("text"),
+                difficulty: try f.difficulty(),
+                intensity: try f.intensity(),
+                hiddenEligible: try f.bool("hidden_eligible", default: false),
+                weekendOnly: try f.bool("weekend_only", default: false),
+                cooldownDays: try f.optionalInt("cooldown_days"),
+                autoVerifyRule: f.optional("auto_verify"),
+                launchURLString: f.optional("launch_url"),
+                variants: f.optional("variants").map {
+                    $0.split(separator: "|").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+                } ?? [],
+                isActive: try f.bool("is_active", default: true)
+            )
+        }
+    }
+
+    public static func routines(csv: String) throws -> [RoutineSeed] {
+        let (header, rows) = CSV.records(csv)
+        try require(["text", "frequency_kind", "frequency_spec", "base_points", "difficulty", "intensity"], in: header)
+        return try rows.enumerated().map { i, r in
+            let line = i + 2
+            let f = Fields(row: r, line: line)
+            let kindRaw = f.value("frequency_kind")
+            guard let kind = RecurrenceKind(rawValue: kindRaw) else {
+                throw SeedError.invalidValue(row: line, column: "frequency_kind", value: kindRaw)
+            }
+            return RoutineSeed(
+                text: try f.nonEmpty("text"),
+                kind: kind,
+                spec: try f.nonEmpty("frequency_spec"),
+                weeklyTarget: try f.optionalInt("weekly_target") ?? 1,
+                basePoints: try f.int("base_points"),
+                difficulty: try f.difficulty(),
+                intensity: try f.intensity(),
+                flexibleWithinWeek: try f.bool("flexible_within_week", default: false),
+                countsForClear: try f.bool("counts_for_clear", default: true),
+                isActive: try f.bool("is_active", default: true),
+                degradedText: f.optional("degraded_text"),
+                autoVerifyRule: f.optional("auto_verify"),
+                launchURLString: f.optional("launch_url")
+            )
+        }
+    }
+
+    private static func require(_ columns: [String], in header: [String]) throws {
+        for c in columns where !header.contains(c) { throw SeedError.missingColumn(c) }
+    }
+}
+
+private struct Fields {
+    let row: [String: String]
+    let line: Int
+
+    func value(_ column: String) -> String {
+        (row[column] ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    func optional(_ column: String) -> String? {
+        let v = value(column)
+        return v.isEmpty ? nil : v
+    }
+
+    func nonEmpty(_ column: String) throws -> String {
+        guard let v = optional(column) else { throw invalid(column) }
+        return v
+    }
+
+    func int(_ column: String) throws -> Int {
+        guard let v = Int(value(column)) else { throw invalid(column) }
+        return v
+    }
+
+    func optionalInt(_ column: String) throws -> Int? {
+        guard optional(column) != nil else { return nil }
+        return try int(column)
+    }
+
+    func bool(_ column: String, default fallback: Bool) throws -> Bool {
+        switch value(column).uppercased() {
+        case "": return fallback
+        case "TRUE": return true
+        case "FALSE": return false
+        default: throw invalid(column)
+        }
+    }
+
+    func difficulty() throws -> Difficulty {
+        guard let d = Difficulty(csvCode: value("difficulty")) else { throw invalid("difficulty") }
+        return d
+    }
+
+    func intensity() throws -> Intensity {
+        guard let i = Intensity(rawValue: value("intensity").lowercased()) else { throw invalid("intensity") }
+        return i
+    }
+
+    private func invalid(_ column: String) -> SeedError {
+        .invalidValue(row: line, column: column, value: value(column))
+    }
+}
