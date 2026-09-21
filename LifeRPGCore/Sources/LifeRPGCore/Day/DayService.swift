@@ -1,24 +1,22 @@
 import Foundation
 import SwiftData
 
-/// The per-day inputs `ensureToday` needs but Stage 1 cannot measure yet.
+/// The per-day inputs `ensureToday` needs but cannot measure itself.
 ///
-/// Stage 3 fills `tier` / `onCycle` / `energy` / `readiness` from HealthKit and Stage 2 fills
-/// `routineLoad` from the frequency scheduler; until then the defaults stand in, which is why they
-/// are a parameter rather than something `ensureToday` decides for itself.
+/// Stage 3 fills `tier` / `onCycle` / `energy` / `readiness` from HealthKit; until then the
+/// defaults stand in, which is why they are a parameter rather than something `ensureToday`
+/// decides. Routine load is **not** here: it is counted from the occurrences `ensureToday`
+/// schedules, so the number that sizes the random slots and the routines on the page can't disagree.
 public struct DayInputs: Equatable, Sendable {
     public var tier: Tier
     public var onCycle: Bool
-    /// Active routines due today, including `countsForClear = false` ones.
-    public var routineLoad: Int
     public var energy: Double
     public var readiness: Int
 
-    public init(tier: Tier = .normal, onCycle: Bool = false, routineLoad: Int = 0,
+    public init(tier: Tier = .normal, onCycle: Bool = false,
                 energy: Double = 1.0, readiness: Int = 75) {
         self.tier = tier
         self.onCycle = onCycle
-        self.routineLoad = routineLoad
         self.energy = energy
         self.readiness = readiness
     }
@@ -38,6 +36,10 @@ public enum DayService {
 
     public static func quests(on dayKey: String, in context: ModelContext) throws -> [DailyQuest] {
         try context.fetch(FetchDescriptor<DailyQuest>(predicate: #Predicate { $0.dayKey == dayKey }))
+    }
+
+    public static func occurrences(dueOn dayKey: String, in context: ModelContext) throws -> [RoutineOccurrence] {
+        try context.fetch(FetchDescriptor<RoutineOccurrence>(predicate: #Predicate { $0.dueDayKey == dayKey }))
     }
 
     /// Every day that is over but not yet settled, oldest first: `[lastProcessed … yesterday]`.
@@ -63,7 +65,11 @@ public enum DayService {
         return days
     }
 
-    /// Generates today's context and random slots, once.
+    /// Generates today's context, today's routine occurrences and random slots, once.
+    ///
+    /// The routines come first because their count sizes the random slots (`PLAN.md` §3). Only
+    /// routines **due today** count toward that load; an overdue one carried from an earlier day
+    /// is already on the page but doesn't shrink today's random draw.
     ///
     /// Idempotency is keyed on `DailyContext`, not on `DailyQuest`: a day where every draw came
     /// back nil (small library, everything on cooldown) still counts as generated, otherwise the
@@ -74,11 +80,21 @@ public enum DayService {
                                    in timeZone: TimeZone = .current,
                                    inputs: DayInputs = DayInputs(),
                                    rng: inout some RandomNumberGenerator,
-                                   settle: (String, ModelContext) throws -> Void = { _, _ in }) throws -> DailyContext {
+                                   settle: ((String, ModelContext) throws -> Void)? = nil) throws -> DailyContext {
         let today = now.dayKey(in: timeZone)          // taken once; everything below uses the key
-        try catchUp(context, openedOn: today, in: timeZone, settle: settle)
+        // Nil = the real settlement (`Overdue.settle`); tests may pass their own.
+        try catchUp(context, openedOn: today, in: timeZone,
+                    settle: settle ?? { try Overdue.settle($0, in: $1, timeZone: timeZone, now: now) })
 
         if let existing = try dailyContext(for: today, in: context) { return existing }
+
+        let weekKey = DayKey.weekKey(of: today, in: timeZone) ?? now.weekKey(in: timeZone)
+        let due = Schedule.dueRoutines(try context.fetch(FetchDescriptor<RoutineTask>()),
+                                       occurrences: try context.fetch(FetchDescriptor<RoutineOccurrence>()),
+                                       on: today, in: timeZone)
+        for routine in due {
+            context.insert(RoutineOccurrence(routine: routine, dueDayKey: today, weekKey: weekKey))
+        }
 
         let day = DailyContext()
         day.dayKey = today
@@ -86,11 +102,10 @@ public enum DayService {
         day.onCycle = inputs.onCycle
         day.energy = inputs.energy
         day.readiness = inputs.readiness
-        day.routineLoad = inputs.routineLoad
-        day.randomSlots = Composition.slots(routineLoad: inputs.routineLoad)
+        day.routineLoad = due.count
+        day.randomSlots = Composition.slots(routineLoad: due.count)
         context.insert(day)
 
-        let weekKey = DayKey.weekKey(of: today, in: timeZone) ?? now.weekKey(in: timeZone)
         let templates = try Sampling.activeTemplates(context)
         let allowed = Composition.allowedIntensities(tier: inputs.tier, onCycle: inputs.onCycle)
         var drawn: Set<UUID> = []
@@ -137,8 +152,7 @@ public enum DayService {
         let randomsDone = quests
             .filter { !$0.isHiddenSlot && !$0.replaced && $0.slot != .epic }
             .allSatisfy { $0.completedAt != nil }
-        let occurrences = try context.fetch(FetchDescriptor<RoutineOccurrence>(
-            predicate: #Predicate { $0.dueDayKey == dayKey }))
+        let occurrences = try occurrences(dueOn: dayKey, in: context)
         // `countsForClear = false` routines (the check-in kind) are recorded but never gate the
         // day — PLAN.md §3. The flag is read off the occurrence's own snapshot, not the routine.
         let routinesDone = occurrences
@@ -210,5 +224,19 @@ extension DailyQuest {
                                                         : Array(repeating: "", count: group.count)
         trivialDone = Array(repeating: false, count: group.count)
         textSnapshot = group.map(\.text).joined(separator: " · ")
+    }
+}
+
+extension RoutineOccurrence {
+    /// One routine due on one day. Text, points and the full-clear flag are snapshotted, so
+    /// editing the routine later can't rewrite what was asked of you that day.
+    public convenience init(routine: RoutineTask, dueDayKey: String, weekKey: String) {
+        self.init()
+        routineID = routine.id
+        self.dueDayKey = dueDayKey
+        self.weekKey = weekKey
+        textSnapshot = routine.text
+        basePoints = routine.basePoints
+        countsForClear = routine.countsForClear
     }
 }

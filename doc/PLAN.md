@@ -59,7 +59,7 @@ Friday with 1 routine gets 3 random quests; Wednesday with 3 gets 2; Saturday wi
 
 ### Hidden unlock
 
-Unlocks once all `counts_for_clear` routines and all random slots for the day are completed. On heavy-load days there are more routines but fewer random quests, which actually makes unlocking easier — a bit of compensation for a hard day.
+Unlocks once all `counts_for_clear` routines and all random slots for the day are completed. Flexible routines due that day count too: moving one to a later day avoids a penalty, but it costs that day's hidden quest. On heavy-load days there are more routines but fewer random quests, which actually makes unlocking easier — a bit of compensation for a hard day.
 
 ### Epic
 
@@ -107,14 +107,14 @@ The value is drawn once, when the day is generated, and snapshotted onto the `Da
 | kind | spec example | use |
 |---|---|---|
 | weekly | `MON,THU` | fixed weekdays |
-| everyNDays | `3` | computed from last completion date |
+| everyNDays | `3` | computed from last completion date; never completed = due at once; a skipped round restarts the count from the skip day |
 | monthly | `15` | a specific day of the month |
-| nthWeekdayOfMonth | `1:SAT` / `-1:SAT` | first / last Saturday of the month |
-| everyNWeeksOnWeekday | `2:SAT` | biweekly Saturday, needs a starting-week anchor (`anchorWeekKey`); no routine uses it right now |
+| nthWeekdayOfMonth | `1:SAT` / `-1:SAT` | first / last Saturday of the month; n is 1…4 or -1 (`5:SAT` is rejected — most months have no fifth) |
+| everyNWeeksOnWeekday | `2:SAT` | biweekly Saturday; `anchorWeekKey` is set by the first completion, due every week until then; no routine uses it right now |
 
 ### Movable within the week (flexible_within_week)
 
-When Saturday's weight training gets broken by social plans, it's allowed to shift to any day that week — the check changes from "was it done today" to "has the weekly count hit `weekly_target`," settled on Sunday to determine any shortfall. Exercise, project work, job applications, and studying all have this on; taking out the trash and cleaning the litter box must be done same-day, so it's off.
+When Saturday's weight training gets broken by social plans, it's allowed to shift to any day that week — the check changes from "was it done today" to "has the weekly count hit `weekly_target`," settled on Sunday to determine any shortfall. Once the week's target is met (ahead completions included), its remaining scheduled days that week don't generate it at all. Exercise, project work, job applications, and studying all have this on; taking out the trash and cleaning the litter box must be done same-day, so it's off.
 
 ### Degradable (degraded_text)
 
@@ -596,9 +596,11 @@ The exact `weekly_target` number for exercise routines — weight training is cu
 
 Probability of the T group appearing — currently envisioned as guaranteed at very-low energy, 40% otherwise (only when the composition has an E slot for it to take); tune after use.
 
-Whether the overdue penalty should still be scaled by readiness — it currently isn't, following the worked example (base 50 → −25 / −38 / −50).
+~~Whether the overdue penalty should still be scaled by readiness~~ **Decided (Stage 2):** it is not — fixed on base (base 50 → −25 / −38 / −50).
 
-Flexible routines and the escalating penalty: the Sunday shortfall has no "next day" within the week — does it escalate into Mon/Tue of the following week, or is it a single deduction on Sunday?
+~~Flexible routines and the escalating penalty~~ **Decided (Stage 2):** a single deduction on Sunday, 50% of base per occurrence short of `weekly_target`; flexible routines have no daily ladder and nothing escalates into the next week.
+
+~~Doing a flexible routine earlier than its due day~~ **Decided (Stage 2):** it is logged ahead against the next occurrence still to come that week, created on the spot and completed at full pay; that day then doesn't generate it again or count it as load.
 
 ~~Weekend H exposure~~ **Decided (Stage 1):** fewer slots drop from the hard end on every day of the week, weekends included, so no H is guaranteed and `weekend_only` H quests stay rare. Revisit once there is enough real data to say how rare; guaranteeing a weekend H slot would put the hardest random quest on the heaviest routine day, which is the opposite of what the dynamic slot count is for.
 

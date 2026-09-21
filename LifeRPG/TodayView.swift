@@ -3,7 +3,8 @@ import SwiftData
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// The daily page: HUD, today's random slots, and the hidden quest once the day is cleared.
+/// The daily page: HUD, routines (overdue pinned on top), today's random slots, and the hidden
+/// quest once the day is cleared.
 ///
 /// There is no undo anywhere on this page — completion writes a ledger entry and starts the
 /// template's cooldown, both final. That is why every tap goes through a confirmation.
@@ -18,8 +19,13 @@ struct TodayView: View {
     @Query(sort: \DailyQuest.dayKey) private var allQuests: [DailyQuest]
     @Query private var ledger: [LedgerEntry]
     @Query private var contexts: [DailyContext]
+    @Query private var occurrences: [RoutineOccurrence]
+    @Query private var routines: [RoutineTask]
 
     @State private var pending: PendingAction?
+    /// Collapsed by default: it lists every flexible routine still short this week, which is most
+    /// of them early in the week, and none of it is today's work.
+    @AppStorage("aheadExpanded") private var aheadExpanded = false
     @State private var roll: Roll?
     @State private var actionError: String?
     @State private var exportingJSON = false
@@ -44,12 +50,16 @@ struct TodayView: View {
     private enum PendingAction {
         case quest(DailyQuest)
         case trivialItem(DailyQuest, Int)
+        case routine(RoutineOccurrence)
+        case ahead(RoutineTask)
 
         var label: String {
             switch self {
             case .quest(let q): [q.textSnapshot, q.variantSnapshot]
                     .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " — ")
             case .trivialItem(let q, let i): q.trivialGroup.indices.contains(i) ? q.trivialGroup[i] : ""
+            case .routine(let o): o.textSnapshot
+            case .ahead(let r): "\(r.text) (ahead of schedule)"
             }
         }
     }
@@ -75,6 +85,24 @@ struct TodayView: View {
     }
     private var hiddenQuest: DailyQuest? { quests.first(where: \.isHiddenSlot) }
 
+    private var todaysRoutines: [RoutineOccurrence] {
+        occurrences.filter { $0.dueDayKey == today }.sorted { $0.textSnapshot < $1.textSnapshot }
+    }
+    private var flexibleIDs: Set<UUID> { Set(routines.filter(\.flexibleWithinWeek).map(\.id)) }
+    // Which rows are overdue, open this week or in the backlog is Core's rule; these only hand
+    // it the rows the queries already hold.
+    private var overdueRoutines: [RoutineOccurrence] {
+        Schedule.overdue(occurrences, flexible: flexibleIDs, on: today)
+    }
+    private var thisWeekRoutines: [RoutineOccurrence] {
+        Schedule.openThisWeek(occurrences, flexible: flexibleIDs, on: today)
+    }
+    private var backlog: [RoutineOccurrence] { Array(Schedule.backlog(occurrences).prefix(30)) }
+    private var aheadCandidates: [Schedule.Ahead] {
+        Schedule.aheadCandidates(routines, occurrences: occurrences, on: today)
+    }
+    private var doneAhead: [RoutineOccurrence] { Schedule.doneAhead(occurrences, on: today) }
+
     // Both rules live in Core; this only hands over the rows the query already has.
     private var balance: Int { Economy.balance(ledger) }
     private var totalEarned: Int { Economy.totalEarned(ledger) }
@@ -97,6 +125,15 @@ struct TodayView: View {
                 }
 
                 Section { hud } header: { Text(today) }
+
+                // Only what is on today: due today, plus fixed routines that are overdue — those
+                // cost points every day they stay undone, so they are never folded away.
+                if !overdueRoutines.isEmpty || !todaysRoutines.isEmpty {
+                    Section("Routines") {
+                        ForEach(overdueRoutines) { routineRow($0, note: .overdue) }
+                        ForEach(todaysRoutines) { routineRow($0) }
+                    }
+                }
 
                 Section("Random slots") {
                     if randomQuests.isEmpty {
@@ -125,6 +162,78 @@ struct TodayView: View {
                         } else {
                             Label("Clear every slot to unlock", systemImage: "lock")
                                 .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+
+                // The rest of the week's flexible work, folded: sessions from earlier days still
+                // open (full pay until Sunday), what was pulled forward today, and what can be.
+                // Saturday's session done today counts as Saturday's, and Saturday no longer carries it.
+                if !thisWeekRoutines.isEmpty || !aheadCandidates.isEmpty || !doneAhead.isEmpty {
+                    Section {
+                        if aheadExpanded {
+                            ForEach(thisWeekRoutines) { routineRow($0, note: .thisWeek) }
+                            ForEach(doneAhead) { o in
+                                HStack(alignment: .firstTextBaseline) {
+                                    badge("R", range: nil)
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(o.textSnapshot)
+                                        Text("Done ahead · counts for \(o.dueDayKey)")
+                                            .font(.caption).foregroundStyle(.secondary)
+                                    }
+                                    Spacer()
+                                    Text("+\(o.awardedPoints ?? 0)").monospacedDigit().foregroundStyle(.green)
+                                }
+                            }
+                            ForEach(aheadCandidates, id: \.routine.id) { c in
+                                let pays = Scoring.routinePoints(basePoints: c.routine.basePoints, tier: tier, late: false)
+                                HStack(alignment: .firstTextBaseline) {
+                                    badge("R", range: pays...pays)
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(c.routine.text)
+                                        Text("\(c.doneThisWeek)/\(c.routine.weeklyTarget) this week · next due \(c.nextDueDayKey)")
+                                            .font(.caption).foregroundStyle(.secondary)
+                                    }
+                                    Spacer()
+                                    Button("Do now") { pending = .ahead(c.routine) }
+                                        .buttonStyle(.bordered)
+                                }
+                            }
+                        }
+                    } header: {
+                        Button {
+                            withAnimation { aheadExpanded.toggle() }
+                        } label: {
+                            HStack {
+                                Text("Ahead this week")
+                                Text("\(thisWeekRoutines.count + aheadCandidates.count)").monospacedDigit()
+                                if !doneAhead.isEmpty {
+                                    Text("· \(doneAhead.count) done").monospacedDigit()
+                                }
+                                Spacer()
+                                Image(systemName: "chevron.right")
+                                    .rotationEffect(.degrees(aheadExpanded ? 90 : 0))
+                            }
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+
+                // Skipped and never done: read-only, a record rather than a to-do.
+                if !backlog.isEmpty {
+                    Section("Backlog") {
+                        ForEach(backlog) { o in
+                            HStack(alignment: .firstTextBaseline) {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(o.textSnapshot).foregroundStyle(.secondary)
+                                    Text("Due \(o.dueDayKey)").font(.caption).foregroundStyle(.tertiary)
+                                }
+                                Spacer()
+                                if o.penaltyApplied > 0 {
+                                    Text("−\(o.penaltyApplied)").monospacedDigit().foregroundStyle(.red)
+                                }
+                            }
                         }
                     }
                 }
@@ -244,6 +353,42 @@ struct TodayView: View {
         }
     }
 
+    private enum RoutineNote { case overdue, thisWeek }
+
+    /// A routine pays a fixed amount, so the badge shows one number rather than a range — the
+    /// same number `Completion.completeRoutine` will pay today (half for an overdue one).
+    private func routineRow(_ occurrence: RoutineOccurrence, note: RoutineNote? = nil) -> some View {
+        let flexible = occurrence.routineID.map(flexibleIDs.contains) ?? false
+        let pays = Completion.routinePayout(occurrence, flexible: flexible, on: today, tier: tier)
+        return HStack(alignment: .firstTextBaseline) {
+            badge("R", range: pays.map { $0...$0 })
+            VStack(alignment: .leading, spacing: 2) {
+                Text(occurrence.textSnapshot)
+                if occurrence.completedDayKey == nil {
+                    switch note {
+                    case .overdue:
+                        Text("Overdue −50%").font(.caption).foregroundStyle(.red)
+                    case .thisWeek:
+                        Text("Not done · due \(occurrence.dueDayKey)")
+                            .font(.caption).foregroundStyle(.secondary)
+                    case nil:
+                        EmptyView()
+                    }
+                }
+                if !occurrence.countsForClear {
+                    Text("Doesn't gate the hidden quest").font(.caption).foregroundStyle(.secondary)
+                }
+            }
+            Spacer()
+            if let points = occurrence.awardedPoints {
+                Text("+\(points)").monospacedDigit().foregroundStyle(.green)
+            } else {
+                Button("Done") { pending = .routine(occurrence) }
+                    .buttonStyle(.bordered)
+            }
+        }
+    }
+
     /// Three micro-actions in one E slot, scored 12 as a whole once all three are ticked.
     private func trivialGroupRow(_ quest: DailyQuest) -> some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -312,6 +457,11 @@ struct TodayView: View {
                                                                in: context, rng: &rng) {
                     reveal(points, for: quest)
                 }
+            case .routine(let occurrence):
+                // A fixed payout, nothing rolled — the number lands on the row, no reveal.
+                try Completion.completeRoutine(occurrence, on: today, tier: tier, in: context)
+            case .ahead(let routine):
+                try Completion.completeAhead(routine, on: today, tier: tier, in: context)
             }
             actionError = nil
         } catch {

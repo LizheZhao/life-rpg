@@ -6,6 +6,11 @@ import SwiftUI
 /// failed seed or an unreadable raw value gets noticed at all.
 struct DebugView: View {
     let seedStatus: String
+    /// The app's current day — shifted by time travel on the simulator.
+    let today: String
+    #if targetEnvironment(simulator)
+    @AppStorage("debugDayOffset") private var dayOffset = 0
+    #endif
 
     @Environment(\.modelContext) private var modelContext
     @State private var audit: [StoreAudit.Issue] = []
@@ -71,6 +76,27 @@ struct DebugView: View {
                     Text("Marks today's quests undone, deletes the ledger entries that paid for them, and removes the hidden quest so it can be revealed again. The same quests come back — only the day's results are undone.")
                 }
 
+                #if targetEnvironment(simulator)
+                Section {
+                    HStack {
+                        Text("App day")
+                        Spacer()
+                        Text(dayOffset == 0 ? today : "\(today)  (+\(dayOffset))").monospacedDigit()
+                    }
+                    Button { dayOffset += 1 } label: {
+                        Label("Advance one day", systemImage: "forward.frame")
+                    }
+                    Button { dayOffset = 0 } label: {
+                        Label("Back to the real date", systemImage: "calendar")
+                    }
+                    .disabled(dayOffset == 0)
+                } header: {
+                    Text("Time travel (simulator only)")
+                } footer: {
+                    Text("Each step is like opening the app the next morning: yesterday is judged, today is generated. Going back does not undo anything — future days stay generated. To start clean, delete the app from the simulator.")
+                }
+                #endif
+
                 Section("Quests by difficulty") {
                     ForEach(Difficulty.allCases, id: \.self) { d in
                         row(d.rawValue, questTemplates.filter { $0.difficulty == d }.count)
@@ -102,7 +128,7 @@ struct DebugView: View {
 
     private func reopenToday() {
         do {
-            let result = try DayReset.reopen(modelContext, dayKey: Date().dayKey)
+            let result = try DayReset.reopen(modelContext, dayKey: today)
             resetResult = result.description
             audit = try StoreAudit.issues(modelContext)
         } catch {
@@ -112,6 +138,6 @@ struct DebugView: View {
 }
 
 #Preview {
-    DebugView(seedStatus: "Preview")
+    DebugView(seedStatus: "Preview", today: Date().dayKey)
         .modelContainer(for: LifeRPGSchema.models, inMemory: true)
 }

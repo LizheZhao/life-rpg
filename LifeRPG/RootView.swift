@@ -11,26 +11,34 @@ struct RootView: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var today = Date().dayKey
     @State private var generationError: String?
+    #if targetEnvironment(simulator)
+    // Debug time travel: days added to the real clock. Simulator only — it writes future-dated
+    // rows that never go away, which must never happen to the real store on the phone.
+    @AppStorage("debugDayOffset") private var dayOffset = 0
+    #else
+    private let dayOffset = 0
+    #endif
 
     var body: some View {
         TabView {
             TodayView(today: today, generationError: generationError)
                 .tabItem { Label("Today", systemImage: "checklist") }
-            DebugView(seedStatus: seedStatus)
+            DebugView(seedStatus: seedStatus, today: today)
                 .tabItem { Label("Debug", systemImage: "wrench.and.screwdriver") }
         }
         .task { refresh() }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { refresh() }
         }
+        .onChange(of: dayOffset) { refresh() }
     }
 
     private func refresh() {
-        let now = Date()
+        let now = LifeCalendar.gregorian().date(byAdding: .day, value: dayOffset, to: Date()) ?? Date()
         var rng = SystemRandomNumberGenerator()
         do {
-            // Stage 1 inputs are the defaults: tier `normal`, no routine load. Stage 2 fills the
-            // load from the frequency scheduler, Stage 3 the tier from HealthKit.
+            // Tier is still the default `normal` until Stage 3 reads HealthKit. Routine load is
+            // not an input: `ensureToday` schedules today's routines and counts them itself.
             try DayService.ensureToday(context, now: now, inputs: DayInputs(), rng: &rng)
             today = now.dayKey
             generationError = nil

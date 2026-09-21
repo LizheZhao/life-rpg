@@ -48,15 +48,93 @@ struct DayServiceTests {
         #expect(try DayService.dailyContext(for: friday, in: ctx) != nil)
     }
 
-    @Test func routineLoadShrinksTheSlots() throws {
+    private func seedRoutines(_ ctx: ModelContext) throws {
+        // Header only on the side: the stock library supplies the quests.
+        let sideHeader = try Fixtures.csv("side_quests.csv").split(separator: "\n")[0] + "\n"
+        try SeedImporter.mergeSeeds(ctx, sideQuestsCSV: String(sideHeader),
+                                    routinesCSV: Fixtures.csv("routine_quests.csv"))
+    }
+
+    /// `PLAN.md` §3: "Saturday with 5 gets only 1". The load is counted from the seed, not passed in.
+    @Test func saturdayRoutinesShrinkTheSlotsToOne() throws {
         let ctx = try Fixtures.context()
         Fixtures.stockLibrary(ctx)
+        try seedRoutines(ctx)
         var rng = SeededRNG(seed: 4)
-        let day = try DayService.ensureToday(ctx, now: Fixtures.date(saturday), in: tz,
-                                             inputs: DayInputs(routineLoad: 5), rng: &rng)
+        let day = try DayService.ensureToday(ctx, now: Fixtures.date(saturday), in: tz, rng: &rng)
         #expect(day.routineLoad == 5)
         #expect(day.randomSlots == 1)
         #expect(try DayService.quests(on: saturday, in: ctx).count == 1)
+        #expect(try DayService.occurrences(dueOn: saturday, in: ctx).count == 5)
+    }
+
+    @Test func fridayWithOneRoutineKeepsThreeSlots() throws {
+        let ctx = try Fixtures.context()
+        Fixtures.stockLibrary(ctx)
+        try seedRoutines(ctx)
+        var rng = SeededRNG(seed: 4)
+        let day = try DayService.ensureToday(ctx, now: Fixtures.date(friday), in: tz, rng: &rng)
+        #expect(day.routineLoad == 1)
+        #expect(day.randomSlots == 3)
+    }
+
+    @Test func occurrencesSnapshotTheRoutine() throws {
+        let ctx = try Fixtures.context()
+        let r = RoutineTask()
+        r.text = "Take out the trash"; r.spec = "SAT"; r.basePoints = 5; r.countsForClear = false
+        ctx.insert(r)
+        var rng = SeededRNG(seed: 1)
+        try DayService.ensureToday(ctx, now: Fixtures.date(saturday), in: tz, rng: &rng)
+
+        let o = try #require(try DayService.occurrences(dueOn: saturday, in: ctx).first)
+        #expect(o.routineID == r.id)
+        #expect(o.weekKey == "2026-W38")
+        #expect(o.basePoints == 5)
+        #expect(!o.countsForClear)
+
+        r.text = "Renamed"; r.basePoints = 50          // later edits don't reach history
+        #expect(o.textSnapshot == "Take out the trash")
+        #expect(o.basePoints == 5)
+    }
+
+    @Test func routinesAreScheduledOncePerDay() throws {
+        let ctx = try Fixtures.context()
+        try seedRoutines(ctx)
+        var rng = SeededRNG(seed: 1)
+        try DayService.ensureToday(ctx, now: Fixtures.date(saturday, hour: 8), in: tz, rng: &rng)
+        try DayService.ensureToday(ctx, now: Fixtures.date(saturday, hour: 22), in: tz, rng: &rng)
+        #expect(try ctx.fetch(FetchDescriptor<RoutineOccurrence>()).count == 5)
+    }
+
+    /// Friday's run is still open on Saturday (day 2 of its round), but only routines due Saturday
+    /// size Saturday's random draw.
+    @Test func overdueRoutinesDontCountTowardLoad() throws {
+        let ctx = try Fixtures.context()
+        Fixtures.stockLibrary(ctx)
+        try seedRoutines(ctx)
+        var rng = SeededRNG(seed: 1)
+        try DayService.ensureToday(ctx, now: Fixtures.date(friday), in: tz, rng: &rng)
+        let day = try DayService.ensureToday(ctx, now: Fixtures.date(saturday), in: tz, rng: &rng)
+        #expect(day.routineLoad == 5)
+        #expect(try DayService.occurrences(dueOn: friday, in: ctx).allSatisfy { $0.completedDayKey == nil })
+    }
+
+    @Test func hiddenStaysLockedUntilTheRoutinesAreDone() throws {
+        let ctx = try Fixtures.context()
+        Fixtures.stockLibrary(ctx)
+        let r = RoutineTask(); r.text = "Workout: running"; r.spec = "FRI"; r.basePoints = 25
+        ctx.insert(r)
+        var rng = SeededRNG(seed: 1)
+        try DayService.ensureToday(ctx, now: Fixtures.date(friday), in: tz, rng: &rng)
+        for q in try DayService.quests(on: friday, in: ctx) {
+            if q.isTrivialGroup { q.trivialDone = [true, true, true] }
+            try Completion.complete(q, tier: .normal, in: ctx, rng: &rng)
+        }
+        #expect(try !DayService.hiddenUnlocked(on: friday, in: ctx))
+
+        let o = try #require(try DayService.occurrences(dueOn: friday, in: ctx).first)
+        try Completion.completeRoutine(o, on: friday, tier: .normal, in: ctx, timeZone: tz)
+        #expect(try DayService.hiddenUnlocked(on: friday, in: ctx))
     }
 
     @Test func drawsAreNeverRepeatedWithinADay() throws {
@@ -277,6 +355,27 @@ struct DayServiceTests {
             quest.trivialDone = quest.trivialDone.map { _ in true }
             try Completion.complete(quest, tier: .normal, in: ctx, rng: &rng)
         }
+        #expect(try DayService.hiddenUnlocked(on: friday, in: ctx))
+    }
+
+    /// Flexible only moves the *penalty* to Sunday; the day it is due, it still has to be done for
+    /// that day's full clear. Moving it to a later day costs that day's hidden quest.
+    @Test func aFlexibleRoutineDueTodayGatesHidden() throws {
+        let ctx = try Fixtures.context()
+        Fixtures.stockLibrary(ctx)
+        let r = RoutineTask(); r.text = "Workout: running"; r.spec = "FRI"
+        r.flexibleWithinWeek = true; r.basePoints = 25
+        ctx.insert(r)
+        var rng = SeededRNG(seed: 21)
+        try DayService.ensureToday(ctx, now: Fixtures.date(friday), in: tz, rng: &rng)
+        for quest in try DayService.quests(on: friday, in: ctx) {
+            quest.trivialDone = quest.trivialDone.map { _ in true }
+            try Completion.complete(quest, tier: .normal, in: ctx, rng: &rng)
+        }
+        #expect(try !DayService.hiddenUnlocked(on: friday, in: ctx))
+
+        let occurrence = try #require(try DayService.occurrences(dueOn: friday, in: ctx).first)
+        try Completion.completeRoutine(occurrence, on: friday, tier: .normal, in: ctx, timeZone: tz)
         #expect(try DayService.hiddenUnlocked(on: friday, in: ctx))
     }
 

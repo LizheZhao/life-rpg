@@ -30,6 +30,27 @@ public enum Scoring {
         return rounded(Double(base) * effortMultiplier(tier)) + (isHidden ? hiddenBonus : 0)
     }
 
+    /// A routine pays its fixed `basePoints`, nothing rolled: `round(base × m)` on the due day,
+    /// `round(base × 0.5 × m)` as a late make-up on day 2–3 (`PLAN.md` §4). `m` is the tier of
+    /// the day it is actually done.
+    public static func routinePoints(basePoints: Int, tier: Tier, late: Bool) -> Int {
+        rounded(Double(basePoints) * (late ? 0.5 : 1.0) * effortMultiplier(tier))
+    }
+
+    /// What an overdue routine costs at the end of round day 1 / 2 / 3: 50% / 75% / 100% of base
+    /// (`PLAN.md` §4). Fixed on base, never scaled by the day's tier or readiness.
+    public static func overduePenalty(basePoints: Int, roundDay: Int) -> Int {
+        let rate: [Double] = [0.5, 0.75, 1.0]
+        guard (1...rate.count).contains(roundDay) else { return 0 }
+        return rounded(Double(basePoints) * rate[roundDay - 1])
+    }
+
+    /// A flexible routine's Sunday settlement: 50% of base per occurrence short of the target,
+    /// charged once — no escalation into the next week.
+    public static func flexibleShortfallPenalty(basePoints: Int) -> Int {
+        rounded(Double(basePoints) * 0.5)
+    }
+
     public static func questPoints(_ quest: DailyQuest, tier: Tier,
                                    rng: inout some RandomNumberGenerator) -> Int {
         questPoints(slot: quest.slot,

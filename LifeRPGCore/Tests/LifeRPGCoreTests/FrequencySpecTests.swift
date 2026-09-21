@@ -37,6 +37,7 @@ struct FrequencySpecTests {
         (.monthly, "32"),
         (.nthWeekdayOfMonth, "1:SATURDAY"),
         (.nthWeekdayOfMonth, "SAT"),
+        (.nthWeekdayOfMonth, "5:SAT"),
         (.nthWeekdayOfMonth, "6:SAT"),
         (.nthWeekdayOfMonth, "-2:SAT"),
         (.nthWeekdayOfMonth, "1:SAT:2"),

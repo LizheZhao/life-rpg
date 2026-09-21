@@ -12,12 +12,20 @@ public enum Completion {
         case alreadyCompleted
         case trivialGroupIncomplete(remaining: Int)
         case indexOutOfRange
+        case skipped
+        /// A flexible routine with nothing left to come due this week (or not flexible at all).
+        case nothingAhead
+        /// Before the due day, or after day 3 of the round (day 4 is the auto-skip).
+        case outsideRound(dueDayKey: String, dayKey: String)
 
         public var description: String {
             switch self {
             case .alreadyCompleted: "already completed"
             case .trivialGroupIncomplete(let n): "\(n) item(s) of the T group still undone"
             case .indexOutOfRange: "no such T group item"
+            case .skipped: "already skipped"
+            case .nothingAhead: "nothing left to do ahead this week"
+            case .outsideRound(let due, let day): "due \(due), can't be completed on \(day)"
             }
         }
     }
@@ -89,6 +97,120 @@ public enum Completion {
             quest.trivialDone[index] = false      // same rule: an unsaved tick is not a tick
             throw error
         }
+    }
+
+    /// What completing `occurrence` on `dayKey` pays, or nil when it can't be completed that day.
+    ///
+    /// A fixed routine: full on the due day, half as a late make-up on round day 2–3, closed from
+    /// day 4. A flexible one: full on any day from its due day to the end of that week — moving it
+    /// inside the week is the point, not lateness (`PLAN.md` §4).
+    public static func routinePayout(_ occurrence: RoutineOccurrence, flexible: Bool,
+                                     on dayKey: String, tier: Tier,
+                                     in timeZone: TimeZone = .current) -> Int? {
+        if flexible {
+            guard occurrence.dueDayKey <= dayKey,
+                  DayKey.weekKey(of: dayKey, in: timeZone) == occurrence.weekKey else { return nil }
+            return Scoring.routinePoints(basePoints: occurrence.basePoints, tier: tier, late: false)
+        }
+        guard let roundDay = Schedule.roundDay(due: occurrence.dueDayKey, on: dayKey, in: timeZone) else {
+            return nil
+        }
+        return Scoring.routinePoints(basePoints: occurrence.basePoints, tier: tier, late: roundDay > 1)
+    }
+
+    /// Completes a routine occurrence on `dayKey`, paying `routinePayout`. Returns the points.
+    ///
+    /// Also writes the routine's `lastCompletedDayKey` (what `everyNDays` counts from) and, for
+    /// `everyNWeeksOnWeekday`, sets `anchorWeekKey` on the first completion ever — the cadence
+    /// starts from the week you actually did it, not from an arbitrary date in the CSV.
+    @discardableResult
+    public static func completeRoutine(_ occurrence: RoutineOccurrence,
+                                       on dayKey: String,
+                                       tier: Tier,
+                                       in context: ModelContext,
+                                       now: Date = Date(),
+                                       timeZone: TimeZone = .current) throws -> Int {
+        guard occurrence.completedDayKey == nil else { throw Failure.alreadyCompleted }
+        guard !occurrence.skipped else { throw Failure.skipped }
+        let routine = try routine(of: occurrence, in: context)
+        guard let points = routinePayout(occurrence, flexible: routine?.flexibleWithinWeek ?? false,
+                                         on: dayKey, tier: tier, in: timeZone) else {
+            throw Failure.outsideRound(dueDayKey: occurrence.dueDayKey, dayKey: dayKey)
+        }
+        let lastCompletedBefore = routine?.lastCompletedDayKey
+        let anchorBefore = routine?.anchorWeekKey
+
+        occurrence.completedDayKey = dayKey
+        occurrence.completedAt = now
+        occurrence.awardedPoints = points
+        routine.map { stamp($0, completedOn: dayKey, weekKey: occurrence.weekKey) }
+        let entry = Economy.record(context, kind: .routine, points: points, dayKey: dayKey,
+                                   refID: occurrence.id, note: occurrence.textSnapshot, now: now)
+
+        do {
+            try context.save()
+        } catch {
+            // Same rule as `complete`: nothing is done until its ledger entry is on disk.
+            occurrence.completedDayKey = nil
+            occurrence.completedAt = nil
+            occurrence.awardedPoints = nil
+            routine?.lastCompletedDayKey = lastCompletedBefore
+            routine?.anchorWeekKey = anchorBefore
+            context.delete(entry)
+            throw error
+        }
+        return points
+    }
+
+    /// Does a flexible routine ahead of its due day: creates the next occurrence still to come
+    /// this week (`Schedule.aheadCandidates`) and completes it today, at full pay. When that day
+    /// arrives the occurrence already exists, so it is neither created again nor counted as load.
+    @discardableResult
+    public static func completeAhead(_ routine: RoutineTask,
+                                     on dayKey: String,
+                                     tier: Tier,
+                                     in context: ModelContext,
+                                     now: Date = Date(),
+                                     timeZone: TimeZone = .current) throws -> Int {
+        let all = try context.fetch(FetchDescriptor<RoutineOccurrence>())
+        guard let ahead = Schedule.aheadCandidates([routine], occurrences: all, on: dayKey, in: timeZone).first,
+              let week = DayKey.weekKey(of: dayKey, in: timeZone) else { throw Failure.nothingAhead }
+
+        let points = Scoring.routinePoints(basePoints: routine.basePoints, tier: tier, late: false)
+        let lastCompletedBefore = routine.lastCompletedDayKey
+        let anchorBefore = routine.anchorWeekKey
+        let occurrence = RoutineOccurrence(routine: routine, dueDayKey: ahead.nextDueDayKey, weekKey: week)
+        occurrence.completedDayKey = dayKey
+        occurrence.completedAt = now
+        occurrence.awardedPoints = points
+        context.insert(occurrence)
+        stamp(routine, completedOn: dayKey, weekKey: week)
+        let entry = Economy.record(context, kind: .routine, points: points, dayKey: dayKey,
+                                   refID: occurrence.id, note: occurrence.textSnapshot, now: now)
+        do {
+            try context.save()
+        } catch {
+            routine.lastCompletedDayKey = lastCompletedBefore
+            routine.anchorWeekKey = anchorBefore
+            context.delete(occurrence)
+            context.delete(entry)
+            throw error
+        }
+        return points
+    }
+
+    /// What a completion writes back to the routine, however it was done: `lastCompletedDayKey`
+    /// (what `everyNDays` counts from) and, the first time ever, the `everyNWeeksOnWeekday` anchor.
+    static func stamp(_ routine: RoutineTask, completedOn dayKey: String, weekKey: String) {
+        routine.lastCompletedDayKey = dayKey
+        if routine.kind == .everyNWeeksOnWeekday, routine.anchorWeekKey == nil {
+            routine.anchorWeekKey = weekKey
+        }
+    }
+
+    static func routine(of occurrence: RoutineOccurrence, in context: ModelContext) throws -> RoutineTask? {
+        guard let id = occurrence.routineID else { return nil }
+        return try context.fetch(FetchDescriptor<RoutineTask>(predicate: #Predicate { $0.id == id })).first
     }
 
     /// The templates behind a quest — one, or the three of a T group. A template deleted since the

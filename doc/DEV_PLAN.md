@@ -2,7 +2,7 @@
 
 Stages follow `PLAN.md` §11; this file only tracks concrete checkable tasks, updated as development progresses. Design intent, formulas, and data model definitions stay authoritative in `PLAN.md` — not repeated here.
 
-Current status: Stage 1 done, reviewed, and extended. `ensureToday`, catch-up, sampling, scoring,
+Current status: Stage 2 in progress — scheduling, occurrences, load → slots, routine completion, the overdue ladder, day-4 auto-skip, flexible Sunday settlement, the backlog and doing a flexible routine ahead are in, plus a two-week scenario test and simulator-only time travel (223 Core tests). Left: degraded_text, ad-hoc replacement. Stage 1 below as it stood: done, reviewed, and extended. `ensureToday`, catch-up, sampling, scoring,
 streak, the ledger, the today page, the payout reveal and the exports are in; 162 Core tests. Two inputs are still stubs, by
 design: `tier` is always `normal` until Stage 3 reads HealthKit, and `routineLoad` is always 0
 until Stage 2 schedules routines — both are `DayInputs` parameters, so wiring them is a one-line
@@ -87,16 +87,28 @@ that already have the most routine work.
 
 - [x] Frequency **spec parsing + validation**: weekly / everyNDays / monthly / nthWeekdayOfMonth / everyNWeeksOnWeekday + tests — `Core/Rules/FrequencySpec.swift`, called from `SeedParser` so `TUES` or `1:SATURDAY` throws with a line number
 - [x] `auto_verify` rule parsing + validation (`mindful:N` / `calendar_workout:N` / `calendar_workout_weekly:N`) — `Core/Rules/AutoVerifyRule.swift`, same import gate
-- [ ] Frequency **scheduling**: which `dayKey`s a parsed spec comes due on (needs `anchorWeekKey` for everyNWeeksOnWeekday, last completion for everyNDays) + tests
-- [ ] Overdue penalty (routines only; escalating 50% / 75% / 100% per undone day, stacking; day 4 auto-skip; no daily cap) + tests
-- [ ] **Design call** — whether the overdue penalty is scaled by readiness (`PLAN.md` §12): it currently isn't, following the worked example (base 50 → −25 / −38 / −50). Decide before writing the penalty tests, since it changes their expected numbers
-- [ ] Late make-up on day 2–3: half of base × multiplier, skips that day's deduction, not counted for full-clear + tests
-- [ ] **Design call** — flexible routines vs the escalating penalty (`PLAN.md` §12): Sunday's shortfall has no "next day" left inside the week. Single deduction on Sunday, or escalation into Mon/Tue of the following week? Blocks the settlement task below
-- [ ] `flexible_within_week` weekly settlement (shortfall judged on Sunday) + tests
+- [x] Frequency **scheduling** + tests — `Core/Rules/Schedule.swift`, `ScheduleTests` (incl. the seed's load for a whole week, Fri 1 / Wed 3 / Sat 5 per `PLAN.md` §3). Decisions made with the user:
+  - `nthWeekdayOfMonth` takes n = 1…4 or -1; `5:SAT` is now rejected at import (most months have no fifth Saturday — use `-1:SAT`)
+  - `everyNDays`: never completed → due at once; otherwise due `lastCompleted + N`. Not re-issued while its round is open (days 1–3); a skipped round ends on day 4 and the count restarts from that day — an undone routine is **not** chased every day
+  - `everyNWeeksOnWeekday`: `anchorWeekKey` is set by the routine's **first completion** (`Completion.completeRoutine`); before that it is due every week on its weekday
+  - Overdue routines do **not** count toward the day's load; only routines due that day do
+- [x] `ensureToday` inserts today's `RoutineOccurrence`s (text / points / `countsForClear` snapshotted) and counts `routineLoad` from them. `DayInputs.routineLoad` was removed so the load can't be computed in two places
+- [x] Routine completion — `Completion.completeRoutine`: `round(base × m)` on the due day, `round(base × 0.5 × m)` on day 2–3, refused before the due day and from day 4; rolls back on a failed save like `complete`. Today page shows routines (overdue pinned on top, "day N of 3 · half pay") with a confirmed Done button
+- [x] **Backlog section** on the today page: skipped and never done, newest first, read-only, with what it cost — `Schedule.backlog`
+- [x] Overdue penalty + tests — `Core/Day/Overdue.swift`, run by catch-up for every ended day (`ensureToday` uses it by default). 50% / 75% / 100% of base, stacking, no daily cap, day-4 auto-skip with a 0-point `skip` entry dated day 4; `countsForClear = false` never charged. Idempotent per (occurrence, day) via the ledger. Today page marks overdue rows "Overdue −50%" in red
+- [x] **Design call — settled** — the overdue penalty is **not** scaled by readiness or tier: fixed on base
+- [x] Late make-up on day 2–3: half of base × multiplier, skips that day's deduction (falls out: it is no longer open when that day is judged), not counted for full-clear + tests
+- [x] **Design call — settled** — flexible routines: a single deduction on Sunday, 50% of base per occurrence short of `weekly_target`; no escalation into the next week, no daily ladder
+- [x] `flexible_within_week` weekly settlement + tests. Target is capped by how many occurrences actually came due that week (a day the app never opened generates none, same as fixed routines). A flexible occurrence can be completed at full pay any day from its due day to that Sunday; open ones from earlier in the week show as "This week"
+- [x] **Design call — settled (B)** — doing a flexible routine **earlier** than its due day logs ahead against the next occurrence still to come this week
+- [x] Flexible do-ahead + tests — `Schedule.aheadCandidates` / `Completion.completeAhead`, `FlexibleAheadTests`. Offered when the routine is short of target this week, has nothing open on the page, and still comes due later this week. Creates that occurrence completed today at full pay; on its due day it is not generated again and doesn't count toward load. Today page: "Ahead this week" section with a confirmed "Do now"
+- [x] Review fixes: a flexible routine whose `weekly_target` is met this week (ahead included) stops coming due for the rest of the week (`Schedule.dueRoutines`); a do-ahead first completion sets the `everyNWeeksOnWeekday` anchor like any other (`Completion.stamp`, shared by both paths). **Design call — settled:** a flexible routine due today still gates that day's hidden quest
+- [x] Scenario tests — `ScenarioTests`: two weeks with the real seed through `ensureToday` (late make-ups, moved and ahead flexible sessions, days never opened, a low-tier day, first/last-Saturday loads), every balance worked out by hand; opening twice a day changes nothing; a week of doing nothing costs exactly the hand-summed ladder
+- [x] Debug time travel, **simulator only** (`#if targetEnvironment(simulator)`): "Advance one day" / "Back to the real date" on the debug page; `RootView` shifts `now` by the offset. Future-dated rows stay after going back — delete the app to start clean
 - [ ] `degraded_text` fallback logic (auto-swap on low energy, only routines with `degraded_text`)
-- [ ] Routine points get the 1.3x low-tier multiplier + tests
+- [x] Routine points get the 1.3x low-tier multiplier + tests — `Scoring.routinePoints`
 - [ ] Ad-hoc routine replacing a random slot (`replaced` flag)
-- [ ] `randomSlots` dynamic calculation wired to routine load — the formula and its tests are already in `Composition.slots`; Stage 2 only has to pass the real `DayInputs.routineLoad`
+- [x] `randomSlots` dynamic calculation wired to routine load — counted inside `ensureToday`. Note: a day already generated by an older build keeps its old 3 slots and no routines; the next day is correct
 
 ## Stage 3 — HealthKit and Calendar
 

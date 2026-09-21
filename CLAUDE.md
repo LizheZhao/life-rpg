@@ -10,9 +10,9 @@ Personal-use life RPG app, single-user, not published to the App Store. Full des
 
 Keep as much logic as possible in Core; views should only render. When working in Core you (Claude) only need the `swift` commands, not `xcodebuild`.
 
-**Current status: Stage 1 done and reviewed; Stage 2 (routine scheduling) is next.** Day generation, catch-up, sampling, scoring, streak, the ledger, the today page with its payout reveal, the JSON and CSV exports, and the rating/comment log are all in. 162 Core tests. `doc/DEV_PLAN.md` is the task-level truth; read it before starting anything.
+**Current status: Stage 2 in progress.** Stage 1 (day generation, catch-up, sampling, scoring, streak, ledger, today page, payout reveal, JSON/CSV exports, rating/comment log) is done. Stage 2 so far: frequency scheduling, routine occurrences, routine load → random slots, routine completion (incl. late half pay), the overdue ladder + day-4 auto-skip, flexible Sunday settlement, backlog section, flexible do-ahead, a two-week `ScenarioTests`, and simulator-only time travel on the debug page. Left: degraded_text, ad-hoc replacement. 227 Core tests. `doc/DEV_PLAN.md` is the task-level truth; read it before starting anything.
 
-Two inputs are still stubs by design and both are `DayInputs` parameters, so wiring them is a one-line change at the call site: `tier` is always `normal` until Stage 3 reads HealthKit, and `routineLoad` is always 0 until Stage 2 schedules routines. The second one has a visible consequence — every day currently gets three random slots instead of the one or two a heavy routine day should have.
+`tier` is still a stub: always `normal` until Stage 3 reads HealthKit (a `DayInputs` parameter, so wiring it is a one-line change at the call site). Routine load is **not** an input — `ensureToday` schedules the day's routines and counts them itself.
 
 `LifeRPGCore` is a single library target + `LifeRPGCoreTests` (Swift Testing, Swift 5 language mode). `LifeRPG.xcodeproj` (target/scheme `LifeRPG`, iOS 17.6+, iPhone only) links the local package; `LifeRPG/` is a synchronized folder, so new files placed there are picked up without touching `project.pbxproj`. `@Model` requires full Xcode as the active developer dir (Command Line Tools lack the SwiftData macro plugin).
 
@@ -35,7 +35,7 @@ Seed CSVs: `doc/*.csv` is the single source of truth. `LifeRPG/Seed/*.csv` are s
 - **A rule lives in exactly one place, in Core.** A view that needs one passes in the rows its `@Query` already holds (`Streak.completedDayKeys(_:)`, `Economy.balance(_:)`, `Economy.totalEarned(_:)`) rather than re-filtering or re-summing beside the HUD. This has already drifted twice; if a rule needs a `[Model]` overload to make that possible, add the overload.
 - Anything derived from an already-awarded value takes that value as a parameter and never recomputes it — `Scoring.breakdown(_:tier:awarded:)` has no RNG in its signature on purpose, so the reveal animation physically cannot re-roll the points it is displaying.
 - Dates always use `dayKey` (`"2026-09-17"`, local timezone) and `weekKey` (`"2026-W38"`) strings; never compare `Date` directly in business logic.
-- Write tests in Core before new logic. Still uncovered because unwritten: overdue penalty and flexible routine weekly settlement. Where `PLAN.md` states expected numbers (the reroll ladders, the penalty worked example), assert those literals rather than recomputing them with the formula under test.
+- Write tests in Core before new logic. Where `PLAN.md` states expected numbers (the reroll ladders, the penalty worked example), assert those literals rather than recomputing them with the formula under test.
 - Never put credentials like the Oura token in code or tests — tokens go through Keychain.
 
 ## Communication

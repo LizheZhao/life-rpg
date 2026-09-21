@@ -45,9 +45,10 @@ public enum FrequencySpec: Equatable, Sendable {
     case everyNDays(Int)
     /// `"15"` — a day of the month; a month shorter than the day falls back to its last day.
     case monthly(day: Int)
-    /// `"1:SAT"` / `"-1:SAT"` — first / last Saturday of the month.
+    /// `"1:SAT"` / `"-1:SAT"` — first / last Saturday of the month. n is 1…4 or -1.
     case nthWeekdayOfMonth(n: Int, weekday: Weekday)
-    /// `"2:SAT"` — every n-th week on that weekday, counted from `anchorWeekKey`.
+    /// `"2:SAT"` — every n-th week on that weekday, counted from `anchorWeekKey`, which is the
+    /// week of the routine's first completion. Before that it comes due every week.
     case everyNWeeksOnWeekday(n: Int, weekday: Weekday)
 
     public static func parse(kind: RecurrenceKind, spec: String) throws -> FrequencySpec {
@@ -83,8 +84,10 @@ public enum FrequencySpec: Equatable, Sendable {
 
         case .nthWeekdayOfMonth:
             let (n, weekday) = try pair(raw, kind: kind, spec: spec)
-            guard (1...5).contains(n) || n == -1 else {
-                throw FrequencyError(kind: kind, spec: spec, reason: "n must be 1…5 or -1 (last)")
+            // No 5: most months have only four of any weekday, so "5:SAT" would silently skip
+            // most months. "The last one" is -1, which every month has.
+            guard (1...4).contains(n) || n == -1 else {
+                throw FrequencyError(kind: kind, spec: spec, reason: "n must be 1…4 or -1 (last)")
             }
             return .nthWeekdayOfMonth(n: n, weekday: weekday)
 
