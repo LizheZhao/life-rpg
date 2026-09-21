@@ -7,26 +7,32 @@ public enum SeedImporter {
         public var routineTasks: Int
     }
 
-    /// Seeds each table from CSV only if that table is empty. After the first launch the DB copy
-    /// is the user's own data; the CSVs in `doc/` are never re-applied over it.
+    /// Additive merge keyed on `text`: rows the DB doesn't have yet are inserted, rows it already
+    /// has are left untouched — edits and soft-deletes made in the app always win. Rows removed
+    /// from the CSV stay in the DB. Returns how many rows were inserted.
+    ///
+    /// Consequence: editing a text in the CSV reads as a new row, so the old one lives on next to
+    /// it; and a hard-deleted quest comes back on the next launch (deactivate instead).
     @discardableResult
-    public static func seedIfEmpty(_ context: ModelContext,
-                                   sideQuestsCSV: String,
-                                   routinesCSV: String) throws -> Result {
+    public static func mergeSeeds(_ context: ModelContext,
+                                  sideQuestsCSV: String,
+                                  routinesCSV: String) throws -> Result {
         var result = Result(questTemplates: 0, routineTasks: 0)
 
-        if try context.fetchCount(FetchDescriptor<QuestTemplate>()) == 0 {
-            for seed in try SeedParser.sideQuests(csv: sideQuestsCSV) {
-                context.insert(QuestTemplate(seed: seed))
-                result.questTemplates += 1
-            }
+        var knownQuests = Set(try context.fetch(FetchDescriptor<QuestTemplate>()).map(\.text))
+        for seed in try SeedParser.sideQuests(csv: sideQuestsCSV)
+        where knownQuests.insert(seed.text).inserted {          // also dedupes within the CSV
+            context.insert(QuestTemplate(seed: seed))
+            result.questTemplates += 1
         }
-        if try context.fetchCount(FetchDescriptor<RoutineTask>()) == 0 {
-            for seed in try SeedParser.routines(csv: routinesCSV) {
-                context.insert(RoutineTask(seed: seed))
-                result.routineTasks += 1
-            }
+
+        var knownRoutines = Set(try context.fetch(FetchDescriptor<RoutineTask>()).map(\.text))
+        for seed in try SeedParser.routines(csv: routinesCSV)
+        where knownRoutines.insert(seed.text).inserted {
+            context.insert(RoutineTask(seed: seed))
+            result.routineTasks += 1
         }
+
         try context.save()
         return result
     }

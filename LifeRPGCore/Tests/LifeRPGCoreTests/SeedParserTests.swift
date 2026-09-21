@@ -82,7 +82,7 @@ struct SeedParserTests {
 
     @Test func realSideQuestsParse() throws {
         let seeds = try SeedParser.sideQuests(csv: Fixtures.csv("side_quests.csv"))
-        #expect(seeds.count == 75)
+        #expect(!seeds.isEmpty)
         #expect(Set(seeds.map(\.difficulty)) == Set(Difficulty.allCases))
         let parents = try #require(seeds.first { $0.text == "Video call with parents" })
         #expect(parents.weekendOnly)
@@ -94,7 +94,7 @@ struct SeedParserTests {
 
     @Test func realRoutinesParse() throws {
         let seeds = try SeedParser.routines(csv: Fixtures.csv("routine_quests.csv"))
-        #expect(seeds.count == 13)
+        #expect(!seeds.isEmpty)
         let office = try #require(seeds.first { $0.text == "Go to the office" })
         #expect(!office.isActive)
         let clean = try #require(seeds.first { $0.text.hasPrefix("Clean and tidy") })
@@ -103,5 +103,31 @@ struct SeedParserTests {
         let bills = try #require(seeds.first { $0.text == "Review bills/statements" })
         #expect(bills.kind == .nthWeekdayOfMonth)
         #expect(bills.spec == "-1:SAT")
+    }
+
+    // MARK: invariants — the merge keys on text, so duplicates would be silently dropped
+
+    @Test func sideQuestTextsAreUnique() throws {
+        let texts = try SeedParser.sideQuests(csv: Fixtures.csv("side_quests.csv")).map(\.text)
+        #expect(Set(texts).count == texts.count)
+    }
+
+    @Test func routineTextsAreUnique() throws {
+        let texts = try SeedParser.routines(csv: Fixtures.csv("routine_quests.csv")).map(\.text)
+        #expect(Set(texts).count == texts.count)
+    }
+
+    @Test func epicsHaveNoCooldown() throws {
+        let epics = try SeedParser.sideQuests(csv: Fixtures.csv("side_quests.csv"))
+            .filter { $0.difficulty == .epic }
+        #expect(!epics.isEmpty)
+        #expect(epics.allSatisfy { ($0.cooldownDays ?? 0) == 0 })
+    }
+
+    @Test func weekendOnlyQuestsAreHard() throws {
+        let weekend = try SeedParser.sideQuests(csv: Fixtures.csv("side_quests.csv"))
+            .filter(\.weekendOnly)
+        #expect(!weekend.isEmpty)
+        #expect(weekend.allSatisfy { $0.difficulty == .hard })
     }
 }

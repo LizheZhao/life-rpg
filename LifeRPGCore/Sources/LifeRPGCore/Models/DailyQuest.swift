@@ -11,8 +11,11 @@ import SwiftData
     public var templateID: UUID?
     public var textSnapshot: String = ""
     public var launchURLSnapshot: String?
+    public var variantSnapshot: String?           // the value drawn from a parameterized template
     public var trivialGroup: [String] = []        // the three texts in the T group; non-empty = isTrivialGroup
     public var trivialDone: [Bool] = []
+    public var trivialTemplateIDs: [UUID] = []    // parallel to trivialGroup, for the cooldown write-back only
+    public var trivialVariants: [String] = []     // parallel to trivialGroup; "" = that item has none
     public var points: Int?                       // nil = not completed
     public var completedAt: Date?
     public var sourceTypeRaw: String = "manual"

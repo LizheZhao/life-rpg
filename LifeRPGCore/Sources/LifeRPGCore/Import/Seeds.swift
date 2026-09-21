@@ -1,8 +1,19 @@
 import Foundation
 
-public enum SeedError: Error, Equatable {
+public enum SeedError: Error, Equatable, CustomStringConvertible {
     case missingColumn(String)
-    case invalidValue(row: Int, column: String, value: String)
+    /// `reason` carries the parser's explanation for the specs that have one
+    /// (`frequency_spec`, `auto_verify`); it stays nil for a plain bad value.
+    case invalidValue(row: Int, column: String, value: String, reason: String? = nil)
+
+    public var description: String {
+        switch self {
+        case .missingColumn(let c):
+            "CSV is missing the '\(c)' column"
+        case .invalidValue(let row, let column, let value, let reason):
+            "line \(row), \(column) = '\(value)'" + (reason.map { ": \($0)" } ?? "")
+        }
+    }
 }
 
 public struct SideQuestSeed: Equatable, Sendable {
@@ -34,6 +45,24 @@ public struct RoutineSeed: Equatable, Sendable {
     public var launchURLString: String?
 }
 
+extension SideQuestSeed {
+    /// Validated at parse time, so this never fails for a seed the parser returned.
+    public var autoVerify: AutoVerifyRule? {
+        autoVerifyRule.flatMap { try? AutoVerifyRule.parse($0) }
+    }
+}
+
+extension RoutineSeed {
+    /// Validated at parse time, so this never fails for a seed the parser returned.
+    public var frequencySpec: FrequencySpec? {
+        try? FrequencySpec.parse(kind: kind, spec: spec)
+    }
+
+    public var autoVerify: AutoVerifyRule? {
+        autoVerifyRule.flatMap { try? AutoVerifyRule.parse($0) }
+    }
+}
+
 public enum SeedParser {
     public static func sideQuests(csv: String) throws -> [SideQuestSeed] {
         let (header, rows) = CSV.records(csv)
@@ -48,7 +77,7 @@ public enum SeedParser {
                 hiddenEligible: try f.bool("hidden_eligible", default: false),
                 weekendOnly: try f.bool("weekend_only", default: false),
                 cooldownDays: try f.optionalInt("cooldown_days"),
-                autoVerifyRule: f.optional("auto_verify"),
+                autoVerifyRule: try f.autoVerifyRule(),
                 launchURLString: f.optional("launch_url"),
                 variants: f.optional("variants").map {
                     $0.split(separator: "|").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
@@ -68,11 +97,14 @@ public enum SeedParser {
             guard let kind = RecurrenceKind(rawValue: kindRaw) else {
                 throw SeedError.invalidValue(row: line, column: "frequency_kind", value: kindRaw)
             }
+            // Parsed here purely to validate: an unparseable spec would otherwise never come due
+            // — no penalty, no error, no row on the today page.
+            let frequency = try f.frequency(kind: kind)
             return RoutineSeed(
                 text: try f.nonEmpty("text"),
                 kind: kind,
                 spec: try f.nonEmpty("frequency_spec"),
-                weeklyTarget: try f.optionalInt("weekly_target") ?? 1,
+                weeklyTarget: try f.weeklyTarget(frequency),
                 basePoints: try f.int("base_points"),
                 difficulty: try f.difficulty(),
                 intensity: try f.intensity(),
@@ -80,7 +112,7 @@ public enum SeedParser {
                 countsForClear: try f.bool("counts_for_clear", default: true),
                 isActive: try f.bool("is_active", default: true),
                 degradedText: f.optional("degraded_text"),
-                autoVerifyRule: f.optional("auto_verify"),
+                autoVerifyRule: try f.autoVerifyRule(),
                 launchURLString: f.optional("launch_url")
             )
         }
@@ -138,7 +170,43 @@ private struct Fields {
         return i
     }
 
-    private func invalid(_ column: String) -> SeedError {
-        .invalidValue(row: line, column: column, value: value(column))
+    func frequency(kind: RecurrenceKind) throws -> FrequencySpec {
+        let raw = value("frequency_spec")
+        do {
+            return try FrequencySpec.parse(kind: kind, spec: raw)
+        } catch let error as FrequencyError {
+            throw SeedError.invalidValue(row: line, column: "frequency_spec",
+                                         value: raw, reason: error.reason)
+        }
+    }
+
+    func weeklyTarget(_ frequency: FrequencySpec) throws -> Int {
+        let target = try optionalInt("weekly_target") ?? 1
+        guard target >= 1 else {
+            throw invalid("weekly_target", reason: "must be at least 1")
+        }
+        // A target above the number of days the spec offers can never be met, so the routine
+        // would report a shortfall every single Sunday. A lower target is legitimate
+        // (three slots offered, two required), so only the upper bound is checked.
+        if let available = frequency.nominalWeeklyCount, target > available {
+            throw invalid("weekly_target",
+                          reason: "spec '\(frequency.specString)' only comes due \(available)x a week")
+        }
+        return target
+    }
+
+    func autoVerifyRule() throws -> String? {
+        guard let raw = optional("auto_verify") else { return nil }
+        do {
+            _ = try AutoVerifyRule.parse(raw)
+        } catch let error as AutoVerifyError {
+            throw SeedError.invalidValue(row: line, column: "auto_verify",
+                                         value: raw, reason: error.reason)
+        }
+        return raw
+    }
+
+    private func invalid(_ column: String, reason: String? = nil) -> SeedError {
+        .invalidValue(row: line, column: column, value: value(column), reason: reason)
     }
 }

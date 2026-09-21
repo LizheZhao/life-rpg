@@ -10,6 +10,9 @@ import SwiftData
     public var textSnapshot: String = ""
     public var usedDegraded: Bool = false
     public var basePoints: Int = 0
+    // Snapshotted from the routine, not read back off it: whether this occurrence gates the
+    // day's full-clear (and therefore the hidden quest). PLAN.md §3.
+    public var countsForClear: Bool = true
     public var awardedPoints: Int?                // late make-up = half of base × m
     public var penaltyApplied: Int = 0            // running total of escalating deductions
     public var skipped: Bool = false              // user skip, or auto on day 4

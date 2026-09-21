@@ -15,6 +15,17 @@ public enum Difficulty: String, Codable, CaseIterable, Sendable {
         }
     }
 
+    /// Inverse of `init?(csvCode:)` — also what the UI shows as the slot badge.
+    public var code: String {
+        switch self {
+        case .trivial: "T"
+        case .easy: "E"
+        case .medium: "M"
+        case .hard: "H"
+        case .epic: "EPIC"
+        }
+    }
+
     public var range: ClosedRange<Int> {
         switch self {
         case .trivial: 4...4
@@ -55,4 +66,10 @@ public enum Tier: String, Codable, CaseIterable, Sendable {
 
 public enum RecurrenceKind: String, Codable, CaseIterable, Sendable {
     case weekly, everyNDays, monthly, nthWeekdayOfMonth, everyNWeeksOnWeekday
+}
+
+/// What a rating or comment is attached to. `QuestTemplate` and `RoutineTask` ids live in separate
+/// tables, so the kind is what tells the two apart when exporting or looking one up.
+public enum FeedbackTarget: String, Codable, CaseIterable, Sendable {
+    case quest, routine
 }

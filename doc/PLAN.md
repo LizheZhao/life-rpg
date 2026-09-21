@@ -85,9 +85,18 @@ Big things that only fit on a weekend (video call with parents, meeting friends,
 
 Streak = number of consecutive days with **at least one random quest completed** (regular slots, the T group, and hidden all count; routines and epic don't). A streak freeze covers one missed day without breaking it.
 
+### Completion is final
+
+There is no undo on the today page. A completed quest writes its ledger entry and starts the
+template's cooldown, and neither is reversed: a reversible checkbox would turn the points roll into
+something you can re-roll until the number is good. A genuine mistake is corrected with an `adjust`
+ledger entry, which stays visible in the history. Every completion tap is therefore confirmed once.
+
 ### Parameterized templates
 
-Entries with bracketed placeholders (a color, learning about something, a journal prompt) substitute in a random value from a `variants` array — one entry does the work of ten.
+Entries phrased as an open prompt (a color, learning about something, a journal prompt) draw a random value from a `variants` array — one entry does the work of ten.
+
+The value is drawn once, when the day is generated, and snapshotted onto the `DailyQuest` as `variantSnapshot` **beside** the text rather than spliced into it. The CSV wording stays the row's identity — which is what the seed merge keys on, and what makes a year of history still greppable — and the page shows the variant underneath it as the actual ask of the day.
 
 ---
 
@@ -169,6 +178,9 @@ Thresholds: E < 0.85 very low, 0.85–0.92 low, 0.92–1.06 normal, > 1.06 high.
 | Normal | E + M + H |
 | High | 2 M + 1 H |
 
+The table is written easy → hard, and a day with fewer than 3 slots **drops from the hard end**:
+at `normal`, 2 slots are E + M and 1 slot is an E. No H is guaranteed on a weekend — see §12.
+
 On low-tier days (`low` and `veryLow`), points get a 1.3x effort multiplier. Moving is harder when you're in bad shape than good shape, so the payout shouldn't collapse along with it.
 
 ```
@@ -236,13 +248,23 @@ Pricing must be noticeably higher than the payout from completing the underlying
 
 Escalates by 1.5x, rounded up, resets daily. Base is E 10, M 20, H 30 — so E goes 10 / 15 / 23 / 34, H goes 30 / 45 / 68 / 102. Epic reroll is a flat 80, once per week.
 
+**A reroll records what it swapped away.** Escalation has to accumulate on the day's slot, which is tempting to implement by overwriting the `DailyQuest` row in place — but that row *is* the history the calendar and the summary read, so overwriting it erases what was rerolled away. Instead the old row is kept and marked `rerolledAway`, and the replacement carries `rerollCount + 1`. Rerolled-away rows are skipped by full-clear and streak the same way `replaced` ones are. Escalation still resets daily, because a new day means new rows starting at zero.
+
+**A reroll can never take the balance below zero.** Spending down to exactly zero is fine — that is not debt. Penalties are the only thing allowed to push the balance negative, because they are something that happens to you; a purchase you chose to make is not. Combined with the rule below, that gives two separate refusals: "clear the debt first" and "you can't afford it".
+
+### Opening balance
+
+A new store is granted 100 coins, once ever, as a `grant` ledger entry. Without it nothing can be spent for the first week, so nothing has a price and the first reroll is unreachable. The grant is keyed on a `grant` entry already existing rather than on the ledger being empty, so restoring a backup does not mint a second one.
+
 ### Balance can go negative
 
 If routine penalties push the balance below zero, let it stay negative and display it in red — more honest than clamping to zero. Redemption still requires sufficient balance though, or going into debt to buy headphones would defeat the point. While in debt, reroll is unavailable — quests need to be completed first to bring the balance back up.
 
 ### Level
 
-Balance always equals the sum of the ledger, never stored separately; cumulative points only sum positive entries; `level = floor(sqrt(total / 60)) + 1`.
+Balance always equals the sum of the ledger, never stored separately; `level = floor(sqrt(total / 60)) + 1`.
+
+Cumulative points sum the positive entries **except the opening grant**. Spending must not drop the level, and a gift must not buy one: a level is a record of what has been done, so it counts what was earned, not what was held. A new store therefore opens at 100 coins and still reads level 1.
 
 ---
 
@@ -324,8 +346,11 @@ enum RecurrenceKind: String, Codable {
     var templateID: UUID?
     var textSnapshot: String = ""          // snapshot; template edits/deletes don't affect history
     var launchURLSnapshot: String?
+    var variantSnapshot: String?           // the value drawn from a parameterized template
     var trivialGroup: [String] = []        // the three texts in the T group; non-empty = isTrivialGroup
     var trivialDone: [Bool] = []
+    var trivialTemplateIDs: [UUID] = []    // parallel to trivialGroup, for the cooldown write-back
+    var trivialVariants: [String] = []     // parallel to trivialGroup; "" = that item has none
     var points: Int?                       // nil = not completed
     var completedAt: Date?
     var sourceTypeRaw: String = "manual"
@@ -343,6 +368,7 @@ enum RecurrenceKind: String, Codable {
     var textSnapshot: String = ""
     var usedDegraded: Bool = false
     var basePoints: Int = 0
+    var countsForClear: Bool = true        // snapshot; false = recorded but doesn't gate full-clear
     var awardedPoints: Int?                // late make-up = half of base × m
     var penaltyApplied: Int = 0            // running total of escalating deductions
     var skipped: Bool = false              // user skip, or auto on day 4
@@ -379,6 +405,29 @@ enum RecurrenceKind: String, Codable {
     var onCycle: Bool = false
     var routineLoad: Int = 0
     var randomSlots: Int = 3
+}
+
+// Feedback is an append-only log, not a field on the template: the same quest can be rated
+// differently in March and September, and both readings are kept. `QuestTemplate.affinity` stays
+// the one value sampling reads; these tables are where it comes from and how it is explained.
+@Model final class QuestRating {
+    var id: UUID = UUID()
+    var targetID: UUID?                    // QuestTemplate.id or RoutineTask.id
+    var targetKindRaw: String = "quest"    // quest / routine
+    var textSnapshot: String = ""
+    var rating: Int = 0                    // -2...2, same scale as affinity
+    var dayKey: String = ""
+    var timestamp: Date = Date()
+}
+
+@Model final class QuestComment {
+    var id: UUID = UUID()
+    var targetID: UUID?
+    var targetKindRaw: String = "quest"
+    var textSnapshot: String = ""
+    var comment: String = ""
+    var dayKey: String = ""
+    var timestamp: Date = Date()
 }
 ```
 
@@ -510,6 +559,8 @@ No week view for now. A stats page can wait until there's been actual usage over
 
 Export the whole DB as JSON via `fileExporter` to iCloud Drive, filename dated; confirm before overwriting on import.
 
+What the JSON has to carry is exactly what the seed CSVs in `doc/` cannot rebuild: the history tables, and the `QuestRating` / `QuestComment` logs. Templates and routines are deliberately left out — they come back from the CSVs. There is a second, smaller export beside it that writes the two feedback logs out as CSV, because their destination is a spreadsheet or a diff against `doc/*.csv`, not an importer.
+
 The JSON carries its own integer `schemaVersion`, incremented only on model changes, decoupled from the GitHub release tag (things like v0.1). Tags will jump ahead due to UI changes, so import only looks at schemaVersion.
 
 The web prototype's save file is base64 JSON, with timestamps, quest text, points, and difficulty in the log — enough to reconstruct history. Build a one-time importer to migrate it over, then retire the web version.
@@ -518,18 +569,22 @@ The web prototype's save file is base64 JSON, with timestamps, quest text, point
 
 ## 11. Stage breakdown
 
-| Stage | Content | Done when |
-|---|---|---|
-| 0 | project, model, seed from the two CSVs | DB has data, app runs |
-| 1 | Today page, random slot generation, completion rolls, undo, ledger, HUD | Ready for daily use |
-| 2 | Routine layer: frequency parsing, overdue, degrade, movable-within-week, ad-hoc replacement | Saturday no longer stacks up to ten tasks |
-| 3 | HealthKit and Calendar: energy, readiness proxy, tier adjustment, auto-verification, cycle | Tier actually drops on a bad sleep night |
-| 4 | Monthly calendar page and day detail | Any day can be reviewed |
-| 5 | Epic, paid reroll, redemption page (including estimatedCost conversion), quest library management and affinity feedback | |
-| 6 | JSON export/import, web version migration | Balance matches exactly |
-| 7 | Optional: Oura API, DeviceActivity, notifications, widget, CloudKit (requires paying) | |
+| Stage | Content | Done when | Status |
+|---|---|---|---|
+| 0 | project, model, seed from the two CSVs | DB has data, app runs | **done** |
+| 1 | Today page, random slot generation, completion rolls, payout reveal, ledger, HUD | Ready for daily use | **done, reviewed** |
+| 2 | Routine layer: frequency scheduling, overdue, degrade, movable-within-week, ad-hoc replacement | Saturday no longer stacks up to ten tasks | parsing done, scheduling next |
+| 3 | HealthKit and Calendar: energy, readiness proxy, tier adjustment, auto-verification, cycle | Tier actually drops on a bad sleep night | |
+| 4 | Monthly calendar page and day detail | Any day can be reviewed | |
+| 5 | Epic, paid reroll, redemption page (including estimatedCost conversion), quest library management and affinity feedback | Coins have somewhere to go | reroll pricing done |
+| 6 | JSON export/import, web version migration | Balance matches exactly | export done, import pending |
+| 7 | Optional: Oura API, DeviceActivity, notifications, widget, CloudKit (requires paying) | | |
 
 HealthKit is pulled ahead of the calendar page because it changes slot-generation logic and fields — doing it early saves rework.
+
+Two things were pulled forward out of their stage on the same argument, that **data which cannot be reconstructed must not start accumulating without a way off the device**: the JSON export (Stage 6) and the rating / comment log (Stage 5). Both record things the seed CSVs can never rebuild. `DEV_PLAN.md` tracks the detail.
+
+Stage 1 is deliberately usable on its own but not yet *correct* on its own: `routineLoad` is 0 and `tier` is `normal` until Stages 2 and 3 fill them, so every day currently gets the full three random slots instead of the one or two a heavy routine day should have. That is the single biggest gap between the app as built and the app as designed.
 
 Acceptance per stage: quests refresh correctly across midnight; manually change system time to test streak, reroll reset, and flexible routine weekly settlement; export JSON, reinstall, and confirm a complete import.
 
@@ -541,8 +596,20 @@ The exact `weekly_target` number for exercise routines — weight training is cu
 
 Probability of the T group appearing — currently envisioned as guaranteed at very-low energy, 40% otherwise (only when the composition has an E slot for it to take); tune after use.
 
+Whether the overdue penalty should still be scaled by readiness — it currently isn't, following the worked example (base 50 → −25 / −38 / −50).
+
 Flexible routines and the escalating penalty: the Sunday shortfall has no "next day" within the week — does it escalate into Mon/Tue of the following week, or is it a single deduction on Sunday?
 
-Weekend H exposure: Saturday's routine load leaves only 1 random slot (Sunday 2), so weekend-only H quests may rarely get drawn. Consider guaranteeing an H slot on weekends, or computing weekend slots differently.
+~~Weekend H exposure~~ **Decided (Stage 1):** fewer slots drop from the hard end on every day of the week, weekends included, so no H is guaranteed and `weekend_only` H quests stay rare. Revisit once there is enough real data to say how rare; guaranteeing a weekend H slot would put the hardest random quest on the heaviest routine day, which is the opposite of what the dynamic slot count is for.
 
 Affinity feedback needs a week or two to accumulate before batch-expanding the quest library. The side quest H pool currently has only nine entries, a bit thin, but leaving it for now until it's clearer which category is actually worth doing.
+
+**How `affinity` is derived from the rating log.** Ratings are now collected (one tap, right after the payout reveal) and stored append-only with their dates, but nothing reads them back yet: `QuestTemplate.affinity` — the number sampling actually weights on — is still always 0. Newest rating wins? Mean over a trailing window? A window makes one bad day count for less, which is the point of rating repeatedly, but it also means a quest you have decisively gone off takes weeks to fade. Blocks the last task in Stage 5; harmless until then, because the log keeps everything either rule would need.
+
+**What the day detail shows about rerolls and ratings.** `DailyQuest` is the per-day history the calendar page reads, and `QuestRating.questID` now points at the exact completion that prompted each rating. Whether the day detail surfaces "rerolled twice, swapped away X and Y" and "you rated this +2" is a Stage 4 question, but it decides whether Stage 5's reroll has to keep the swapped-away rows — see §6.
+
+~~Whether a reroll may push the balance negative~~ **Decided:** it may not. See §6, "Reroll".
+
+~~Whether the opening grant counts toward the level~~ **Decided:** it does not. See §6, "Level".
+
+~~How a parameterized template's variant reaches the page~~ **Decided (Stage 1):** drawn once at generation and snapshotted beside the text as `variantSnapshot`, never spliced into it. See §3, "Parameterized templates".
