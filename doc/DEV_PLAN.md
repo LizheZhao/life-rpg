@@ -2,7 +2,7 @@
 
 Stages follow `PLAN.md` §11; this file only tracks concrete checkable tasks, updated as development progresses. Design intent, formulas, and data model definitions stay authoritative in `PLAN.md` — not repeated here.
 
-Current status: Stage 3 code done and running on the phone with HealthKit access; open until the device checks in the Stage 3 list pass. Stage 2 done — scheduling, occurrences, load → slots, routine completion, the overdue ladder, day-4 auto-skip, flexible Sunday settlement, the backlog, doing a flexible routine ahead, ad-hoc replacement and degraded_text, plus a two-week scenario test and simulator-only time travel (250 Core tests). Next: Stage 3. Stage 1 below as it stood: done, reviewed, and extended. `ensureToday`, catch-up, sampling, scoring,
+Current status: Stage 4 code done (calendar, day detail, rating summary; 317 Core tests), device check pending. Stage 3 code done and running on the phone with HealthKit access; open until the device checks in the Stage 3 list pass. Stage 2 done — scheduling, occurrences, load → slots, routine completion, the overdue ladder, day-4 auto-skip, flexible Sunday settlement, the backlog, doing a flexible routine ahead, ad-hoc replacement and degraded_text, plus a two-week scenario test and simulator-only time travel (250 Core tests). Next: Stage 3. Stage 1 below as it stood: done, reviewed, and extended. `ensureToday`, catch-up, sampling, scoring,
 streak, the ledger, the today page, the payout reveal and the exports are in; 162 Core tests. Two inputs are still stubs, by
 design: `tier` is always `normal` until Stage 3 reads HealthKit, and `routineLoad` is always 0
 until Stage 2 schedules routines — both are `DayInputs` parameters, so wiring them is a one-line
@@ -136,18 +136,21 @@ Code is done: Core tested (`EnergyTests`, `HealthBucketsTests`, `AutoVerifyTests
 
 Done when: any past day can be reviewed
 
-- [ ] Month view: green dot (random quests completed), blue dot (routines fully done), star (hidden)
-- [ ] Epic-completed week highlight, judged by `weekKey` (not row index)
-- [ ] Custom `LazyVGrid` (not `UICalendarView`)
-- [ ] Day detail sheet: quest/routine status, points, completion time, auto-verify/degraded markers, that day's redemptions and penalties, `DailyContext`
-- [ ] Day detail also shows the ratings given that day (`QuestRating.questID` links each one to the completion that prompted it) and what was rerolled away — **design call**, `PLAN.md` §12: whether these appear decides whether Stage 5's reroll must keep the swapped-away rows
-- [ ] Summary view over the rating log: `Feedback.topRated(since:)` already answers "what has been landing well lately" and is untested against real data — no UI yet
+Code done: `Core/Rules/CalendarMarks.swift`, `Core/Time/MonthGrid.swift`, `Core/Day/DayRecord.swift` (`CalendarMarksTests`, `MonthGridTests`, `DayRecordTests`, 317 Core tests); app pages `CalendarView`, `DayDetailView`, `RatingSummaryView`, a Calendar tab in `RootView`. Checked on the simulator. No `@Model` change.
+
+- [x] Month view: green dots (random quests done, 0–3; hidden / epic / replaced don't count, the T group counts once), blue dot, star (hidden). **Blue dot decided with the user:** every `countsForClear` routine due that day done **on the day** — done ahead counts, a late make-up or a skip does not, and a day with no gating routine shows no blue dot. Deliberately stricter than `hiddenUnlocked`, which treats a skip as cleared
+- [x] Epic-completed week highlight, judged by `weekKey` (not row index) — `CalendarMarks.epicWeeks`. Monday-start grid so each row is one ISO week and carries its `weekKey`. Nothing lights up until Stage 5 generates epics
+- [x] Custom `LazyVGrid` (not `UICalendarView`)
+- [x] Day detail sheet: quest/routine status, points, completion time, auto-verify/degraded markers, that day's redemptions and penalties, `DailyContext`. Late make-ups and done-ahead routines also appear on the day the work happened ("Done this day for another day")
+- [x] Day detail shows the ratings given that day, hung on the completion that prompted them via `QuestRating.questID`. **Design call decided:** rerolled-away rows are shown too, so Stage 5's reroll **must** keep them (see Stage 5). The display itself waits for the `rerolledAway` field
+- [x] Summary view over the rating log (`RatingSummaryView`, 7 / 30 / 90 days / all, via `Feedback.topRated(since:)`) — still unchecked against real ratings
+- [ ] Device check: open a few real past days on the phone and compare against what happened
 
 ## Stage 5 — Epic, paid reroll, redemption
 
 - [ ] Epic generation (every Monday, visible immediately), extension (max twice)
 - [x] Reroll **pricing and the balance rule** + tests — `Core/Rules/Reroll.swift`. Cost is settled; the swap itself is still below. A reroll may never take the balance below zero (exactly zero is allowed), and is refused outright while in debt
-- [ ] Reroll **execution**: mark the old row `rerolledAway` rather than overwriting it — escalation has to accumulate on the day's slot, but overwriting would erase what was swapped away, and `DailyQuest` is the history the summary page reads. The new row carries `rerollCount + 1`; `hiddenUnlocked` and `Streak` must skip rerolled-away rows the way they skip `replaced` ones
+- [ ] Reroll **execution**: mark the old row `rerolledAway` rather than overwriting it (**required** — Stage 4 decided the day detail shows what was swapped away; add a "Rerolled away" line to `DayRecord` and `DayDetailView` with the field, and keep `CalendarMarks` skipping those rows) — escalation has to accumulate on the day's slot, but overwriting would erase what was swapped away, and `DailyQuest` is the history the summary page reads. The new row carries `rerollCount + 1`; `hiddenUnlocked` and `Streak` must skip rerolled-away rows the way they skip `replaced` ones
 - [ ] Epic reroll fixed at 80/week (needs the epic itself, above)
 - [ ] `Reward.estimatedCost` → coins conversion formula + tests
 - [ ] Redemption page UI, reroll disabled while balance is negative

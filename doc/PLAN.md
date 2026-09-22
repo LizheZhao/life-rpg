@@ -584,7 +584,7 @@ The web prototype's save file is base64 JSON, with timestamps, quest text, point
 | 1 | Today page, random slot generation, completion rolls, payout reveal, ledger, HUD | Ready for daily use | **done, reviewed** |
 | 2 | Routine layer: frequency scheduling, overdue, degrade, movable-within-week, ad-hoc replacement | Saturday no longer stacks up to ten tasks | parsing done, scheduling next |
 | 3 | HealthKit and Calendar: energy, readiness proxy, tier adjustment, auto-verification, cycle | Tier actually drops on a bad sleep night | code done, device checks pending |
-| 4 | Monthly calendar page and day detail | Any day can be reviewed | |
+| 4 | Monthly calendar page and day detail | Any day can be reviewed | code done, device check pending |
 | 5 | Epic, paid reroll, redemption page (including estimatedCost conversion), quest library management and affinity feedback | Coins have somewhere to go | reroll pricing done |
 | 6 | JSON export/import, web version migration | Balance matches exactly | export done, import pending |
 | 7 | Optional: Oura API, DeviceActivity, notifications, widget, CloudKit (requires paying) | | |
@@ -617,7 +617,7 @@ Affinity feedback needs a week or two to accumulate before batch-expanding the q
 
 **How `affinity` is derived from the rating log.** Ratings are now collected (one tap, right after the payout reveal) and stored append-only with their dates, but nothing reads them back yet: `QuestTemplate.affinity` — the number sampling actually weights on — is still always 0. Newest rating wins? Mean over a trailing window? A window makes one bad day count for less, which is the point of rating repeatedly, but it also means a quest you have decisively gone off takes weeks to fade. Blocks the last task in Stage 5; harmless until then, because the log keeps everything either rule would need.
 
-**What the day detail shows about rerolls and ratings.** `DailyQuest` is the per-day history the calendar page reads, and `QuestRating.questID` now points at the exact completion that prompted each rating. Whether the day detail surfaces "rerolled twice, swapped away X and Y" and "you rated this +2" is a Stage 4 question, but it decides whether Stage 5's reroll has to keep the swapped-away rows — see §6.
+~~What the day detail shows about rerolls and ratings~~ **Decided (Stage 4):** both. Ratings hang on the completion that prompted them (`QuestRating.questID`); rerolled-away rows are shown too, so Stage 5's reroll must keep them marked `rerolledAway` — see §6.
 
 ~~Whether a reroll may push the balance negative~~ **Decided:** it may not. See §6, "Reroll".
 
