@@ -14,6 +14,20 @@ extension QuestTemplate {
     }
 }
 
+extension DailyQuest {
+    public var sourceType: SourceType {
+        get { SourceType(rawValue: sourceTypeRaw) ?? .manual }
+        set { sourceTypeRaw = newValue.rawValue }
+    }
+}
+
+extension RoutineOccurrence {
+    public var sourceType: SourceType {
+        get { SourceType(rawValue: sourceTypeRaw) ?? .manual }
+        set { sourceTypeRaw = newValue.rawValue }
+    }
+}
+
 extension RoutineTask {
     public var frequency: FrequencySpec? {
         try? FrequencySpec.parse(kind: kind, spec: spec)

@@ -2,7 +2,7 @@
 
 Stages follow `PLAN.md` §11; this file only tracks concrete checkable tasks, updated as development progresses. Design intent, formulas, and data model definitions stay authoritative in `PLAN.md` — not repeated here.
 
-Current status: Stage 2 done — scheduling, occurrences, load → slots, routine completion, the overdue ladder, day-4 auto-skip, flexible Sunday settlement, the backlog, doing a flexible routine ahead, ad-hoc replacement and degraded_text, plus a two-week scenario test and simulator-only time travel (250 Core tests). Next: Stage 3. Stage 1 below as it stood: done, reviewed, and extended. `ensureToday`, catch-up, sampling, scoring,
+Current status: Stage 3 code done and running on the phone with HealthKit access; open until the device checks in the Stage 3 list pass. Stage 2 done — scheduling, occurrences, load → slots, routine completion, the overdue ladder, day-4 auto-skip, flexible Sunday settlement, the backlog, doing a flexible routine ahead, ad-hoc replacement and degraded_text, plus a two-week scenario test and simulator-only time travel (250 Core tests). Next: Stage 3. Stage 1 below as it stood: done, reviewed, and extended. `ensureToday`, catch-up, sampling, scoring,
 streak, the ledger, the today page, the payout reveal and the exports are in; 162 Core tests. Two inputs are still stubs, by
 design: `tier` is always `normal` until Stage 3 reads HealthKit, and `routineLoad` is always 0
 until Stage 2 schedules routines — both are `DayInputs` parameters, so wiring them is a one-line
@@ -114,13 +114,23 @@ that already have the most routine work.
 
 Done when: readiness actually drops the tier on a bad sleep day
 
-- [ ] HealthKit permissions + read sleep / HRV / restingHR / mindful / menstrualFlow
-- [ ] energy / readiness calculation + 28-day rolling median baseline + tests
-- [ ] Tier thresholds and random composition table, 1.3x effort multiplier at low tier — the table itself is already in `Core/Rules/Composition.swift`; Stage 3 only has to feed it a real tier
-- [ ] Confirm the intensity ladder `Composition.allowedIntensities` assumes (`veryLow` → low only, `low` → low + medium, cycle drops high). `PLAN.md` §5 fixes only the cycle rule and "filter down at low energy"; the middle step is this app's reading of it
-- [ ] Cycle detection: tier capped at normal, excludes `intensity = high`
-- [ ] EventKit reads calendar, `calendar_workout:30` auto-verification
-- [ ] `mindfulSession` auto-verification (allows multiple sessions per day to accumulate)
+Code is done: Core tested (`EnergyTests`, `HealthBucketsTests`, `AutoVerifyTests`, 296 Core tests), the app reads HealthKit / EventKit in `HealthService` / `CalendarService` and feeds `ensureToday` from `RootView`. Installed on the phone, HealthKit access granted, and the debug page's **Preview today's body data** (reads and scores now, writes nothing) returns real readings. **Stage 3 stays open** until the device checks below pass in daily use.
+
+- [x] Xcode: HealthKit capability (`LifeRPG.entitlements`), `NSHealthShareUsageDescription` and `NSCalendarsFullAccessUsageDescription`. An **empty** usage description makes HealthKit throw on the permission request — it looked like a frozen app because the debugger had paused the crash
+- [x] The free personal team installs an app with the HealthKit entitlement (`PLAN.md` §1). First launch needs the developer certificate trusted on the phone (Settings → General → VPN & Device Management)
+- [ ] Device check: the next morning's day stores real HRV / sleep / resting HR instead of 1.000 / 75 (a day generated before access was granted stays at defaults — the tier is locked at generation)
+- [ ] Device check — **the stage's "done when"**: a genuinely bad night drops the tier to low / veryLow and the day's composition follows
+- [ ] Device check: preview sleep hours and resting HR agree with the Health app (the sleep window and the RHR rule below are unverified assumptions)
+- [ ] Device check: a real workout written by the Shortcut auto-completes the matching routine / quest; mindful minutes likewise; a cycle day caps at normal
+- [x] HealthKit read of sleep / HRV / restingHR / mindful / menstrualFlow — `HealthService`. Which samples make a day is `Core/Rules/HealthBuckets.swift`: sleep = asleep stages ending in `[D−1 18:00, D 12:00)`, overlapping sources merged (Watch + Oura); HRV = mean of that window; resting HR = latest in `[D−1 00:00, D 12:00)`. The RHR rule assumes Apple dates its daily sample on the day it describes — **unverified against real data**
+- [x] energy / readiness + 28-day rolling median baseline + tests — `Core/Rules/Energy.swift`. Decisions made with the user: a missing metric (no HRV, no baseline yet) is dropped and the remaining weights renormalised; a metric needs 7 days in the window for a baseline; nothing usable → `normal`. The tier is **locked when the day is generated** (first open), like the rest of the day; the 28-day history is re-read from HealthKit each morning, which is also the first-launch backfill. Raw readings are stored on `DailyContext` (fields already existed)
+- [x] Tier thresholds (0.85 → low, 0.92 and 1.06 → normal) and the composition table fed a real tier; 1.3x at low tier already in `Scoring`
+- [x] Intensity ladder confirmed with the user: `veryLow` → low only, `low` → low + medium, cycle drops high
+- [x] Cycle: any `menstrualFlow` sample that day other than "none"; `Energy.cap` caps high at normal, never pushes down
+- [x] EventKit `calendar_workout:N` auto-verification — `Core/Day/AutoVerify.swift`. Decided with the user: an event counts only if it is in the chosen calendar **and** its title has a keyword (both set on the debug page; unset = off). All-day events never count. One event verifies one thing (routines first, oldest due first, shortest sufficient event); anything already completed that day spends its evidence first, so re-running is idempotent
+- [x] `mindfulSession` auto-verification, sessions accumulate per day (drawn down as items claim them)
+- [x] Auto-verify runs on every foreground for today, and during catch-up on each ended day **before** it is judged — a workout on a day the app never opened still counts on that day instead of being docked. `RoutineOccurrence` gained `sourceTypeRaw` (defaulted, still `SchemaV1`; export carries it); `Completion.complete` / `completeRoutine` take a `source`
+- Not covered, by design: `calendar_workout_weekly` (the epic's, Stage 5); T groups; ad-hoc occurrences (no routine to read a rule from). A light version shorter than the routine's threshold (weight training: light 20 min, rule 40) won't auto-verify — tap it
 
 ## Stage 4 — Monthly calendar page
 

@@ -3,15 +3,17 @@ import SwiftData
 
 /// The per-day inputs `ensureToday` needs but cannot measure itself.
 ///
-/// Stage 3 fills `tier` / `onCycle` / `energy` / `readiness` from HealthKit; until then the
-/// defaults stand in, which is why they are a parameter rather than something `ensureToday`
-/// decides. Routine load is **not** here: it is counted from the occurrences `ensureToday`
+/// The app fills them from HealthKit through `Energy.inputs`; the defaults are what a day with no
+/// body data gets (`normal`). The raw readings ride along so the day records what it was judged on. Routine load is **not** here: it is counted from the occurrences `ensureToday`
 /// schedules, so the number that sizes the random slots and the routines on the page can't disagree.
 public struct DayInputs: Equatable, Sendable {
     public var tier: Tier
     public var onCycle: Bool
     public var energy: Double
     public var readiness: Int
+    public var hrv: Double?
+    public var sleepHours: Double?
+    public var restingHR: Double?
 
     public init(tier: Tier = .normal, onCycle: Bool = false,
                 energy: Double = 1.0, readiness: Int = 75) {
@@ -79,14 +81,28 @@ public enum DayService {
                                    now: Date = Date(),
                                    in timeZone: TimeZone = .current,
                                    inputs: DayInputs = DayInputs(),
+                                   evidence: [String: DayEvidence] = [:],
                                    rng: inout some RandomNumberGenerator,
                                    settle: ((String, ModelContext) throws -> Void)? = nil) throws -> DailyContext {
         let today = now.dayKey(in: timeZone)          // taken once; everything below uses the key
         // Nil = the real settlement (`Overdue.settle`); tests may pass their own.
-        try catchUp(context, openedOn: today, in: timeZone,
-                    settle: settle ?? { try Overdue.settle($0, in: $1, timeZone: timeZone, now: now) })
+        let judge = settle ?? { try Overdue.settle($0, in: $1, timeZone: timeZone, now: now) }
+        // Each ended day is auto-verified from its own evidence *before* it is judged, so a workout
+        // logged on a day the app never saw still counts on that day rather than being docked.
+        try catchUp(context, openedOn: today, in: timeZone, settle: { day, ctx in
+            if let e = evidence[day] {
+                try AutoVerify.run(on: day, evidence: e, in: ctx, now: now, timeZone: timeZone, rng: &rng)
+            }
+            try judge(day, ctx)
+        })
 
-        if let existing = try dailyContext(for: today, in: context) { return existing }
+        if let existing = try dailyContext(for: today, in: context) {
+            // Every foreground re-checks today: a workout that synced since the last one lands now.
+            if let e = evidence[today] {
+                try AutoVerify.run(on: today, evidence: e, in: context, now: now, timeZone: timeZone, rng: &rng)
+            }
+            return existing
+        }
 
         let weekKey = DayKey.weekKey(of: today, in: timeZone) ?? now.weekKey(in: timeZone)
         let due = Schedule.dueRoutines(try context.fetch(FetchDescriptor<RoutineTask>()),
@@ -103,6 +119,9 @@ public enum DayService {
         day.onCycle = inputs.onCycle
         day.energy = inputs.energy
         day.readiness = inputs.readiness
+        day.hrv = inputs.hrv
+        day.sleepHours = inputs.sleepHours
+        day.restingHR = inputs.restingHR
         day.routineLoad = due.count
         day.randomSlots = Composition.slots(routineLoad: due.count)
         context.insert(day)
@@ -140,6 +159,9 @@ public enum DayService {
         }
 
         try context.save()
+        if let e = evidence[today] {
+            try AutoVerify.run(on: today, evidence: e, in: context, now: now, timeZone: timeZone, rng: &rng)
+        }
         return day
     }
 

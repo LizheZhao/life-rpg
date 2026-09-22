@@ -583,7 +583,7 @@ The web prototype's save file is base64 JSON, with timestamps, quest text, point
 | 0 | project, model, seed from the two CSVs | DB has data, app runs | **done** |
 | 1 | Today page, random slot generation, completion rolls, payout reveal, ledger, HUD | Ready for daily use | **done, reviewed** |
 | 2 | Routine layer: frequency scheduling, overdue, degrade, movable-within-week, ad-hoc replacement | Saturday no longer stacks up to ten tasks | parsing done, scheduling next |
-| 3 | HealthKit and Calendar: energy, readiness proxy, tier adjustment, auto-verification, cycle | Tier actually drops on a bad sleep night | |
+| 3 | HealthKit and Calendar: energy, readiness proxy, tier adjustment, auto-verification, cycle | Tier actually drops on a bad sleep night | code done, device checks pending |
 | 4 | Monthly calendar page and day detail | Any day can be reviewed | |
 | 5 | Epic, paid reroll, redemption page (including estimatedCost conversion), quest library management and affinity feedback | Coins have somewhere to go | reroll pricing done |
 | 6 | JSON export/import, web version migration | Balance matches exactly | export done, import pending |

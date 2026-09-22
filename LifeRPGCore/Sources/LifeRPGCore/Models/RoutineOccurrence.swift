@@ -23,6 +23,9 @@ import SwiftData
     public var penaltyApplied: Int = 0            // running total of escalating deductions
     public var skipped: Bool = false              // user skip, or auto on day 4
     public var completedAt: Date?
+    // `SourceType` raw value, as on `DailyQuest`. Added after V1 shipped: a defaulted field, so
+    // lightweight migration fills "manual" — which every earlier completion was.
+    public var sourceTypeRaw: String = "manual"
     // Ad-hoc (`PLAN.md` §3): the random slot this occurrence took over. Non-nil = ad-hoc, and
     // then `routineID` is nil on purpose, so scheduling, flexible settlement and the weekly
     // target never see it. Added after V1 shipped: optional, so lightweight migration fills nil.

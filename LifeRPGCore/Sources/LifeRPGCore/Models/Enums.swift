@@ -68,6 +68,12 @@ public enum Tier: String, Codable, CaseIterable, Sendable {
     public var isLow: Bool { self == .low || self == .veryLow }
 }
 
+/// How a quest or routine was completed. Auto-verified ones — calendar workouts as well as
+/// HealthKit mindful minutes — are all `healthKit`, as `PLAN.md` §5 names it.
+public enum SourceType: String, Codable, CaseIterable, Sendable {
+    case manual, healthKit
+}
+
 public enum RecurrenceKind: String, Codable, CaseIterable, Sendable {
     case weekly, everyNDays, monthly, nthWeekdayOfMonth, everyNWeeksOnWeekday
 }

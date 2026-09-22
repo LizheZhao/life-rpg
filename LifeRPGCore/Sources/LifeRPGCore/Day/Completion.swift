@@ -40,6 +40,7 @@ public enum Completion {
                                 tier: Tier,
                                 in context: ModelContext,
                                 now: Date = Date(),
+                                source: SourceType = .manual,
                                 rng: inout some RandomNumberGenerator) throws -> Int {
         guard quest.completedAt == nil else { throw Failure.alreadyCompleted }
         guard !quest.replaced else { throw Failure.replaced }
@@ -52,8 +53,10 @@ public enum Completion {
         let templates = try templates(of: quest, in: context)
         let cooldownBefore = templates.map(\.lastCompletedDayKey)
 
+        let sourceBefore = quest.sourceType
         quest.points = points
         quest.completedAt = now
+        quest.sourceType = source
         for template in templates {
             template.lastCompletedDayKey = quest.dayKey        // cooldown counts from completion
         }
@@ -69,6 +72,7 @@ public enum Completion {
             // `alreadyCompleted` because the in-memory object already looks finished.
             quest.points = nil
             quest.completedAt = nil
+            quest.sourceType = sourceBefore
             for (template, previous) in zip(templates, cooldownBefore) {
                 template.lastCompletedDayKey = previous
             }
@@ -134,7 +138,8 @@ public enum Completion {
                                        tier: Tier,
                                        in context: ModelContext,
                                        now: Date = Date(),
-                                       timeZone: TimeZone = .current) throws -> Int {
+                                       timeZone: TimeZone = .current,
+                                       source: SourceType = .manual) throws -> Int {
         guard occurrence.completedDayKey == nil else { throw Failure.alreadyCompleted }
         guard !occurrence.skipped else { throw Failure.skipped }
         let routine = try routine(of: occurrence, in: context)
@@ -144,10 +149,12 @@ public enum Completion {
         }
         let lastCompletedBefore = routine?.lastCompletedDayKey
         let anchorBefore = routine?.anchorWeekKey
+        let sourceBefore = occurrence.sourceType
 
         occurrence.completedDayKey = dayKey
         occurrence.completedAt = now
         occurrence.awardedPoints = points
+        occurrence.sourceType = source
         routine.map { stamp($0, completedOn: dayKey, weekKey: occurrence.weekKey) }
         let entry = Economy.record(context, kind: .routine, points: points, dayKey: dayKey,
                                    refID: occurrence.id, note: occurrence.displayText, now: now)
@@ -159,6 +166,7 @@ public enum Completion {
             occurrence.completedDayKey = nil
             occurrence.completedAt = nil
             occurrence.awardedPoints = nil
+            occurrence.sourceType = sourceBefore
             routine?.lastCompletedDayKey = lastCompletedBefore
             routine?.anchorWeekKey = anchorBefore
             context.delete(entry)

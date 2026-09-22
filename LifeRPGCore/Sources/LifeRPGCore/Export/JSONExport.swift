@@ -74,6 +74,7 @@ public enum JSONExport {
         public var replacesQuestID: UUID?
         public var adHocSourceRoutineID: UUID?
         public var degradedText: String?
+        public var sourceType: String
     }
 
     public struct Context: Codable, Equatable, Sendable {
@@ -135,7 +136,7 @@ public enum JSONExport {
                            awardedPoints: $0.awardedPoints, penaltyApplied: $0.penaltyApplied,
                            skipped: $0.skipped, completedAt: $0.completedAt,
                            replacesQuestID: $0.replacesQuestID, adHocSourceRoutineID: $0.adHocSourceRoutineID,
-                           degradedText: $0.degradedTextSnapshot)
+                           degradedText: $0.degradedTextSnapshot, sourceType: $0.sourceTypeRaw)
             },
             dailyContexts: try context.fetch(FetchDescriptor<DailyContext>()).sorted { $0.dayKey < $1.dayKey }.map {
                 Context(dayKey: $0.dayKey, hrv: $0.hrv, sleepHours: $0.sleepHours, restingHR: $0.restingHR,
