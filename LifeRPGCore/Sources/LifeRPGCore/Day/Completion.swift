@@ -13,6 +13,8 @@ public enum Completion {
         case trivialGroupIncomplete(remaining: Int)
         case indexOutOfRange
         case skipped
+        /// The slot was taken over by an ad-hoc routine (`AdHoc.replace`).
+        case replaced
         /// A flexible routine with nothing left to come due this week (or not flexible at all).
         case nothingAhead
         /// Before the due day, or after day 3 of the round (day 4 is the auto-skip).
@@ -24,6 +26,7 @@ public enum Completion {
             case .trivialGroupIncomplete(let n): "\(n) item(s) of the T group still undone"
             case .indexOutOfRange: "no such T group item"
             case .skipped: "already skipped"
+            case .replaced: "replaced by an ad-hoc routine"
             case .nothingAhead: "nothing left to do ahead this week"
             case .outsideRound(let due, let day): "due \(due), can't be completed on \(day)"
             }
@@ -39,6 +42,7 @@ public enum Completion {
                                 now: Date = Date(),
                                 rng: inout some RandomNumberGenerator) throws -> Int {
         guard quest.completedAt == nil else { throw Failure.alreadyCompleted }
+        guard !quest.replaced else { throw Failure.replaced }
         if quest.isTrivialGroup {
             let remaining = quest.trivialDone.filter { !$0 }.count
             guard remaining == 0 else { throw Failure.trivialGroupIncomplete(remaining: remaining) }
@@ -84,6 +88,7 @@ public enum Completion {
                                        now: Date = Date(),
                                        rng: inout some RandomNumberGenerator) throws -> Int? {
         guard quest.completedAt == nil else { throw Failure.alreadyCompleted }
+        guard !quest.replaced else { throw Failure.replaced }
         guard quest.trivialDone.indices.contains(index) else { throw Failure.indexOutOfRange }
 
         quest.trivialDone[index] = true
@@ -145,7 +150,7 @@ public enum Completion {
         occurrence.awardedPoints = points
         routine.map { stamp($0, completedOn: dayKey, weekKey: occurrence.weekKey) }
         let entry = Economy.record(context, kind: .routine, points: points, dayKey: dayKey,
-                                   refID: occurrence.id, note: occurrence.textSnapshot, now: now)
+                                   refID: occurrence.id, note: occurrence.displayText, now: now)
 
         do {
             try context.save()
@@ -165,10 +170,15 @@ public enum Completion {
     /// Does a flexible routine ahead of its due day: creates the next occurrence still to come
     /// this week (`Schedule.aheadCandidates`) and completes it today, at full pay. When that day
     /// arrives the occurrence already exists, so it is neither created again nor counted as load.
+    ///
+    /// On a low day with a light version on offer, `light` says which version was done — there is
+    /// no open occurrence to switch afterwards, so the choice is made here. Same points either way;
+    /// ignored when there is no light version.
     @discardableResult
     public static func completeAhead(_ routine: RoutineTask,
                                      on dayKey: String,
                                      tier: Tier,
+                                     light: Bool = true,
                                      in context: ModelContext,
                                      now: Date = Date(),
                                      timeZone: TimeZone = .current) throws -> Int {
@@ -179,14 +189,16 @@ public enum Completion {
         let points = Scoring.routinePoints(basePoints: routine.basePoints, tier: tier, late: false)
         let lastCompletedBefore = routine.lastCompletedDayKey
         let anchorBefore = routine.anchorWeekKey
-        let occurrence = RoutineOccurrence(routine: routine, dueDayKey: ahead.nextDueDayKey, weekKey: week)
+        let occurrence = RoutineOccurrence(routine: routine, dueDayKey: ahead.nextDueDayKey, weekKey: week,
+                                           tier: tier)
+        occurrence.usedDegraded = light && occurrence.degradedTextSnapshot != nil
         occurrence.completedDayKey = dayKey
         occurrence.completedAt = now
         occurrence.awardedPoints = points
         context.insert(occurrence)
         stamp(routine, completedOn: dayKey, weekKey: week)
         let entry = Economy.record(context, kind: .routine, points: points, dayKey: dayKey,
-                                   refID: occurrence.id, note: occurrence.textSnapshot, now: now)
+                                   refID: occurrence.id, note: occurrence.displayText, now: now)
         do {
             try context.save()
         } catch {

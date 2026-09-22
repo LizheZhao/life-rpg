@@ -62,6 +62,10 @@ public enum Intensity: String, Codable, CaseIterable, Sendable {
 
 public enum Tier: String, Codable, CaseIterable, Sendable {
     case veryLow, low, normal, high
+
+    /// A low-energy day (`PLAN.md` §5): the 1.3× effort multiplier applies, and routines with a
+    /// `degraded_text` are swapped for it. One rule for both.
+    public var isLow: Bool { self == .low || self == .veryLow }
 }
 
 public enum RecurrenceKind: String, Codable, CaseIterable, Sendable {

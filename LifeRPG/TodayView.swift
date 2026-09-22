@@ -26,6 +26,7 @@ struct TodayView: View {
     /// Collapsed by default: it lists every flexible routine still short this week, which is most
     /// of them early in the week, and none of it is today's work.
     @AppStorage("aheadExpanded") private var aheadExpanded = false
+    @State private var addingAdHoc = false
     @State private var roll: Roll?
     @State private var actionError: String?
     @State private var exportingJSON = false
@@ -58,7 +59,7 @@ struct TodayView: View {
             case .quest(let q): [q.textSnapshot, q.variantSnapshot]
                     .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " — ")
             case .trivialItem(let q, let i): q.trivialGroup.indices.contains(i) ? q.trivialGroup[i] : ""
-            case .routine(let o): o.textSnapshot
+            case .routine(let o): o.displayText
             case .ahead(let r): "\(r.text) (ahead of schedule)"
             }
         }
@@ -141,7 +142,8 @@ struct TodayView: View {
                             .foregroundStyle(.secondary)
                     }
                     ForEach(randomQuests) { quest in
-                        if quest.isTrivialGroup { trivialGroupRow(quest) } else { questRow(quest) }
+                        if quest.replaced { replacedRow(quest) }
+                        else if quest.isTrivialGroup { trivialGroupRow(quest) } else { questRow(quest) }
                     }
                 }
 
@@ -177,7 +179,7 @@ struct TodayView: View {
                                 HStack(alignment: .firstTextBaseline) {
                                     badge("R", range: nil)
                                     VStack(alignment: .leading, spacing: 2) {
-                                        Text(o.textSnapshot)
+                                        Text(o.displayText)
                                         Text("Done ahead · counts for \(o.dueDayKey)")
                                             .font(.caption).foregroundStyle(.secondary)
                                     }
@@ -190,7 +192,8 @@ struct TodayView: View {
                                 HStack(alignment: .firstTextBaseline) {
                                     badge("R", range: pays...pays)
                                     VStack(alignment: .leading, spacing: 2) {
-                                        Text(c.routine.text)
+                                        // On a low day doing it ahead creates the light version.
+                                        Text(Degrade.text(for: c.routine, tier: tier) ?? c.routine.text)
                                         Text("\(c.doneThisWeek)/\(c.routine.weeklyTarget) this week · next due \(c.nextDueDayKey)")
                                             .font(.caption).foregroundStyle(.secondary)
                                     }
@@ -240,6 +243,11 @@ struct TodayView: View {
             }
             .navigationTitle("Today")
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button { addingAdHoc = true } label: { Image(systemName: "plus") }
+                        .accessibilityLabel("Add a routine for today")
+                        .disabled(AdHoc.replaceableSlots(quests, on: today).isEmpty)
+                }
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
                         Button { prepareJSONExport() } label: {
@@ -262,10 +270,21 @@ struct TodayView: View {
             .alert("Mark as done?",
                    isPresented: Binding(get: { pending != nil }, set: { if !$0 { pending = nil } }),
                    presenting: pending) { action in
-                Button("Complete") { perform(action) }
+                // Done ahead there is no row to switch versions on afterwards, so on a low day the
+                // version is picked here. Same points either way.
+                if case .ahead(let routine) = action, Degrade.text(for: routine, tier: tier) != nil {
+                    Button("Did the light version") { perform(action, light: true) }
+                    Button("Did the original") { perform(action, light: false) }
+                } else {
+                    Button("Complete") { perform(action) }
+                }
                 Button("Cancel", role: .cancel) {}
             } message: { action in
-                Text("\(action.label)\n\nThis is final — completion cannot be undone.")
+                if case .ahead(let routine) = action, let light = Degrade.text(for: routine, tier: tier) {
+                    Text("\(routine.text)\nLight version: \(light)\n\nSame points either way. This is final — completion cannot be undone.")
+                } else {
+                    Text("\(action.label)\n\nThis is final — completion cannot be undone.")
+                }
             }
             .overlay {
                 if let roll {
@@ -276,6 +295,9 @@ struct TodayView: View {
                     }
                     .transition(.opacity)
                 }
+            }
+            .sheet(isPresented: $addingAdHoc) {
+                AdHocView(today: today, tier: tier)
             }
             .fileExporter(isPresented: $exportingJSON,
                           document: jsonDocument,
@@ -363,7 +385,8 @@ struct TodayView: View {
         return HStack(alignment: .firstTextBaseline) {
             badge("R", range: pays.map { $0...$0 })
             VStack(alignment: .leading, spacing: 2) {
-                Text(occurrence.textSnapshot)
+                Text(occurrence.displayText)
+                if occurrence.degradedTextSnapshot != nil { versionNote(occurrence) }
                 if occurrence.completedDayKey == nil {
                     switch note {
                     case .overdue:
@@ -374,6 +397,11 @@ struct TodayView: View {
                     case nil:
                         EmptyView()
                     }
+                }
+                if let questID = occurrence.replacesQuestID {
+                    let replaced = allQuests.first { $0.id == questID }
+                    Text("Added today · replaces \(replaced.map(slotText) ?? "a random slot")")
+                        .font(.caption).foregroundStyle(.secondary)
                 }
                 if !occurrence.countsForClear {
                     Text("Doesn't gate the hidden quest").font(.caption).foregroundStyle(.secondary)
@@ -387,6 +415,45 @@ struct TodayView: View {
                     .buttonStyle(.bordered)
             }
         }
+    }
+
+    /// A routine with a light version on offer today: which one is chosen, and — while it is
+    /// still open — a switch to the other. Both pay the same, so no confirmation.
+    @ViewBuilder
+    private func versionNote(_ occurrence: RoutineOccurrence) -> some View {
+        let open = occurrence.completedDayKey == nil && !occurrence.skipped
+        HStack(spacing: 6) {
+            Text(occurrence.usedDegraded ? "Light version · \(occurrence.textSnapshot)"
+                                         : "Original · light version available")
+                .font(.caption).foregroundStyle(.secondary)
+            if open {
+                Button(occurrence.usedDegraded ? "Do original" : "Use light") {
+                    do {
+                        try Degrade.choose(light: !occurrence.usedDegraded, for: occurrence, in: context)
+                        actionError = nil
+                    } catch {
+                        actionError = "\(error)"
+                    }
+                }
+                .font(.caption)
+                .buttonStyle(.borderless)
+            }
+        }
+    }
+
+    /// A slot an ad-hoc routine took over: kept on the page as a record, no longer to do.
+    private func replacedRow(_ quest: DailyQuest) -> some View {
+        HStack(alignment: .firstTextBaseline) {
+            badge(quest.isTrivialGroup ? "T×3" : quest.slot.code)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(slotText(quest)).strikethrough().foregroundStyle(.secondary)
+                Text("Replaced").font(.caption).foregroundStyle(.tertiary)
+            }
+        }
+    }
+
+    private func slotText(_ quest: DailyQuest) -> String {
+        quest.isTrivialGroup ? quest.trivialGroup.joined(separator: " · ") : quest.textSnapshot
     }
 
     /// Three micro-actions in one E slot, scored 12 as a whole once all three are ticked.
@@ -444,7 +511,7 @@ struct TodayView: View {
 
     // MARK: actions
 
-    private func perform(_ action: PendingAction) {
+    private func perform(_ action: PendingAction, light: Bool = true) {
         var rng = SystemRandomNumberGenerator()
         do {
             switch action {
@@ -461,7 +528,7 @@ struct TodayView: View {
                 // A fixed payout, nothing rolled — the number lands on the row, no reveal.
                 try Completion.completeRoutine(occurrence, on: today, tier: tier, in: context)
             case .ahead(let routine):
-                try Completion.completeAhead(routine, on: today, tier: tier, in: context)
+                try Completion.completeAhead(routine, on: today, tier: tier, light: light, in: context)
             }
             actionError = nil
         } catch {

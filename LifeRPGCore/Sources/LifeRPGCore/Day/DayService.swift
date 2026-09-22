@@ -93,7 +93,8 @@ public enum DayService {
                                        occurrences: try context.fetch(FetchDescriptor<RoutineOccurrence>()),
                                        on: today, in: timeZone)
         for routine in due {
-            context.insert(RoutineOccurrence(routine: routine, dueDayKey: today, weekKey: weekKey))
+            context.insert(RoutineOccurrence(routine: routine, dueDayKey: today, weekKey: weekKey,
+                                             tier: inputs.tier))
         }
 
         let day = DailyContext()
@@ -229,8 +230,10 @@ extension DailyQuest {
 
 extension RoutineOccurrence {
     /// One routine due on one day. Text, points and the full-clear flag are snapshotted, so
-    /// editing the routine later can't rewrite what was asked of you that day.
-    public convenience init(routine: RoutineTask, dueDayKey: String, weekKey: String) {
+    /// editing the routine later can't rewrite what was asked of you that day. On a low `tier`
+    /// day a routine with a light version starts out as that version (`Degrade`).
+    public convenience init(routine: RoutineTask, dueDayKey: String, weekKey: String,
+                            tier: Tier = .normal) {
         self.init()
         routineID = routine.id
         self.dueDayKey = dueDayKey
@@ -238,5 +241,9 @@ extension RoutineOccurrence {
         textSnapshot = routine.text
         basePoints = routine.basePoints
         countsForClear = routine.countsForClear
+        if let light = Degrade.text(for: routine, tier: tier) {
+            degradedTextSnapshot = light
+            usedDegraded = true
+        }
     }
 }

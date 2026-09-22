@@ -14,7 +14,7 @@ public enum Scoring {
 
     /// 1.3x on low-energy days: moving when you are in bad shape deserves more, not less.
     public static func effortMultiplier(_ tier: Tier) -> Double {
-        (tier == .low || tier == .veryLow) ? 1.3 : 1.0
+        tier.isLow ? 1.3 : 1.0
     }
 
     /// `round(roll(difficulty) × m) + (hidden ? 10 : 0)`.

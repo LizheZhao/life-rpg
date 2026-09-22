@@ -69,6 +69,10 @@ Generated every Monday, valid through Sunday, visible from the start, doesn't co
 
 A routine can be manually added for the day, but must specify which random slot it replaces. The replaced random quest is marked `replaced` and doesn't count toward full-clear. The replacement is free, but the cost is that this routine now loses points if not done.
 
+- **Source**, on its own page with two tabs: picked from the routine library (active routines with nothing already on today's page — not due today, not added, not still open from an earlier day), or written on the spot with a difficulty. A custom task's base is the midpoint of that difficulty's range: E 10, M 21, H 38. T and EPIC can't be chosen.
+- **Which slot**: any random slot of today that is not done, not hidden and not already replaced. Final, like completion.
+- **Independent of the library**: the ad-hoc occurrence carries no `routineID`, so it is never flexible, never counts toward a weekly target and never moves the routine's next due date. It is always on the fixed overdue ladder and always gates the full-clear — even when picked from a `counts_for_clear = false` routine, which would otherwise make it a free pass out of a hard slot.
+
 ### Cooldown
 
 Cooldown counts from the **completion** day, not the draw day: after completing a quest it isn't eligible again for its cooldown period — T and E are 3 days, M is 7 days, H is 14 days; individual entries can override this in the CSV.
@@ -121,6 +125,11 @@ When Saturday's weight training gets broken by social plans, it's allowed to shi
 On low-energy days, routines aren't penalized for being skipped — instead they're automatically swapped for a degraded version: running becomes an incline walk, weight training becomes light dumbbells or bodyweight work, and completing it still awards full points. This has to be encoded in the app, not left to willpower in the moment, because the goal is to lower intensity, not skip entirely.
 
 **Only routines with a non-empty `degraded_text` can degrade**; routines without one stay as-is regardless of tier.
+
+- **Low day** = tier `low` or `veryLow` — the same rule as the 1.3× multiplier (`Tier.isLow`).
+- **Decided when the day is generated**: the occurrence starts out as the light version. An overdue one carried from an earlier day keeps the version it was created with; a flexible routine done ahead on a low day asks which version was done.
+- **The original can still be chosen**, for the same points, until the occurrence is done or skipped. `usedDegraded` records which version was actually done. The original wording stays in `textSnapshot`, the light one sits beside it.
+- **Ad-hoc routines never degrade** — they are picked on purpose, on the spot.
 
 ### Overdue penalty
 
