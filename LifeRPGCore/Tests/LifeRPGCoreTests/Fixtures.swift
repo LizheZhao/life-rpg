@@ -17,12 +17,19 @@ enum Fixtures {
 }
 
 extension Fixtures {
-    /// A throwaway in-memory store with the real schema.
+    /// Creating containers concurrently crashes inside Core Data (SIGSEGV in
+    /// `NSSQLEntity_DerivedAttributesExtension _generateTriggerSQL`: the shared model's trigger
+    /// cache is mutated unlocked). Swift Testing runs suites in parallel, so creation is serialized.
+    private static let containerLock = NSLock()
+
+    /// A throwaway in-memory store with the real schema. Every test container must come from here.
     static func context() throws -> ModelContext {
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try ModelContainer(for: LifeRPGSchema.current,
-                                           migrationPlan: LifeRPGMigrationPlan.self,
-                                           configurations: config)
+        let container = try containerLock.withLock {
+            try ModelContainer(for: LifeRPGSchema.current,
+                               migrationPlan: LifeRPGMigrationPlan.self,
+                               configurations: config)
+        }
         return ModelContext(container)
     }
 

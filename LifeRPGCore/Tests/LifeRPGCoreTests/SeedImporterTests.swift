@@ -5,11 +5,7 @@ import Testing
 
 struct SeedImporterTests {
     private func makeContext() throws -> ModelContext {
-        let config = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try ModelContainer(for: LifeRPGSchema.current,
-                                           migrationPlan: LifeRPGMigrationPlan.self,
-                                           configurations: config)
-        return ModelContext(container)
+        try Fixtures.context()
     }
 
     private func merge(_ ctx: ModelContext,

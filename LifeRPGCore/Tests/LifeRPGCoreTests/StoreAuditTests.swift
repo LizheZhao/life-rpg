@@ -7,11 +7,7 @@ import Testing
 /// silently downgraded to E. The audit is what turns that into a visible count.
 struct StoreAuditTests {
     private func makeContext() throws -> ModelContext {
-        let config = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try ModelContainer(for: LifeRPGSchema.current,
-                                           migrationPlan: LifeRPGMigrationPlan.self,
-                                           configurations: config)
-        return ModelContext(container)
+        try Fixtures.context()
     }
 
     @Test func realSeedDataIsClean() throws {
