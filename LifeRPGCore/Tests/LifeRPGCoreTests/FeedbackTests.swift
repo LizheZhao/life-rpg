@@ -78,7 +78,8 @@ struct FeedbackTests {
         // Whole-second timestamps: ISO 8601 has no sub-second field, so a `Date()` default would
         // fail the round trip on precision alone and say nothing about the export.
         let when = Fixtures.date("2026-09-10")
-        Feedback.rate(ctx, target: .quest, id: UUID(), text: "sauna", rating: 2,
+        let questID = UUID()
+        Feedback.rate(ctx, target: .quest, id: UUID(), questID: questID, text: "sauna", rating: 2,
                       dayKey: "2026-09-10", now: when)
         Feedback.comment(ctx, target: .routine, id: UUID(), text: "trash", comment: "bins were full",
                          dayKey: "2026-09-10", now: when)
@@ -87,6 +88,9 @@ struct FeedbackTests {
         let snapshot = try JSONExport.snapshot(ctx, now: when)
         #expect(snapshot.ratings.count == 1)
         #expect(snapshot.ratings.first?.targetKind == "quest")
+        // Without this the link to the completion that prompted the rating dies in the export,
+        // and a restore could only say "this quest, some time in September".
+        #expect(snapshot.ratings.first?.questID == questID)
         #expect(snapshot.comments.count == 1)
         #expect(snapshot.comments.first?.targetKind == "routine")
 

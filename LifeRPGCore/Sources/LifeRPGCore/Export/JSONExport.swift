@@ -96,6 +96,10 @@ public enum JSONExport {
     public struct Rating: Codable, Equatable, Sendable {
         public var id: UUID
         public var targetID: UUID?
+        /// The `DailyQuest` (or occurrence) this was rated right after. Without it a restored
+        /// rating can only say "this quest, in September", not which completion prompted it —
+        /// and that join is the whole reason the field exists.
+        public var questID: UUID?
         public var targetKind: String
         public var text: String
         public var rating: Int
@@ -106,6 +110,7 @@ public enum JSONExport {
     public struct Comment: Codable, Equatable, Sendable {
         public var id: UUID
         public var targetID: UUID?
+        public var questID: UUID?
         public var targetKind: String
         public var text: String
         public var comment: String
@@ -149,12 +154,14 @@ public enum JSONExport {
                         cycleDay: $0.cycleDay, routineLoad: $0.routineLoad, randomSlots: $0.randomSlots)
             },
             ratings: try context.fetch(FetchDescriptor<QuestRating>()).sorted { $0.timestamp < $1.timestamp }.map {
-                Rating(id: $0.id, targetID: $0.targetID, targetKind: $0.targetKindRaw,
+                Rating(id: $0.id, targetID: $0.targetID, questID: $0.questID,
+                       targetKind: $0.targetKindRaw,
                        text: $0.textSnapshot, rating: $0.rating, dayKey: $0.dayKey,
                        timestamp: $0.timestamp)
             },
             comments: try context.fetch(FetchDescriptor<QuestComment>()).sorted { $0.timestamp < $1.timestamp }.map {
-                Comment(id: $0.id, targetID: $0.targetID, targetKind: $0.targetKindRaw,
+                Comment(id: $0.id, targetID: $0.targetID, questID: $0.questID,
+                        targetKind: $0.targetKindRaw,
                         text: $0.textSnapshot, comment: $0.comment, dayKey: $0.dayKey,
                         timestamp: $0.timestamp)
             })
