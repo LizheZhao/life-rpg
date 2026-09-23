@@ -145,6 +145,7 @@ Code done (`SchemaV2`, 337 Core tests). Four changes that belong together becaus
 - [x] **Body data re-read on every foreground**, and a day already on screen can be re-planned after confirming (`Replan`): finished work untouched, open slots redrawn, open routines' downgrade decision redone. A failed read never re-plans
 - [x] `SchemaV2` + a lightweight migration stage; JSON export `schemaVersion` 3 (carries `cycleDay` and `degradedBasePoints`)
 - [x] `SeedImporter` now also links downgrade versions onto rows the DB already has — the one thing the merge writes to an existing row, and it only ever adds an id
+- [x] **T is the bottom rung of the composition table**, not an overlay on an E slot: `veryLow` = T,E,E and `low` = T,E,M; `normal` and `high` have no T. The 40% chance and the very-low guarantee are both gone, so `Composition.plan` no longer takes an RNG and `Composition.Slot` is gone with it — a planned slot is just a `Difficulty`. A T-group `DailyQuest` now records `slot = .trivial` instead of `.easy`; history rows written before this keep `.easy`, which only affects how they sort in the day detail. Settles the T-probability question in `PLAN.md` §12. **Consequence: micro-actions no longer appear on normal or high days at all**
 - [ ] Device check: on the phone, a real day 1 shows the walk instead of weight training, and the day detail says "cycle day 1"
 - [ ] Device check: opening the app before the watch has synced, then again after, offers the re-plan and doesn't disturb anything already done
 

@@ -48,7 +48,7 @@ struct ReplanTests {
 
         let after = try DayService.quests(on: fri, in: ctx).filter { !$0.replaced }
         #expect(after.count == 3)
-        #expect(after.allSatisfy { $0.slot == .easy })
+        #expect(after.map(\.slot).sorted { $0.code < $1.code } == [.easy, .easy, .trivial])
         // The old rows are kept as the record that they were once asked for, not deleted.
         #expect(try DayService.quests(on: fri, in: ctx).filter(\.replaced).count == 3)
         #expect(try DayService.dailyContext(for: fri, in: ctx)?.tier == .veryLow)
@@ -71,8 +71,8 @@ struct ReplanTests {
         #expect(done.textSnapshot == text)
         #expect(!done.replaced)
 
-        // A finished M can't fill one of a very-low day's three E slots, so all three are drawn —
-        // and the finished one stays on the page beside them.
+        // A finished M can't fill a very-low day's T/E/E slots, so all three are drawn — and the
+        // finished one stays on the page beside them.
         let open = try DayService.quests(on: fri, in: ctx).filter { !$0.replaced }
         #expect(open.filter { $0.completedAt == nil }.count == 3)
         #expect(open.filter { $0.completedAt != nil }.count == 1)

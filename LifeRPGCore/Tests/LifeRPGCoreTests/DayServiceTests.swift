@@ -184,7 +184,7 @@ struct DayServiceTests {
     }
 
     /// A T group takes one E slot: one `DailyQuest` holding three texts, not three rows.
-    @Test func trivialGroupOccupiesASingleEasySlot() throws {
+    @Test func aVeryLowDayGetsOneTrivialSlot() throws {
         let ctx = try Fixtures.context()
         Fixtures.stockLibrary(ctx)
         var rng = SeededRNG(seed: 3)
@@ -195,7 +195,7 @@ struct DayServiceTests {
         let groups = quests.filter(\.isTrivialGroup)
         #expect(quests.count == 3)
         #expect(groups.count == 1)
-        #expect(groups[0].slot == .easy)
+        #expect(groups[0].slot == .trivial)   // T is its own rung now, not an E slot
         #expect(groups[0].trivialGroup.count == 3)
         #expect(groups[0].trivialDone == [false, false, false])
         #expect(groups[0].trivialTemplateIDs.count == 3)

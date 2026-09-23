@@ -137,7 +137,7 @@ public enum DayService {
         context.insert(day)
 
         var drawn: Set<UUID> = []
-        try fill(context, plan: Composition.plan(tier: inputs.tier, slots: day.randomSlots, rng: &rng),
+        try fill(context, plan: Composition.plan(tier: inputs.tier, slots: day.randomSlots),
                  on: today, weekKey: weekKey, excluding: &drawn, in: timeZone, rng: &rng)
 
         try context.save()
@@ -151,7 +151,7 @@ public enum DayService {
     /// it draws to it. Shared by the first generation of a day and by `Replan`, so a re-plan
     /// fills a slot exactly the way the morning would have.
     static func fill(_ context: ModelContext,
-                     plan: [Composition.Slot],
+                     plan: [Difficulty],
                      on dayKey: String,
                      weekKey: String,
                      excluding drawn: inout Set<UUID>,
@@ -159,7 +159,7 @@ public enum DayService {
                      rng: inout some RandomNumberGenerator) throws {
         let templates = try Sampling.activeTemplates(context)
         for slot in plan {
-            if slot.isTrivialGroup {
+            if slot == .trivial {
                 let pool = Sampling.eligible(templates, difficulty: .trivial, dayKey: dayKey,
                                              excluding: drawn, in: timeZone)
                 let group = Sampling.pickDistinct(3, from: pool, rng: &rng)
@@ -176,10 +176,11 @@ public enum DayService {
                 }
                 // Fewer than three T items available: the slot falls back to a normal E draw.
             }
-            let pool = Sampling.eligible(templates, difficulty: slot.difficulty, dayKey: dayKey,
+            let difficulty = slot == .trivial ? .easy : slot
+            let pool = Sampling.eligible(templates, difficulty: difficulty, dayKey: dayKey,
                                          excluding: drawn, in: timeZone)
             guard let template = Sampling.pick(from: pool, rng: &rng) else { continue }
-            context.insert(DailyQuest(template: template, slot: slot.difficulty,
+            context.insert(DailyQuest(template: template, slot: difficulty,
                                       dayKey: dayKey, weekKey: weekKey,
                                       variant: Sampling.variant(of: template, rng: &rng)))
             template.lastServedDayKey = dayKey
@@ -261,7 +262,7 @@ extension DailyQuest {
         self.init()
         self.dayKey = dayKey
         self.weekKey = weekKey
-        slot = .easy                                  // the slot it occupies, not its own tier
+        slot = .trivial                               // T is its own rung, below E
         trivialGroup = group.map(\.text)
         trivialTemplateIDs = group.map(\.id)
         trivialVariants = variants.count == group.count ? variants

@@ -72,10 +72,10 @@ public enum Replan {
         // Slots the new tier asks for that a completed quest already answers are left alone —
         // an E that is done still fills the E slot. The rest are drawn fresh, skipping every
         // template the day has already served so nothing repeats inside one day.
-        var plan = Composition.plan(tier: inputs.tier, slots: day.randomSlots, rng: &rng)
+        var plan = Composition.plan(tier: inputs.tier, slots: day.randomSlots)
         for (index, slot) in plan.enumerated().reversed() {
             guard let match = completed.firstIndex(where: {
-                $0.slot == slot.difficulty && $0.isTrivialGroup == slot.isTrivialGroup
+                slot == .trivial ? $0.isTrivialGroup : ($0.slot == slot && !$0.isTrivialGroup)
             }) else { continue }
             completed.remove(at: match)
             plan.remove(at: index)

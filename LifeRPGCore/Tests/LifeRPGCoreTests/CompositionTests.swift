@@ -16,9 +16,11 @@ struct CompositionTests {
         #expect(Composition.slots(routineLoad: 12) == 1)   // never below 1
     }
 
+    /// T is the rung below E, in the table rather than an overlay on an E slot: micro-actions
+    /// are what a day you can barely function on is for.
     @Test func tableMatchesPlan() {
-        #expect(Composition.table(.veryLow) == [.easy, .easy, .easy])
-        #expect(Composition.table(.low) == [.easy, .easy, .medium])
+        #expect(Composition.table(.veryLow) == [.trivial, .easy, .easy])
+        #expect(Composition.table(.low) == [.trivial, .easy, .medium])
         #expect(Composition.table(.normal) == [.easy, .medium, .hard])
         #expect(Composition.table(.high) == [.medium, .medium, .hard])
     }
@@ -26,38 +28,24 @@ struct CompositionTests {
     /// The design call on PLAN §12: fewer slots drop from the **hard** end, so no H is guaranteed
     /// on a weekend. Saturday's single slot is an E, Sunday's two are E + M.
     @Test func fewerSlotsDropTheHardEnd() {
-        var rng = SeededRNG(seed: 1)
-        let one = Composition.plan(tier: .normal, slots: 1, rng: &rng).map(\.difficulty)
-        let two = Composition.plan(tier: .normal, slots: 2, rng: &rng).map(\.difficulty)
-        let three = Composition.plan(tier: .normal, slots: 3, rng: &rng).map(\.difficulty)
-        #expect(one == [.easy])
-        #expect(two == [.easy, .medium])
-        #expect(three == [.easy, .medium, .hard])
+        #expect(Composition.plan(tier: .normal, slots: 1) == [.easy])
+        #expect(Composition.plan(tier: .normal, slots: 2) == [.easy, .medium])
+        #expect(Composition.plan(tier: .normal, slots: 3) == [.easy, .medium, .hard])
     }
 
-    @Test func trivialGroupIsGuaranteedAtVeryLow() {
-        for seed in UInt64(0)..<20 {
-            var rng = SeededRNG(seed: seed)
-            let plan = Composition.plan(tier: .veryLow, slots: 3, rng: &rng)
-            #expect(plan.filter(\.isTrivialGroup).count == 1)
-            #expect(plan.allSatisfy { $0.difficulty == .easy })
-        }
+    /// A heavy routine day at low energy keeps the bottom of the ladder: the one slot left is
+    /// the T group.
+    @Test func aSqueezedLowDayKeepsTheTrivialSlot() {
+        #expect(Composition.plan(tier: .low, slots: 1) == [.trivial])
+        #expect(Composition.plan(tier: .veryLow, slots: 2) == [.trivial, .easy])
     }
 
-    /// A T group only ever takes an E slot — at `high` there is none, so it can't appear.
-    @Test func trivialGroupNeedsAnEasySlot() {
-        for seed in UInt64(0)..<20 {
-            var rng = SeededRNG(seed: seed)
-            #expect(Composition.plan(tier: .high, slots: 3, rng: &rng).allSatisfy { !$0.isTrivialGroup })
-        }
-    }
-
-    @Test func trivialGroupShowsUpRoughlyFortyPercent() {
-        var rng = SeededRNG(seed: 42)
-        var hits = 0
-        for _ in 0..<2000 where Composition.plan(tier: .normal, slots: 3, rng: &rng).contains(where: \.isTrivialGroup) {
-            hits += 1
-        }
-        #expect((700...900).contains(hits))     // 40% of 2000, generous band
+    /// Low and very low always have their T slot; normal and high never do — nothing random
+    /// decides it any more.
+    @Test func trivialBelongsToTheLowTiers() {
+        #expect(Composition.plan(tier: .veryLow, slots: 3).filter { $0 == .trivial }.count == 1)
+        #expect(Composition.plan(tier: .low, slots: 3).filter { $0 == .trivial }.count == 1)
+        #expect(!Composition.plan(tier: .normal, slots: 3).contains(.trivial))
+        #expect(!Composition.plan(tier: .high, slots: 3).contains(.trivial))
     }
 }

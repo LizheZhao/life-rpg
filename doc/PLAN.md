@@ -39,7 +39,9 @@ There is **one** difficulty axis and no second one. An earlier draft carried a s
 | H | 25–50 | |
 | EPIC | 60–150 | One per week, can be extended or rerolled |
 
-The T tier exists to give micro-habits like "floss" or "apply hand cream" somewhere to live, without diluting the E pool. Giving them their own slot would make the payoff feel too thin — so when a T group appears, it **takes the place of one E slot** (three T items = one slot, scored as 12 as a whole).
+The T tier exists to give micro-habits like "floss" or "apply hand cream" somewhere to live, without diluting the E pool. Three of them make one slot, scored as 12 as a whole, so the payoff isn't thin.
+
+**T is simply the rung below E**, and it sits in the composition table like any other difficulty — it does not "replace" an E slot, which would have been a second mechanism for something the one difficulty axis already says. It therefore appears exactly on the days the table puts it on: `low` and `veryLow`. That is what the T tier is for — on a day you can barely function, the win available is flossing.
 
 **Hidden is a flag on the template, not a difficulty tier.** Any quest that's light and fun can be `hidden_eligible = true`; when drawing the hidden slot, only that pool is sampled, and points are calculated from the quest's own difficulty plus a flat +10 bonus (the bonus is not affected by the low-tier multiplier, see §5). So "visit a coffee shop you've never been to" can show up either as a regular M quest or as the hidden one. Hidden is meant as a light reward after full-clear, not a hard challenge.
 
@@ -187,13 +189,15 @@ Thresholds: E < 0.85 very low, 0.85–0.92 low, 0.92–1.06 normal, > 1.06 high.
 
 | Tier | Random composition (at 3 slots) |
 |---|---|
-| Very low | 3 E's, one of which is guaranteed to be the T group |
-| Low | 2 E + 1 M |
+| Very low | T + 2 E |
+| Low | T + E + M |
 | Normal | E + M + H |
 | High | 2 M + 1 H |
 
 The table is written easy → hard, and a day with fewer than 3 slots **drops from the hard end**:
-at `normal`, 2 slots are E + M and 1 slot is an E. No H is guaranteed on a weekend — see §12.
+at `normal`, 2 slots are E + M and 1 slot is an E; a heavy routine day at `low` keeps the T group
+as its single slot. No H is guaranteed on a weekend — see §12. Nothing in the composition is
+random: the tier alone decides the day's shape.
 
 On low-tier days (`low` and `veryLow`), points get a 1.3x effort multiplier. Moving is harder when you're in bad shape than good shape, so the payout shouldn't collapse along with it.
 
@@ -494,7 +498,7 @@ func ensureToday(_ ctx: ModelContext, now: Date = Date(),
     day.routineLoad = due.count
     day.randomSlots = slots
 
-    for d in composition(tier: day.tier, slots: slots, rng: &rng) {   // may yield a T group in an E slot
+    for d in composition(tier: day.tier, slots: slots) {              // a `.trivial` one is the T group
         if let t = sample(difficulty: d, context: day, ctx, rng: &rng) {
             t.lastServedDayKey = today
             ctx.insert(DailyQuest(dayKey: today, template: t))
@@ -618,7 +622,7 @@ Acceptance per stage: quests refresh correctly across midnight; manually change 
 
 The exact `weekly_target` number for exercise routines — weight training is currently written as 2, but the actual frequency after social plans break it needs a week or two of real testing.
 
-Probability of the T group appearing — currently envisioned as guaranteed at very-low energy, 40% otherwise (only when the composition has an E slot for it to take); tune after use.
+~~Probability of the T group appearing~~ **Decided:** there is no probability. T is the bottom rung of the composition table (`low` and `veryLow` have one, `normal` and `high` have none), so the tier alone decides it — the same argument as merging `intensity` into difficulty: one mechanism, not two.
 
 ~~Whether the overdue penalty should still be scaled by readiness~~ **Decided (Stage 2):** it is not — fixed on base (base 50 → −25 / −38 / −50).
 
