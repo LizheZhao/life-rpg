@@ -564,9 +564,10 @@ func rerollCost(_ q: DailyQuest) -> Int {
 **Body data is read on every foreground, not only when the day is generated.** The day is generated the first time the app is opened that day, which can be before the watch has synced last night's sleep, or before a period was logged — so the tier it was locked to can simply be wrong. When a fresh reading disagrees, the app **asks** (`Replan.preview`), and only on confirmation re-plans the day (`Replan.apply`):
 
 - **What is done is never touched.** Completed quests keep their text, their points and their ledger entry; an awarded value is never recomputed. Completed and skipped routines are left alone.
-- Open slots are redrawn for the new tier's composition. A dropped one is marked `replaced` rather than deleted — the row stays as the record that it was once asked of you, and full-clear, streak and the calendar all skip `replaced` rows already.
-- A slot the new composition asks for that a *finished* quest already answers is not drawn again.
-- Open routines have their downgrade decision made again — a period logged at noon is exactly this case.
+- **A re-plan changes as little as it can.** An open slot the new composition still asks for is kept as it is — a T group on a cycle day stays that T group, the E you were about to do stays that E. Only the slots the new table no longer has are dropped, and only the slots it gained are drawn. Finished quests claim their slot first; one the new table has no place for is simply kept beside the day's slots.
+- A dropped row is marked `replaced` with `replacedReason = .replan` rather than deleted — the row stays as the record that it was once asked of you, and full-clear, streak and the calendar all skip `replaced` rows already. The reason is what keeps the page from calling a re-plan an ad-hoc replacement.
+- Open routines have their downgrade decision made again, but only the ones that would actually flip — a period logged at noon is exactly this case, while a version you picked by hand on a day that stays low is left alone.
+- When the new tier would leave the page looking exactly the same (`low` and `veryLow` ask for the same single slot on a heavy day, and score the same), there is nothing to prompt about and nothing is asked.
 - A reading that did not actually come back never re-plans anything: denied HealthKit access returns the `normal` defaults, and those must not read as "your day got easier".
 
 ---

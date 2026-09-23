@@ -74,6 +74,16 @@ public enum SourceType: String, Codable, CaseIterable, Sendable {
     case manual, healthKit
 }
 
+/// Why a random slot stopped being this day's ask. The row is kept either way — it is the record
+/// that it was once asked of you — and full-clear, streak and the calendar skip it.
+public enum ReplacedReason: String, Codable, CaseIterable, Sendable {
+    /// An ad-hoc routine took the slot over (`PLAN.md` §3). You chose it, so the page shows it.
+    case adHoc
+    /// The day was re-planned after a fresh body reading and the new composition no longer has
+    /// that slot (`PLAN.md` §5).
+    case replan
+}
+
 public enum RecurrenceKind: String, Codable, CaseIterable, Sendable {
     case weekly, everyNDays, monthly, nthWeekdayOfMonth, everyNWeeksOnWeekday
 }

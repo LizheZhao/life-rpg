@@ -54,6 +54,7 @@ public enum JSONExport {
         public var sourceType: String
         public var rerollCount: Int
         public var replaced: Bool
+        public var replacedReason: String?
         public var extensionCount: Int
     }
 
@@ -128,7 +129,8 @@ public enum JSONExport {
                       trivialVariants: $0.trivialVariants, variant: $0.variantSnapshot,
                       points: $0.points,
                       completedAt: $0.completedAt, sourceType: $0.sourceTypeRaw,
-                      rerollCount: $0.rerollCount, replaced: $0.replaced, extensionCount: $0.extensionCount)
+                      rerollCount: $0.rerollCount, replaced: $0.replaced,
+                      replacedReason: $0.replacedReasonRaw, extensionCount: $0.extensionCount)
             },
             routineOccurrences: try context.fetch(FetchDescriptor<RoutineOccurrence>()).sorted { $0.dueDayKey < $1.dueDayKey }.map {
                 Occurrence(id: $0.id, routineID: $0.routineID, dueDayKey: $0.dueDayKey, weekKey: $0.weekKey,

@@ -58,10 +58,13 @@ struct RootView: View {
     private func message(for change: Replan.Change) -> String {
         var lines = ["Readings now say \(change.toTier.rawValue) rather than \(change.fromTier.rawValue)."]
         if change.keptQuests > 0 {
-            lines.append("\(change.keptQuests) finished quest(s) stay exactly as they are.")
+            lines.append("\(change.keptQuests) quest(s) stay as they are — everything finished, and anything open the new day still asks for.")
         }
-        if change.redrawnQuests > 0 {
-            lines.append("\(change.redrawnQuests) unfinished slot(s) would be drawn again.")
+        if change.droppedQuests > 0 {
+            lines.append("\(change.droppedQuests) open slot(s) the new day no longer has would be dropped.")
+        }
+        if change.newQuests > 0 {
+            lines.append("\(change.newQuests) new slot(s) would be drawn.")
         }
         if change.adjustedRoutines > 0 {
             lines.append("\(change.adjustedRoutines) open routine(s) would swap to (or back from) a lighter version.")

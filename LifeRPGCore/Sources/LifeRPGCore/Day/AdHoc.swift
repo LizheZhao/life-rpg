@@ -95,10 +95,12 @@ public enum AdHoc {
 
         context.insert(occurrence)
         quest.replaced = true
+        quest.replacedReason = .adHoc
         do {
             try context.save()
         } catch {
             quest.replaced = false
+            quest.replacedReasonRaw = nil
             context.delete(occurrence)
             throw error
         }

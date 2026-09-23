@@ -20,7 +20,10 @@ import SwiftData
     public var completedAt: Date?
     public var sourceTypeRaw: String = "manual"
     public var rerollCount: Int = 0
-    public var replaced: Bool = false             // bumped by an ad-hoc routine
+    public var replaced: Bool = false             // no longer this day's ask; see `replacedReason`
+    /// Why, as a `ReplacedReason` raw value. Added after `replaced` shipped meaning one thing, so
+    /// nil reads as `adHoc` — every row written before this was one.
+    public var replacedReasonRaw: String?
     public var extensionCount: Int = 0            // epic only, max 2
 
     public init() {}
@@ -31,4 +34,9 @@ import SwiftData
     }
 
     public var isTrivialGroup: Bool { !trivialGroup.isEmpty }
+
+    public var replacedReason: ReplacedReason {
+        get { replacedReasonRaw.flatMap(ReplacedReason.init(rawValue:)) ?? .adHoc }
+        set { replacedReasonRaw = newValue.rawValue }
+    }
 }

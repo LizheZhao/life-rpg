@@ -509,7 +509,8 @@ struct TodayView: View {
             badge(quest.isTrivialGroup ? "T×3" : quest.slot.code)
             VStack(alignment: .leading, spacing: 2) {
                 Text(slotText(quest)).strikethrough().foregroundStyle(.secondary)
-                Text("Replaced").font(.caption).foregroundStyle(.tertiary)
+                Text(quest.replacedReason == .replan ? "Dropped — the day was re-planned" : "Replaced")
+                    .font(.caption).foregroundStyle(.tertiary)
             }
         }
     }

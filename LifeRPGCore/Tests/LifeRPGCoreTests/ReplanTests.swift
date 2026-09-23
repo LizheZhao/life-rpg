@@ -34,24 +34,64 @@ struct ReplanTests {
         #expect(try Replan.preview(ctx, on: fri, inputs: DayInputs(tier: .low), in: tz) == nil)
     }
 
-    /// The composition follows the new tier: `normal` is E/M/H, `veryLow` is three E slots.
-    @Test func openSlotsAreRedrawnForTheNewTier() throws {
+    /// Only what the new table no longer asks for is dropped. `normal` is E/M/H and `veryLow` is
+    /// T/E/E, so the E is kept where it is; the M and the H go, and a T and a second E arrive.
+    @Test func onlySlotsTheNewTableDropsAreReplaced() throws {
         let ctx = try world()
         let before = try DayService.quests(on: fri, in: ctx).map(\.slot).map(\.code).sorted()
         #expect(before == ["E", "H", "M"])
+        let easy = try #require(try DayService.quests(on: fri, in: ctx).first { $0.slot == .easy })
 
         let change = try #require(try replan(ctx, to: DayInputs(tier: .veryLow)))
         #expect(change.fromTier == .normal)
         #expect(change.toTier == .veryLow)
-        #expect(change.redrawnQuests == 3)
-        #expect(change.keptQuests == 0)
+        #expect(change.keptQuests == 1)
+        #expect(change.droppedQuests == 2)
+        #expect(change.newQuests == 2)
 
+        #expect(!easy.replaced)                      // the one you were about to do stays
         let after = try DayService.quests(on: fri, in: ctx).filter { !$0.replaced }
         #expect(after.count == 3)
         #expect(after.map(\.slot).sorted { $0.code < $1.code } == [.easy, .easy, .trivial])
-        // The old rows are kept as the record that they were once asked for, not deleted.
-        #expect(try DayService.quests(on: fri, in: ctx).filter(\.replaced).count == 3)
+        // The dropped rows are kept as the record that they were once asked for, not deleted —
+        // and they say why, so the page can't call a re-plan an ad-hoc replacement.
+        let droppedRows = try DayService.quests(on: fri, in: ctx).filter(\.replaced)
+        #expect(droppedRows.count == 2)
+        #expect(droppedRows.allSatisfy { $0.replacedReason == .replan })
         #expect(try DayService.dailyContext(for: fri, in: ctx)?.tier == .veryLow)
+    }
+
+    /// The case that started this: cycle day 2 makes the day `low`, whose table still has a T
+    /// slot, so the T group already on the page is kept rather than swapped for another one.
+    @Test func aTrivialGroupSurvivesADayThatStaysTrivial() throws {
+        let ctx = try world(.veryLow)
+        let group = try #require(try DayService.quests(on: fri, in: ctx).first(where: \.isTrivialGroup))
+        let items = group.trivialGroup
+
+        let change = try #require(try replan(ctx, to: DayInputs(tier: .low, cycleDay: 2)))
+        #expect(!group.replaced)
+        #expect(group.trivialGroup == items)         // the same three micro-actions
+        #expect(change.droppedQuests == 1)           // veryLow's second E; low asks for an M
+        #expect(change.newQuests == 1)
+        let groups = try DayService.quests(on: fri, in: ctx).filter { !$0.replaced && $0.isTrivialGroup }
+        #expect(groups.count == 1)
+    }
+
+    /// Low and very low ask for the same single slot on a squeezed day and score the same, so
+    /// there is nothing to prompt about.
+    @Test func aTierChangeThatChangesNothingIsNotOffered() throws {
+        let ctx = try Fixtures.context()
+        Fixtures.stockLibrary(ctx, each: 8)
+        for i in 0..<5 {                                          // 5 due today → a single slot
+            let r = RoutineTask()
+            r.text = "routine \(i)"; r.spec = "FRI"
+            ctx.insert(r)
+        }
+        var rng = SeededRNG(seed: 3)
+        let day = try DayService.ensureToday(ctx, now: Fixtures.date(fri), in: tz,
+                                             inputs: DayInputs(tier: .low), rng: &rng)
+        #expect(day.randomSlots == 1)
+        #expect(try Replan.preview(ctx, on: fri, inputs: DayInputs(tier: .veryLow), in: tz) == nil)
     }
 
     /// What is done is never touched: same text, same points, same ledger entry, and the slot it
@@ -65,14 +105,15 @@ struct ReplanTests {
         let text = done.textSnapshot
 
         let change = try #require(try replan(ctx, to: DayInputs(tier: .veryLow)))
-        #expect(change.keptQuests == 1)
-        #expect(change.redrawnQuests == 2)
+        // The finished M stays and claims no slot; the open E answers veryLow's E, so only the
+        // open H is dropped, and T + the second E are drawn.
+        #expect(change.keptQuests == 2)
+        #expect(change.droppedQuests == 1)
+        #expect(change.newQuests == 2)
         #expect(done.points == awarded)
         #expect(done.textSnapshot == text)
         #expect(!done.replaced)
 
-        // A finished M can't fill a very-low day's T/E/E slots, so all three are drawn — and the
-        // finished one stays on the page beside them.
         let open = try DayService.quests(on: fri, in: ctx).filter { !$0.replaced }
         #expect(open.filter { $0.completedAt == nil }.count == 3)
         #expect(open.filter { $0.completedAt != nil }.count == 1)
@@ -97,12 +138,13 @@ struct ReplanTests {
     /// The same template never shows up twice in one day, including across a re-plan.
     @Test func aRedrawDoesNotRepeatWhatTheDayAlreadyServed() throws {
         let ctx = try world()
-        let servedBefore = Set(try DayService.quests(on: fri, in: ctx).compactMap(\.templateID))
+        let droppedIDs = Set(try DayService.quests(on: fri, in: ctx)
+            .filter { $0.slot != .easy }.compactMap(\.templateID))
         try replan(ctx, to: DayInputs(tier: .veryLow))
         let fresh = try DayService.quests(on: fri, in: ctx)
-            .filter { !$0.replaced }
+            .filter { !$0.replaced && $0.completedAt == nil }
             .compactMap(\.templateID)
-        #expect(Set(fresh).isDisjoint(with: servedBefore))
+        #expect(Set(fresh).isDisjoint(with: droppedIDs))
     }
 
     /// An open routine has its light-version decision made again — the first cycle day arriving
