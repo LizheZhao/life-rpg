@@ -5,7 +5,6 @@ import SwiftData
     public var id: UUID = UUID()
     public var text: String = ""
     public var difficultyRaw: String = Difficulty.easy.rawValue
-    public var intensityRaw: String = Intensity.low.rawValue
     public var hiddenEligible: Bool = false
     public var weekendOnly: Bool = false          // excluded from the pool Mon–Fri
     public var cooldownDaysOverride: Int?
@@ -22,10 +21,5 @@ import SwiftData
     public var difficulty: Difficulty {
         get { Difficulty(rawValue: difficultyRaw) ?? .easy }
         set { difficultyRaw = newValue.rawValue }
-    }
-
-    public var intensity: Intensity {
-        get { Intensity(rawValue: intensityRaw) ?? .low }
-        set { intensityRaw = newValue.rawValue }
     }
 }

@@ -15,6 +15,9 @@ struct RootView: View {
     /// a denied permission otherwise looks exactly like a night with no data.
     @State private var sensorReport = "Not read yet"
     @State private var refreshing = false
+    /// A re-read that disagrees with the day already on screen, waiting to be confirmed.
+    @State private var replan: Replan.Change?
+    @State private var replanInputs: DayInputs?
     @State private var health = HealthService()
     @State private var calendar = CalendarService()
     @AppStorage("workoutCalendarID") private var workoutCalendarID = ""
@@ -42,6 +45,40 @@ struct RootView: View {
             if phase == .active { Task { await refresh() } }
         }
         .onChange(of: dayOffset) { Task { await refresh() } }
+        .alert("Today's body data changed", isPresented: Binding(
+            get: { replan != nil }, set: { if !$0 { replan = nil; replanInputs = nil } }
+        ), presenting: replan) { change in
+            Button("Re-plan what's open") { apply(change) }
+            Button("Leave it", role: .cancel) {}
+        } message: { change in
+            Text(message(for: change))
+        }
+    }
+
+    private func message(for change: Replan.Change) -> String {
+        var lines = ["Readings now say \(change.toTier.rawValue) rather than \(change.fromTier.rawValue)."]
+        if change.keptQuests > 0 {
+            lines.append("\(change.keptQuests) finished quest(s) stay exactly as they are.")
+        }
+        if change.redrawnQuests > 0 {
+            lines.append("\(change.redrawnQuests) unfinished slot(s) would be drawn again.")
+        }
+        if change.adjustedRoutines > 0 {
+            lines.append("\(change.adjustedRoutines) open routine(s) would swap to (or back from) a lighter version.")
+        }
+        return lines.joined(separator: "\n")
+    }
+
+    private func apply(_ change: Replan.Change) {
+        guard let inputs = replanInputs else { return }
+        var rng = SystemRandomNumberGenerator()
+        do {
+            try Replan.apply(context, on: change.dayKey, inputs: inputs, rng: &rng)
+        } catch {
+            generationError = "\(error)"
+        }
+        replan = nil
+        replanInputs = nil
     }
 
     private func refresh() async {
@@ -54,14 +91,22 @@ struct RootView: View {
         let todayKey = now.dayKey
         var report: [String] = []
 
-        // The tier is locked when the day is generated, so body data is only read for a day that
-        // doesn't exist yet. Any failure leaves the defaults: a `normal` day, never a blocked one.
+        // Read on every foreground, not only for a day that doesn't exist yet: the watch may not
+        // have synced last night's sleep when the app was first opened, and a period logged later
+        // in the morning is exactly the case this is for. What the reading does to a day already
+        // on screen is asked, never applied silently (`Replan`). Any failure leaves the defaults:
+        // a `normal` day, never a blocked one.
+        let dayExisted = (try? DayService.dailyContext(for: todayKey, in: context)) != nil
         var inputs = DayInputs()
-        if (try? DayService.dailyContext(for: todayKey, in: context)) == nil, HealthService.isAvailable {
+        // Only a reading that actually came back may re-plan a day: a denied permission returns
+        // the `normal` defaults, and those must never read as "your day got easier".
+        var readBody = false
+        if HealthService.isAvailable {
             do {
                 inputs = try await health.inputs(for: todayKey, now: now)
+                readBody = true
                 report.append("Body: tier \(inputs.tier.rawValue), readiness \(inputs.readiness)"
-                              + (inputs.onCycle ? ", cycle day" : ""))
+                              + (inputs.cycleDay.map { ", cycle day \($0)" } ?? ""))
             } catch {
                 report.append("Health read failed: \(error.localizedDescription)")
             }
@@ -95,6 +140,13 @@ struct RootView: View {
             try DayService.ensureToday(context, now: now, inputs: inputs, evidence: evidence, rng: &rng)
             today = todayKey
             generationError = nil
+            // The day was already there and the body now says something else: offer to re-plan
+            // what is still open. Nothing is changed until it is confirmed.
+            if dayExisted, readBody,
+               let change = try Replan.preview(context, on: todayKey, inputs: inputs) {
+                replan = change
+                replanInputs = inputs
+            }
         } catch {
             generationError = "\(error)"
         }

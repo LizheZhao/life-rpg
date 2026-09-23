@@ -38,6 +38,6 @@ extension RoutineTask {
     }
 
     public var canDegrade: Bool {
-        !(degradedText ?? "").isEmpty
+        !downgradeIDs.isEmpty
     }
 }

@@ -79,7 +79,9 @@ struct FrequencySpecTests {
     /// Every spec in the real CSV parses — otherwise that routine would never come due.
     @Test func realRoutineSpecsParse() throws {
         let seeds = try SeedParser.routines(csv: Fixtures.csv("routine_quests.csv"))
-        for seed in seeds {
+        // A downgrade version has no frequency of its own: it is only ever reached through the
+        // routine that offers it.
+        for seed in seeds where seed.downgradeOf.isEmpty {
             let parsed = try FrequencySpec.parse(kind: seed.kind, spec: seed.spec)
             #expect(parsed.kind == seed.kind)
             if let available = parsed.nominalWeeklyCount {

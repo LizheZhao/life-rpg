@@ -1,7 +1,10 @@
 import Foundation
 import SwiftData
 
-/// Drawing a template into a slot: cooldown, weekend and intensity filtering, affinity weighting.
+/// Drawing a template into a slot: cooldown and weekend filtering, affinity weighting.
+///
+/// How hard a day's draw is comes from the composition table alone (`Composition.table`), which is
+/// what a low tier moves — there is no second difficulty-like axis to filter on.
 public enum Sampling {
     /// `PLAN.md` §3. Cooldown counts from the **completion** day; a quest that was only drawn
     /// (or rerolled away) gets a flat 1 day so it can't reappear tomorrow.
@@ -23,14 +26,12 @@ public enum Sampling {
     public static func eligible(_ templates: [QuestTemplate],
                                 difficulty: Difficulty,
                                 dayKey: String,
-                                allowedIntensities: Set<Intensity>,
                                 excluding excluded: Set<UUID> = [],
                                 in timeZone: TimeZone = .current) -> [QuestTemplate] {
         let isWeekend = DayKey.isWeekend(dayKey, in: timeZone)
         return templates.filter { t in
             t.isActive
                 && t.difficulty == difficulty
-                && allowedIntensities.contains(t.intensity)
                 && (!t.weekendOnly || isWeekend)        // weekend_only is out of the pool Mon–Fri
                 && !excluded.contains(t.id)
                 && !inCooldown(t, today: dayKey, in: timeZone)
@@ -40,14 +41,12 @@ public enum Sampling {
     /// The hidden pool: same filters, but `hiddenEligible` instead of a difficulty.
     public static func eligibleHidden(_ templates: [QuestTemplate],
                                       dayKey: String,
-                                      allowedIntensities: Set<Intensity>,
                                       excluding excluded: Set<UUID> = [],
                                       in timeZone: TimeZone = .current) -> [QuestTemplate] {
         let isWeekend = DayKey.isWeekend(dayKey, in: timeZone)
         return templates.filter { t in
             t.isActive
                 && t.hiddenEligible
-                && allowedIntensities.contains(t.intensity)
                 && (!t.weekendOnly || isWeekend)
                 && !excluded.contains(t.id)
                 && !inCooldown(t, today: dayKey, in: timeZone)

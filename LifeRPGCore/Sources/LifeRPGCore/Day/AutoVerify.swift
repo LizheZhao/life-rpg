@@ -120,7 +120,12 @@ public enum AutoVerify {
             .filter { !$0.isTrivialGroup && !$0.replaced && $0.slot != .epic }
             .sorted { (!$0.isHiddenSlot && $1.isHiddenSlot) }
 
-        func rule(_ o: RoutineOccurrence) -> AutoVerifyRule? { o.routineID.flatMap { rules[$0] } }
+        // The version currently chosen is the one that has to be proved: a 30-minute walk
+        // verifies the walk, not the 40-minute strength session it replaced.
+        func rule(_ o: RoutineOccurrence) -> AutoVerifyRule? {
+            let id = o.usedDegraded ? (o.degradedRoutineID ?? o.routineID) : o.routineID
+            return id.flatMap { rules[$0] }
+        }
         func rule(_ q: DailyQuest) -> AutoVerifyRule? { q.templateID.flatMap { templateRules[$0] } }
 
         var pool = Pool(evidence)

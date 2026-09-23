@@ -42,23 +42,20 @@ struct SamplingTests {
         Fixtures.quest(ctx, "hike", .hard, weekendOnly: true)
         Fixtures.quest(ctx, "inbox zero", .hard)
         let all = try Sampling.activeTemplates(ctx)
-        let friday = Sampling.eligible(all, difficulty: .hard, dayKey: "2026-09-18",
-                                       allowedIntensities: Set(Intensity.allCases), in: tz)
-        let saturday = Sampling.eligible(all, difficulty: .hard, dayKey: "2026-09-19",
-                                         allowedIntensities: Set(Intensity.allCases), in: tz)
+        let friday = Sampling.eligible(all, difficulty: .hard, dayKey: "2026-09-18", in: tz)
+        let saturday = Sampling.eligible(all, difficulty: .hard, dayKey: "2026-09-19", in: tz)
         #expect(friday.map(\.text) == ["inbox zero"])
         #expect(Set(saturday.map(\.text)) == ["hike", "inbox zero"])
     }
 
-    @Test func inactiveIntensityAndExclusionsAreFiltered() throws {
+    @Test func inactiveAndExcludedAreFiltered() throws {
         let ctx = try Fixtures.context()
         Fixtures.quest(ctx, "retired", .medium, active: false)
-        Fixtures.quest(ctx, "sprints", .medium, intensity: .high)
         let keep = Fixtures.quest(ctx, "walk", .medium)
         let skip = Fixtures.quest(ctx, "already drawn", .medium)
         let all = try Sampling.activeTemplates(ctx)
         let pool = Sampling.eligible(all, difficulty: .medium, dayKey: "2026-09-18",
-                                     allowedIntensities: [.low, .medium], excluding: [skip.id], in: tz)
+                                     excluding: [skip.id], in: tz)
         #expect(pool.map(\.id) == [keep.id])
     }
 

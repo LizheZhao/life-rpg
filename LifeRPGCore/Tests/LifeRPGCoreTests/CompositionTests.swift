@@ -60,12 +60,4 @@ struct CompositionTests {
         }
         #expect((700...900).contains(hits))     // 40% of 2000, generous band
     }
-
-    @Test func intensityNarrowsWithTierAndCycle() {
-        #expect(Composition.allowedIntensities(tier: .normal, onCycle: false) == [.low, .medium, .high])
-        #expect(Composition.allowedIntensities(tier: .low, onCycle: false) == [.low, .medium])
-        #expect(Composition.allowedIntensities(tier: .veryLow, onCycle: false) == [.low])
-        // On cycle the tier is untouched but high intensity is out (PLAN §5).
-        #expect(Composition.allowedIntensities(tier: .high, onCycle: true) == [.low, .medium])
-    }
 }

@@ -67,11 +67,167 @@ struct TodayView: View {
 
     private var todayContext: DailyContext? { contexts.first { $0.dayKey == today } }
     private var tier: Tier { todayContext?.tier ?? .normal }
-    private var onCycle: Bool { todayContext?.onCycle ?? false }
+    private var cycleDay: Int? { todayContext?.cycleDay }
     /// The day's measured state, as stored. Both completion scoring and the hidden draw read this
     /// same value — a hidden quest drawn under `normal` rules on a very-low day would hand out the
     /// hardest thing in the pool as the reward for a day you barely got through.
-    private var inputs: DayInputs { DayInputs(tier: tier, onCycle: onCycle) }
+    private var inputs: DayInputs { DayInputs(tier: tier, cycleDay: cycleDay) }
+
+    /// Only what is on today: due today, plus fixed routines that are overdue — those cost
+    /// points every day they stay undone, so they are never folded away.
+    @ViewBuilder private var routinesSection: some View {
+        // Only what is on today: due today, plus fixed routines that are overdue — those
+        // cost points every day they stay undone, so they are never folded away.
+        if !overdueRoutines.isEmpty || !todaysRoutines.isEmpty {
+            Section("Routines") {
+                ForEach(overdueRoutines) { routineRow($0, note: .overdue) }
+                ForEach(todaysRoutines) { routineRow($0) }
+            }
+        }
+    }
+
+    /// Today's random slots.
+    @ViewBuilder private var randomSection: some View {
+        Section("Random slots") {
+            if randomQuests.isEmpty {
+                Text("No quests today — the pool is empty or fully on cooldown. The day is yours.")
+                    .foregroundStyle(.secondary)
+            }
+            ForEach(randomQuests) { quest in
+                if quest.replaced { replacedRow(quest) }
+                else if quest.isTrivialGroup { trivialGroupRow(quest) } else { questRow(quest) }
+            }
+        }
+    }
+
+    /// Nothing drawn means nothing to clear and no hidden reward to earn — then the section is
+    /// hidden rather than showing a lock with no key.
+    @ViewBuilder private var hiddenSection: some View {
+        // Nothing was drawn, so there is nothing to clear and no hidden reward to earn —
+        // the section is hidden rather than showing a lock with no key.
+        if !randomQuests.isEmpty || hiddenQuest != nil {
+            Section("Hidden") {
+                if let hiddenQuest {
+                    questRow(hiddenQuest)
+                } else if hiddenUnlocked {
+                    Button { revealHidden() } label: {
+                        Label("Reveal the hidden quest", systemImage: "sparkles")
+                            // Without this the tappable area is just the label's own box,
+                            // which is a smaller target than the row it looks like.
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .contentShape(Rectangle())
+                    }
+                } else {
+                    Label("Clear every slot to unlock", systemImage: "lock")
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+    }
+
+    /// The rest of the week's flexible work, folded away: sessions from earlier days still open
+    /// (full pay until Sunday), what was pulled forward today, and what can be.
+    @ViewBuilder private var aheadSection: some View {
+        // The rest of the week's flexible work, folded: sessions from earlier days still
+        // open (full pay until Sunday), what was pulled forward today, and what can be.
+        // Saturday's session done today counts as Saturday's, and Saturday no longer carries it.
+        if !thisWeekRoutines.isEmpty || !aheadCandidates.isEmpty || !doneAhead.isEmpty {
+            Section {
+                if aheadExpanded {
+                    ForEach(thisWeekRoutines) { routineRow($0, note: .thisWeek) }
+                    ForEach(doneAhead) { doneAheadRow($0) }
+                    ForEach(aheadCandidates, id: \.routine.id) { aheadRow($0) }
+                }
+            } header: {
+                Button {
+                    withAnimation { aheadExpanded.toggle() }
+                } label: {
+                    HStack {
+                        Text("Ahead this week")
+                        Text("\(aheadPending)").monospacedDigit()
+                        if !doneAhead.isEmpty {
+                            Text("· \(doneAhead.count) done").monospacedDigit()
+                        }
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .rotationEffect(.degrees(aheadExpanded ? 90 : 0))
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+
+    /// Skipped and never done: a record rather than a to-do.
+    private func backlogRow(_ o: RoutineOccurrence) -> some View {
+        HStack(alignment: .firstTextBaseline) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(o.textSnapshot).foregroundStyle(.secondary)
+                Text("Due \(o.dueDayKey)").font(.caption).foregroundStyle(.tertiary)
+            }
+            Spacer()
+            if o.penaltyApplied > 0 {
+                Text("−\(o.penaltyApplied)").monospacedDigit().foregroundStyle(.red)
+            }
+        }
+    }
+
+    /// A flexible routine already done ahead of its due day.
+    private func doneAheadRow(_ o: RoutineOccurrence) -> some View {
+        HStack(alignment: .firstTextBaseline) {
+            badge("R", range: nil)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(o.displayText)
+                Text("Done ahead · counts for \(o.dueDayKey)")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            Spacer()
+            let awarded = o.awardedPoints ?? 0
+            Text("+\(awarded)").monospacedDigit().foregroundStyle(.green)
+        }
+    }
+
+    /// A flexible routine that can be pulled forward. On a low day doing it ahead draws a lighter
+    /// version, which is why the payout is a range rather than a number the draw could contradict.
+    private func aheadRow(_ c: Schedule.Ahead) -> some View {
+        HStack(alignment: .firstTextBaseline) {
+            badge("R", range: aheadPayout(c.routine))
+            VStack(alignment: .leading, spacing: 2) {
+                Text(c.routine.text)
+                Text("\(c.doneThisWeek)/\(c.routine.weeklyTarget) this week · next due \(c.nextDueDayKey)")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            Spacer()
+            Button("Do now") { pending = .ahead(c.routine) }
+                .buttonStyle(.bordered)
+        }
+    }
+
+    /// What doing this routine ahead would pay. On a low day one of its downgrade versions is
+    /// drawn when it is done, so what is shown is the range across the versions on offer rather
+    /// than a number the draw could contradict.
+    private func aheadPayout(_ routine: RoutineTask) -> ClosedRange<Int> {
+        let bases = [routine.basePoints] + Degrade.versions(of: routine, in: routines).map(\.basePoints)
+        let candidates = tier.isLow && routine.canDegrade ? Array(bases.dropFirst()) : [routine.basePoints]
+        let points = candidates.map { Scoring.routinePoints(basePoints: $0, tier: tier, late: false) }
+        return (points.min() ?? 0)...(points.max() ?? 0)
+    }
+
+    private var aheadPending: Int { thisWeekRoutines.count + aheadCandidates.count }
+
+    /// Whether doing this routine ahead today would offer a lighter version — only on a low day,
+    /// which the first three cycle days also are.
+    private func offersLightVersion(_ routine: RoutineTask) -> Bool {
+        tier.isLow && !Degrade.versions(of: routine, in: routines).isEmpty
+    }
+
+    private func lightVersionList(_ routine: RoutineTask) -> String {
+        Degrade.versions(of: routine, in: routines).map(\.text).joined(separator: " / ")
+    }
+
+    /// An ad-hoc routine takes over a random slot, so there has to be one it may take.
+    private var canAddAdHoc: Bool { !AdHoc.replaceableSlots(quests, on: today).isEmpty }
 
     private var quests: [DailyQuest] { allQuests.filter { $0.dayKey == today } }
     /// Easy first, the way the composition table is written — the query itself has no order
@@ -115,138 +271,44 @@ struct TodayView: View {
         (try? DayService.hiddenUnlocked(on: today, in: context)) ?? false
     }
 
+    /// The page itself; the modifiers stay on `body`.
+    private var questList: some View {
+    List {
+        if let generationError {
+            Section { Text(generationError).foregroundStyle(.red) } header: { Text("Today could not be generated") }
+        }
+        if let actionError {
+            Section { Text(actionError).foregroundStyle(.red) }
+        }
+
+        Section { hud } header: { Text(today) }
+
+        routinesSection
+
+        randomSection
+
+        hiddenSection
+
+        aheadSection
+
+        // Skipped and never done: read-only, a record rather than a to-do.
+        if !backlog.isEmpty {
+            Section("Backlog") {
+                ForEach(backlog) { backlogRow($0) }
+            }
+        }
+    }
+    }
+
     var body: some View {
         NavigationStack {
-            List {
-                if let generationError {
-                    Section { Text(generationError).foregroundStyle(.red) } header: { Text("Today could not be generated") }
-                }
-                if let actionError {
-                    Section { Text(actionError).foregroundStyle(.red) }
-                }
-
-                Section { hud } header: { Text(today) }
-
-                // Only what is on today: due today, plus fixed routines that are overdue — those
-                // cost points every day they stay undone, so they are never folded away.
-                if !overdueRoutines.isEmpty || !todaysRoutines.isEmpty {
-                    Section("Routines") {
-                        ForEach(overdueRoutines) { routineRow($0, note: .overdue) }
-                        ForEach(todaysRoutines) { routineRow($0) }
-                    }
-                }
-
-                Section("Random slots") {
-                    if randomQuests.isEmpty {
-                        Text("No quests today — the pool is empty or fully on cooldown. The day is yours.")
-                            .foregroundStyle(.secondary)
-                    }
-                    ForEach(randomQuests) { quest in
-                        if quest.replaced { replacedRow(quest) }
-                        else if quest.isTrivialGroup { trivialGroupRow(quest) } else { questRow(quest) }
-                    }
-                }
-
-                // Nothing was drawn, so there is nothing to clear and no hidden reward to earn —
-                // the section is hidden rather than showing a lock with no key.
-                if !randomQuests.isEmpty || hiddenQuest != nil {
-                    Section("Hidden") {
-                        if let hiddenQuest {
-                            questRow(hiddenQuest)
-                        } else if hiddenUnlocked {
-                            Button { revealHidden() } label: {
-                                Label("Reveal the hidden quest", systemImage: "sparkles")
-                                    // Without this the tappable area is just the label's own box,
-                                    // which is a smaller target than the row it looks like.
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                    .contentShape(Rectangle())
-                            }
-                        } else {
-                            Label("Clear every slot to unlock", systemImage: "lock")
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                }
-
-                // The rest of the week's flexible work, folded: sessions from earlier days still
-                // open (full pay until Sunday), what was pulled forward today, and what can be.
-                // Saturday's session done today counts as Saturday's, and Saturday no longer carries it.
-                if !thisWeekRoutines.isEmpty || !aheadCandidates.isEmpty || !doneAhead.isEmpty {
-                    Section {
-                        if aheadExpanded {
-                            ForEach(thisWeekRoutines) { routineRow($0, note: .thisWeek) }
-                            ForEach(doneAhead) { o in
-                                HStack(alignment: .firstTextBaseline) {
-                                    badge("R", range: nil)
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text(o.displayText)
-                                        Text("Done ahead · counts for \(o.dueDayKey)")
-                                            .font(.caption).foregroundStyle(.secondary)
-                                    }
-                                    Spacer()
-                                    Text("+\(o.awardedPoints ?? 0)").monospacedDigit().foregroundStyle(.green)
-                                }
-                            }
-                            ForEach(aheadCandidates, id: \.routine.id) { c in
-                                let pays = Scoring.routinePoints(basePoints: c.routine.basePoints, tier: tier, late: false)
-                                HStack(alignment: .firstTextBaseline) {
-                                    badge("R", range: pays...pays)
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        // On a low day doing it ahead creates the light version.
-                                        Text(Degrade.text(for: c.routine, tier: tier) ?? c.routine.text)
-                                        Text("\(c.doneThisWeek)/\(c.routine.weeklyTarget) this week · next due \(c.nextDueDayKey)")
-                                            .font(.caption).foregroundStyle(.secondary)
-                                    }
-                                    Spacer()
-                                    Button("Do now") { pending = .ahead(c.routine) }
-                                        .buttonStyle(.bordered)
-                                }
-                            }
-                        }
-                    } header: {
-                        Button {
-                            withAnimation { aheadExpanded.toggle() }
-                        } label: {
-                            HStack {
-                                Text("Ahead this week")
-                                Text("\(thisWeekRoutines.count + aheadCandidates.count)").monospacedDigit()
-                                if !doneAhead.isEmpty {
-                                    Text("· \(doneAhead.count) done").monospacedDigit()
-                                }
-                                Spacer()
-                                Image(systemName: "chevron.right")
-                                    .rotationEffect(.degrees(aheadExpanded ? 90 : 0))
-                            }
-                            .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-
-                // Skipped and never done: read-only, a record rather than a to-do.
-                if !backlog.isEmpty {
-                    Section("Backlog") {
-                        ForEach(backlog) { o in
-                            HStack(alignment: .firstTextBaseline) {
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(o.textSnapshot).foregroundStyle(.secondary)
-                                    Text("Due \(o.dueDayKey)").font(.caption).foregroundStyle(.tertiary)
-                                }
-                                Spacer()
-                                if o.penaltyApplied > 0 {
-                                    Text("−\(o.penaltyApplied)").monospacedDigit().foregroundStyle(.red)
-                                }
-                            }
-                        }
-                    }
-                }
-            }
+            questList
             .navigationTitle("Today")
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button { addingAdHoc = true } label: { Image(systemName: "plus") }
                         .accessibilityLabel("Add a routine for today")
-                        .disabled(AdHoc.replaceableSlots(quests, on: today).isEmpty)
+                        .disabled(!canAddAdHoc)
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
@@ -271,17 +333,17 @@ struct TodayView: View {
                    isPresented: Binding(get: { pending != nil }, set: { if !$0 { pending = nil } }),
                    presenting: pending) { action in
                 // Done ahead there is no row to switch versions on afterwards, so on a low day the
-                // version is picked here. Same points either way.
-                if case .ahead(let routine) = action, Degrade.text(for: routine, tier: tier) != nil {
-                    Button("Did the light version") { perform(action, light: true) }
+                // version is picked here — and a lighter version pays its own points.
+                if case .ahead(let routine) = action, offersLightVersion(routine) {
+                    Button("Did a lighter version") { perform(action, light: true) }
                     Button("Did the original") { perform(action, light: false) }
                 } else {
                     Button("Complete") { perform(action) }
                 }
                 Button("Cancel", role: .cancel) {}
             } message: { action in
-                if case .ahead(let routine) = action, let light = Degrade.text(for: routine, tier: tier) {
-                    Text("\(routine.text)\nLight version: \(light)\n\nSame points either way. This is final — completion cannot be undone.")
+                if case .ahead(let routine) = action, offersLightVersion(routine) {
+                    Text("\(routine.text)\nLighter: \(lightVersionList(routine))\n\nA lighter version pays its own points, and one of them is drawn when you pick it. This is final — completion cannot be undone.")
                 } else {
                     Text("\(action.label)\n\nThis is final — completion cannot be undone.")
                 }

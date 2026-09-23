@@ -102,24 +102,34 @@ public enum Energy {
         }
     }
 
-    /// A cycle day is capped at normal — never pushed down (`PLAN.md` §5, "Menstrual cycle").
-    public static func cap(_ tier: Tier, onCycle: Bool) -> Tier {
-        onCycle && tier == .high ? .normal : tier
+    /// What a cycle day does to the tier (`PLAN.md` §5, "Menstrual cycle").
+    ///
+    /// The **first three days** are held down to `low`: that one line is the whole rule, because
+    /// a low day already means fewer and easier random slots, the 1.3× effort multiplier, and
+    /// routines swapped for their downgrade version — no strength session on day 1. A measured
+    /// `veryLow` stays `veryLow`; this never pushes a tier *up*. Later cycle days are only capped
+    /// at normal, as before: being on a period is not the same as being weak.
+    public static func cap(_ tier: Tier, cycleDay: Int?) -> Tier {
+        guard let cycleDay else { return tier }
+        if cycleDay <= Cycle.earlyDays { return tier.isLow ? tier : .low }
+        return tier == .high ? .normal : tier
     }
 
     /// Everything `ensureToday` needs from the body, in one call.
-    public static func inputs(today: HealthReading, history: [HealthReading], onCycle: Bool,
+    public static func inputs(today: HealthReading, history: [HealthReading], cycleDay: Int?,
                               in timeZone: TimeZone = .current) -> DayInputs {
-        var inputs = DayInputs(onCycle: onCycle)
+        var inputs = DayInputs(cycleDay: cycleDay)
         inputs.hrv = today.hrv
         inputs.sleepHours = today.sleepHours
         inputs.restingHR = today.restingHR
         guard let e = score(today, baseline: baseline(history, before: today.dayKey, in: timeZone)) else {
+            // No usable reading: the day is `normal` — but a cycle day still applies.
+            inputs.tier = cap(.normal, cycleDay: cycleDay)
             return inputs
         }
         inputs.energy = e
         inputs.readiness = readiness(e)
-        inputs.tier = cap(tier(e), onCycle: onCycle)
+        inputs.tier = cap(tier(e), cycleDay: cycleDay)
         return inputs
     }
 }

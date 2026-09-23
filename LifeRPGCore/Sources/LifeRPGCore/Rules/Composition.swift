@@ -50,21 +50,4 @@ public enum Composition {
         if trivial { out[easySlot].isTrivialGroup = true }
         return out
     }
-
-    /// Which `intensity` values may be drawn today.
-    ///
-    /// `PLAN.md` §5 fixes only the two ends: intensity exists "to filter down at low energy", and a
-    /// cycle day excludes `high` without otherwise forcing the tier down. The middle step (`low`
-    /// keeps medium, `veryLow` keeps only low) is this app's reading of that, and is worth
-    /// revisiting in Stage 3 when real readiness data starts moving the tier around.
-    public static func allowedIntensities(tier: Tier, onCycle: Bool) -> Set<Intensity> {
-        var allowed: Set<Intensity>
-        switch tier {
-        case .veryLow: allowed = [.low]
-        case .low:     allowed = [.low, .medium]
-        case .normal, .high: allowed = Set(Intensity.allCases)
-        }
-        if onCycle { allowed.remove(.high) }
-        return allowed
-    }
 }

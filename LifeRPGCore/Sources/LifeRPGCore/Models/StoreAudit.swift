@@ -26,22 +26,23 @@ public enum StoreAudit {
         }
 
         let difficulty = { Difficulty(rawValue: $0) != nil }
-        let intensity = { Intensity(rawValue: $0) != nil }
 
         for q in try context.fetch(FetchDescriptor<QuestTemplate>()) {
             check("QuestTemplate", "difficultyRaw", q.difficultyRaw, difficulty)
-            check("QuestTemplate", "intensityRaw", q.intensityRaw, intensity)
             check("QuestTemplate", "autoVerifyRule", q.autoVerifyRule, isAutoVerify)
             check("QuestTemplate", "lastServedDayKey", q.lastServedDayKey, { DayKey.isValid($0) })
             check("QuestTemplate", "lastCompletedDayKey", q.lastCompletedDayKey, { DayKey.isValid($0) })
         }
 
-        for r in try context.fetch(FetchDescriptor<RoutineTask>()) {
+        let routines = try context.fetch(FetchDescriptor<RoutineTask>())
+        let downgrades = Degrade.versionIDs(in: routines)
+        for r in routines {
             check("RoutineTask", "difficultyRaw", r.difficultyRaw, difficulty)
-            check("RoutineTask", "intensityRaw", r.intensityRaw, intensity)
             check("RoutineTask", "kindRaw", r.kindRaw, { RecurrenceKind(rawValue: $0) != nil })
             // Only meaningful once the kind itself reads back.
-            if RecurrenceKind(rawValue: r.kindRaw) != nil {
+            // A downgrade version is never scheduled, so an empty spec is correct for it.
+            // Anything else with an unparseable spec would silently never come due.
+            if RecurrenceKind(rawValue: r.kindRaw) != nil, !downgrades.contains(r.id) {
                 check("RoutineTask", "spec", r.spec, { (try? FrequencySpec.parse(kind: r.kind, spec: $0)) != nil })
             }
             check("RoutineTask", "autoVerifyRule", r.autoVerifyRule, isAutoVerify)

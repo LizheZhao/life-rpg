@@ -19,7 +19,6 @@ public enum SeedError: Error, Equatable, CustomStringConvertible {
 public struct SideQuestSeed: Equatable, Sendable {
     public var text: String
     public var difficulty: Difficulty
-    public var intensity: Intensity
     public var hiddenEligible: Bool
     public var weekendOnly: Bool
     public var cooldownDays: Int?
@@ -36,11 +35,13 @@ public struct RoutineSeed: Equatable, Sendable {
     public var weeklyTarget: Int
     public var basePoints: Int
     public var difficulty: Difficulty
-    public var intensity: Intensity
     public var flexibleWithinWeek: Bool
     public var countsForClear: Bool
     public var isActive: Bool
-    public var degradedText: String?
+    /// The texts of the routines this one is a downgrade version of, `|`-separated in the CSV.
+    /// Non-empty = never scheduled on its own; the importer turns these into `downgradeIDs` on
+    /// each parent. Such a row may leave `frequency_kind` / `frequency_spec` empty.
+    public var downgradeOf: [String]
     public var autoVerifyRule: String?
     public var launchURLString: String?
 }
@@ -66,14 +67,13 @@ extension RoutineSeed {
 public enum SeedParser {
     public static func sideQuests(csv: String) throws -> [SideQuestSeed] {
         let (header, rows) = CSV.records(csv)
-        try require(["text", "difficulty", "intensity", "hidden_eligible", "weekend_only"], in: header)
+        try require(["text", "difficulty", "hidden_eligible", "weekend_only"], in: header)
         return try rows.enumerated().map { i, r in
             let line = i + 2   // 1-based, after header
             let f = Fields(row: r, line: line)
             return SideQuestSeed(
                 text: try f.nonEmpty("text"),
                 difficulty: try f.difficulty(),
-                intensity: try f.intensity(),
                 hiddenEligible: try f.bool("hidden_eligible", default: false),
                 weekendOnly: try f.bool("weekend_only", default: false),
                 cooldownDays: try f.optionalInt("cooldown_days"),
@@ -89,10 +89,28 @@ public enum SeedParser {
 
     public static func routines(csv: String) throws -> [RoutineSeed] {
         let (header, rows) = CSV.records(csv)
-        try require(["text", "frequency_kind", "frequency_spec", "base_points", "difficulty", "intensity"], in: header)
+        try require(["text", "frequency_kind", "frequency_spec", "base_points", "difficulty"], in: header)
         return try rows.enumerated().map { i, r in
             let line = i + 2
             let f = Fields(row: r, line: line)
+            let downgradeOf = f.list("downgrade_of")
+            // A downgrade version is never scheduled on its own, so it needs no frequency — and
+            // a frequency it was given would be data nothing reads. Everything else is parsed
+            // and validated the same way, because it is completed and paid like any routine.
+            guard downgradeOf.isEmpty else {
+                return RoutineSeed(
+                    text: try f.nonEmpty("text"),
+                    kind: .weekly, spec: "", weeklyTarget: 1,
+                    basePoints: try f.int("base_points"),
+                    difficulty: try f.difficulty(),
+                    flexibleWithinWeek: try f.bool("flexible_within_week", default: false),
+                    countsForClear: try f.bool("counts_for_clear", default: true),
+                    isActive: try f.bool("is_active", default: true),
+                    downgradeOf: downgradeOf,
+                    autoVerifyRule: try f.autoVerifyRule(),
+                    launchURLString: f.optional("launch_url")
+                )
+            }
             let kindRaw = f.value("frequency_kind")
             guard let kind = RecurrenceKind(rawValue: kindRaw) else {
                 throw SeedError.invalidValue(row: line, column: "frequency_kind", value: kindRaw)
@@ -107,11 +125,10 @@ public enum SeedParser {
                 weeklyTarget: try f.weeklyTarget(frequency),
                 basePoints: try f.int("base_points"),
                 difficulty: try f.difficulty(),
-                intensity: try f.intensity(),
                 flexibleWithinWeek: try f.bool("flexible_within_week", default: false),
                 countsForClear: try f.bool("counts_for_clear", default: true),
                 isActive: try f.bool("is_active", default: true),
-                degradedText: f.optional("degraded_text"),
+                downgradeOf: [],
                 autoVerifyRule: try f.autoVerifyRule(),
                 launchURLString: f.optional("launch_url")
             )
@@ -160,14 +177,17 @@ private struct Fields {
         }
     }
 
+    /// A `|`-separated list; empty entries are dropped. `|` rather than a comma because several
+    /// routine texts contain commas.
+    func list(_ column: String) -> [String] {
+        value(column).split(separator: "|")
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+    }
+
     func difficulty() throws -> Difficulty {
         guard let d = Difficulty(csvCode: value("difficulty")) else { throw invalid("difficulty") }
         return d
-    }
-
-    func intensity() throws -> Intensity {
-        guard let i = Intensity(rawValue: value("intensity").lowercased()) else { throw invalid("intensity") }
-        return i
     }
 
     func frequency(kind: RecurrenceKind) throws -> FrequencySpec {

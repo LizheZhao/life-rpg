@@ -27,6 +27,9 @@ final class HealthService {
 
     /// Everything that goes into a day's tier: the reading, the baseline it is judged against,
     /// and the result. `inputs` is what generation uses; the debug page shows the whole thing.
+    /// How far back flow entries are read, in days — long enough to find the start of a round.
+    private let cycleWindow = 14
+
     struct Body {
         var today: HealthReading
         var baseline: Energy.Baseline
@@ -52,7 +55,7 @@ final class HealthService {
         async let asleep = asleepIntervals(from: from, to: now)
         async let hrv = values(.heartRateVariabilitySDNN, unit: .secondUnit(with: .milli), from: from, to: now)
         async let rhr = values(.restingHeartRate, unit: .count().unitDivided(by: .minute()), from: from, to: now)
-        async let cycle = onCycle(dayKey)
+        async let cycle = cycleDay(dayKey)
 
         let readings = HealthBuckets.readings(for: days, asleep: try await asleep,
                                               hrv: try await hrv, restingHR: try await rhr)
@@ -60,7 +63,7 @@ final class HealthService {
         let history = Array(readings.dropLast())
         return Body(today: today,
                     baseline: Energy.baseline(history, before: dayKey),
-                    inputs: Energy.inputs(today: today, history: history, onCycle: try await cycle))
+                    inputs: Energy.inputs(today: today, history: history, cycleDay: try await cycle))
     }
 
     func mindfulSessions(from: Date, to: Date) async throws -> [MindfulSession] {
@@ -77,20 +80,29 @@ final class HealthService {
             .map { DateInterval(start: $0.startDate, end: max($0.startDate, $0.endDate)) }
     }
 
-    /// `PLAN.md` §5: any flow entry that day. A logged "none" is a record of *no* flow, so it
-    /// doesn't count.
-    private func onCycle(_ dayKey: String) async throws -> Bool {
-        guard let noon = DayKey.date(dayKey) else { return false }
-        let start = LifeCalendar.gregorian().startOfDay(for: noon)
-        guard let end = LifeCalendar.gregorian().date(byAdding: .day, value: 1, to: start) else { return false }
+    /// Which day of the period `dayKey` is (`Cycle.day`), or nil.
+    ///
+    /// Two weeks of flow entries are read rather than just today's: the rule counts calendar days
+    /// from the day the round started, so a day logged earlier is what tells day 1 from day 3.
+    /// A logged "none" is a record of *no* flow, so it doesn't count.
+    private func cycleDay(_ dayKey: String) async throws -> Int? {
+        guard let noon = DayKey.date(dayKey),
+              let first = DayKey.adding(-cycleWindow, to: dayKey),
+              let firstNoon = DayKey.date(first) else { return nil }
+        let start = LifeCalendar.gregorian().startOfDay(for: firstNoon)
+        guard let end = LifeCalendar.gregorian().date(byAdding: .day, value: 1,
+                                                      to: LifeCalendar.gregorian().startOfDay(for: noon))
+        else { return nil }
         let none: Int
         if #available(iOS 18.0, *) {
             none = HKCategoryValueVaginalBleeding.none.rawValue
         } else {
             none = HKCategoryValueMenstrualFlow.none.rawValue
         }
-        return try await categorySamples(.menstrualFlow, from: start, to: end)
-            .contains { $0.value != none && $0.startDate.dayKey == dayKey }
+        let flowDays = try await categorySamples(.menstrualFlow, from: start, to: end)
+            .filter { $0.value != none }
+            .map { $0.startDate.dayKey }
+        return Cycle.day(on: dayKey, flowDays: Set(flowDays))
     }
 
     private func categorySamples(_ id: HKCategoryTypeIdentifier, from: Date, to: Date) async throws -> [HKCategorySample] {

@@ -10,15 +10,15 @@ struct SeedValidationTests {
                             target: String = "2",
                             autoVerify: String = "") -> String {
         """
-        text,frequency_kind,frequency_spec,weekly_target,base_points,difficulty,intensity,auto_verify
-        Foo,\(kind),"\(spec)",\(target),15,E,low,\(autoVerify)
+        text,frequency_kind,frequency_spec,weekly_target,base_points,difficulty,auto_verify
+        Foo,\(kind),"\(spec)",\(target),15,E,\(autoVerify)
         """
     }
 
     private func sideCSV(autoVerify: String) -> String {
         """
-        text,difficulty,intensity,hidden_eligible,weekend_only,auto_verify
-        Foo,E,low,FALSE,FALSE,\(autoVerify)
+        text,difficulty,hidden_eligible,weekend_only,auto_verify
+        Foo,E,FALSE,FALSE,\(autoVerify)
         """
     }
 

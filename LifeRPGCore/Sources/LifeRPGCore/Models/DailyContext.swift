@@ -10,6 +10,9 @@ import SwiftData
     public var readiness: Int = 75
     public var tierRaw: String = Tier.normal.rawValue
     public var onCycle: Bool = false
+    /// Which day of the current period this is, 1-based, or nil when there is no flow. Days 1–3
+    /// hold the tier down to `low` (`PLAN.md` §5), which is what makes the routines downgrade.
+    public var cycleDay: Int?
     public var routineLoad: Int = 0
     public var randomSlots: Int = 3
 

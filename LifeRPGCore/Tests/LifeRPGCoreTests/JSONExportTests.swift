@@ -16,7 +16,7 @@ struct JSONExportTests {
         }
 
         let snapshot = try JSONExport.snapshot(ctx)
-        #expect(snapshot.schemaVersion == 2)
+        #expect(snapshot.schemaVersion == 3)
         #expect(snapshot.dailyContexts.count == 1)
         #expect(snapshot.dailyQuests.count == 3)
         #expect(snapshot.ledger.count == 3)

@@ -15,7 +15,9 @@ import SwiftData
 /// one costs 50% of base, charged against an open occurrence, and the open ones are skipped.
 ///
 /// `countsForClear = false` routines are never charged, but their rounds still end.
-/// Penalties are fixed on base — never scaled by tier or readiness.
+/// Penalties are fixed on base — never scaled by tier or readiness. The base is the one the day
+/// actually asked for: an occurrence sitting on its downgrade version is charged against that
+/// version's points, because a walk is what was missed.
 ///
 /// Idempotent: a penalty is keyed on (occurrence, day) in the ledger and a skip on the flag, so
 /// judging the same day twice changes nothing. Does not save; `ensureToday` saves once at the end.
@@ -47,7 +49,7 @@ public enum Overdue {
         // Fixed routines: the daily ladder.
         for o in occurrences where Schedule.isOpen(o) && !Schedule.isFlexible(o, flexible) {
             guard let roundDay = Schedule.roundDay(due: o.dueDayKey, on: dayKey, in: timeZone) else { continue }
-            charge(o, Scoring.overduePenalty(basePoints: o.basePoints, roundDay: roundDay),
+            charge(o, Scoring.overduePenalty(basePoints: o.effectiveBasePoints, roundDay: roundDay),
                    "overdue day \(roundDay)")
             if roundDay == Schedule.roundDays { skip(o) }
         }
@@ -64,7 +66,7 @@ public enum Overdue {
             let shortfall = max(0, min(routine.weeklyTarget, thisWeek.count) - done)
             let open = thisWeek.filter(Schedule.isOpen)
             for o in open.prefix(shortfall) {
-                charge(o, Scoring.flexibleShortfallPenalty(basePoints: o.basePoints),
+                charge(o, Scoring.flexibleShortfallPenalty(basePoints: o.effectiveBasePoints),
                        "\(done)/\(routine.weeklyTarget) this week")
             }
             open.forEach(skip)

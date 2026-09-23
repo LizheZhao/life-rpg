@@ -82,6 +82,9 @@ public enum Schedule {
                                    occurrences: [RoutineOccurrence],
                                    on dayKey: String,
                                    in timeZone: TimeZone = .current) -> [RoutineTask] {
+        // A downgrade version is a routine row like any other, but it is only ever reached
+        // through the routine it belongs to (`Degrade`), never scheduled by itself.
+        let downgrades = Degrade.versionIDs(in: routines)
         var latest: [UUID: RoutineOccurrence] = [:]
         let existing = Set(occurrences.filter { $0.dueDayKey == dayKey }.compactMap(\.routineID))
         let week = DayKey.weekKey(of: dayKey, in: timeZone)
@@ -95,7 +98,8 @@ public enum Schedule {
             latest[id] = o
         }
         return routines.filter { r in
-            guard r.isActive, !existing.contains(r.id), let spec = r.frequency else { return false }
+            guard r.isActive, !downgrades.contains(r.id), !existing.contains(r.id),
+                  let spec = r.frequency else { return false }
             if r.flexibleWithinWeek, doneThisWeek[r.id, default: 0] >= r.weeklyTarget { return false }
             let last = latest[r.id]
             let history = History(lastCompletedDayKey: r.lastCompletedDayKey,
@@ -153,8 +157,9 @@ public enum Schedule {
               let tomorrow = DayKey.adding(1, to: dayKey, in: timeZone) else { return [] }
         let laterThisWeek = DayKey.range(from: tomorrow, through: sunday, in: timeZone)
 
+        let downgrades = Degrade.versionIDs(in: routines)
         return routines
-            .filter { $0.isActive && $0.flexibleWithinWeek }
+            .filter { $0.isActive && $0.flexibleWithinWeek && !downgrades.contains($0.id) }
             .sorted { $0.text < $1.text }
             .compactMap { r in
                 let mine = occurrences.filter { $0.routineID == r.id && $0.weekKey == week }

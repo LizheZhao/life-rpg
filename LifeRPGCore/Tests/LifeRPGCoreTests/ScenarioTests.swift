@@ -147,7 +147,11 @@ struct ScenarioTests {
         #expect(try w.backlog.count == 5)            // the five flexible shortfalls, skipped Sunday
 
         // Tue 29 (tier low): Mon is judged — trash day 3 → −5, then skipped (dated day 4).
-        // Mon's study done on Tue, Tue's study and dumbbell done: 20 × 1.3 = 26 each.
+        // Mon's study done on Tue: created on a normal day, so it is still the full version —
+        // 20 × 1.3 = 26. Tuesday's own two were created on a low day and start out as their
+        // downgrade versions, which pay what the lighter thing is worth:
+        //   study    → "Just one easy problem"  8 × 1.3 = 10.4 → 10
+        //   dumbbell → "Walk, 30 minutes"      10 × 1.3 = 13
         try w.open("2026-09-29", tier: .low)
         #expect(try w.penalties(on: "2026-09-28") == [-5])
         let trash = try w.occurrence("Take out the trash", due: "2026-09-26")
@@ -159,9 +163,11 @@ struct ScenarioTests {
             "Work on project", "Workout: dumbbell training", "Workout: running",
         ])
         #expect(try w.done("Study", due: "2026-09-28", on: "2026-09-29", tier: .low) == 26)
-        try w.done("Study", due: "2026-09-29", on: "2026-09-29", tier: .low)
-        try w.done("Workout: dumbbell", due: "2026-09-29", on: "2026-09-29", tier: .low)
-        #expect(try w.balance == 74 - 5 + 78)                              // 147
+        #expect(try w.occurrence("Study", due: "2026-09-29").displayText == "Just one easy problem")
+        #expect(try w.done("Study", due: "2026-09-29", on: "2026-09-29", tier: .low) == 10)
+        #expect(try w.occurrence("Workout: dumbbell", due: "2026-09-29").displayText == "Walk, 30 minutes")
+        #expect(try w.done("Workout: dumbbell", due: "2026-09-29", on: "2026-09-29", tier: .low) == 13)
+        #expect(try w.balance == 74 - 5 + 26 + 10 + 13)                    // 118
 
         // Wed 30 – Fri Oct 2: never opened, so nothing is generated and nothing charged.
 
@@ -170,7 +176,7 @@ struct ScenarioTests {
         let sat2 = try w.open("2026-10-03")
         #expect(sat2.routineLoad == 6)
         #expect(sat2.randomSlots == 1)
-        #expect(try w.balance == 147)
+        #expect(try w.balance == 118)
 
         // Sun Oct 4: Sat is judged — clean day 1 → −13 (12.5), trash day 1 → −3.
         // Cat done (15); Sat's clean made up late (12.5 → 13); weights Sat (moved) and Sun, 30 each.
@@ -181,7 +187,7 @@ struct ScenarioTests {
         #expect(try w.done("Clean", due: "2026-10-03", on: "2026-10-04") == 13)
         try w.done("Workout: weight", due: "2026-10-03", on: "2026-10-04")
         try w.done("Workout: weight", due: "2026-10-04", on: "2026-10-04")
-        #expect(try w.balance == 147 - 16 + 15 + 13 + 60)                  // 219
+        #expect(try w.balance == 118 - 16 + 15 + 13 + 60)                  // 190
 
         // Mon Oct 5: Sun is judged — trash day 2 → −4. W40 settles:
         //   study     2 due (Wed never generated), 2 done     → 0
@@ -191,17 +197,17 @@ struct ScenarioTests {
         //   weights   2 due, 2 done                           → 0
         //   job apps  1 due, 0 done                           → −13 (12.5)
         //   project   2 due, 0 done                           → −18 × 2
-        //   219 − 4 − 8 − 5 − 13 − 36 = 153
+        //   190 − 4 − 8 − 5 − 13 − 36 = 124
         try w.open("2026-10-05")
         #expect(try w.penalties(on: "2026-10-04") == [-18, -18, -13, -8, -5, -4])
-        #expect(try w.balance == 153)
+        #expect(try w.balance == 124)
         #expect(try w.overdue(on: "2026-10-05") == ["Take out the trash"])  // still on day 3
 
         // The ledger is the only place the balance lives: re-summing it by kind agrees.
         let ledger = try w.ctx.fetch(FetchDescriptor<LedgerEntry>())
         let earned = ledger.filter { $0.kind == "routine" }.map(\.points).reduce(0, +)
         let charged = ledger.filter { $0.kind == "penalty" }.map(\.points).reduce(0, +)
-        #expect(earned == 148 + 166)
+        #expect(earned == 148 + 137)
         #expect(charged == -(79 + 82))
         #expect(ledger.filter { $0.kind == "skip" }.allSatisfy { $0.points == 0 })
     }

@@ -140,7 +140,7 @@ struct DebugView: View {
     private var bodySection: some View {
         Section {
             if let day = todayContext {
-                value("Tier", day.tier.rawValue + (day.onCycle ? " (cycle day)" : ""))
+                value("Tier", day.tier.rawValue + (day.cycleDay.map { " (cycle day \($0))" } ?? (day.onCycle ? " (cycle)" : "")))
                 value("Energy / readiness", String(format: "%.3f / %d", day.energy, day.readiness))
                 value("HRV", day.hrv.map { String(format: "%.1f ms", $0) } ?? "—")
                 value("Sleep", day.sleepHours.map { String(format: "%.2f h", $0) } ?? "—")
@@ -193,7 +193,7 @@ struct DebugView: View {
         } header: {
             Text("Body (today)")
         } footer: {
-            Text("The tier is fixed when the day is generated — the first time the app opens that day. Data that syncs later counts from tomorrow. A metric with no data is left out; with none at all the day is normal.")
+            Text("The tier is set when the day is generated — the first time the app opens that day — but the body is read again on every foreground. If a later reading disagrees, the app offers to re-plan what is still open; finished work is never touched. Cycle days 1–3 hold the tier at low. A metric with no data is left out; with none at all the day is normal.")
         }
     }
 

@@ -154,7 +154,7 @@ struct EnergyTests {
     // MARK: inputs (the whole path)
 
     @Test func inputsFromABadNight() {
-        let i = Energy.inputs(today: reading(50, 5.25, 55), history: history(28), onCycle: false, in: tz)
+        let i = Energy.inputs(today: reading(50, 5.25, 55), history: history(28), cycleDay: nil, in: tz)
         #expect(i.tier == .low)
         #expect(i.readiness == 67)
         #expect(abs(i.energy - 0.895) < 1e-9)
@@ -164,7 +164,7 @@ struct EnergyTests {
 
     /// First launch before any backfill, or no watch at all: the day stays normal.
     @Test func noDataFallsBackToNormal() {
-        let i = Energy.inputs(today: reading(nil, nil, nil), history: [], onCycle: false, in: tz)
+        let i = Energy.inputs(today: reading(nil, nil, nil), history: [], cycleDay: nil, in: tz)
         #expect(i.tier == .normal)
         #expect(i.energy == 1.0)
         #expect(i.readiness == 75)
@@ -174,16 +174,25 @@ struct EnergyTests {
 
     /// `PLAN.md` §5: a cycle day is capped at normal, but not pushed down.
     @Test func aCycleDayCapsHighAtNormal() {
-        #expect(Energy.cap(.high, onCycle: true) == .normal)
-        #expect(Energy.cap(.normal, onCycle: true) == .normal)
-        #expect(Energy.cap(.low, onCycle: true) == .low)
-        #expect(Energy.cap(.veryLow, onCycle: true) == .veryLow)
-        #expect(Energy.cap(.high, onCycle: false) == .high)
+        // Day 4 on: capped at normal, never pushed down (PLAN §5).
+        #expect(Energy.cap(.high, cycleDay: 5) == .normal)
+        #expect(Energy.cap(.normal, cycleDay: 5) == .normal)
+        #expect(Energy.cap(.low, cycleDay: 5) == .low)
+        #expect(Energy.cap(.veryLow, cycleDay: 5) == .veryLow)
+        #expect(Energy.cap(.high, cycleDay: nil) == .high)
+
+        // The first three days are held down to low — that is the whole downgrade rule.
+        for day in 1...3 {
+            #expect(Energy.cap(.high, cycleDay: day) == .low)
+            #expect(Energy.cap(.normal, cycleDay: day) == .low)
+            #expect(Energy.cap(.low, cycleDay: day) == .low)
+            #expect(Energy.cap(.veryLow, cycleDay: day) == .veryLow)   // never pushed up
+        }
     }
 
     @Test func inputsOnACycleDay() {
         // Every ratio at the ceiling would be high; the cycle caps it. Readiness is not capped.
-        let i = Energy.inputs(today: reading(100, 15, 20), history: history(28), onCycle: true, in: tz)
+        let i = Energy.inputs(today: reading(100, 15, 20), history: history(28), cycleDay: 5, in: tz)
         #expect(i.tier == .normal)
         #expect(i.readiness == 100)
         #expect(i.onCycle)
@@ -193,7 +202,7 @@ struct EnergyTests {
     @Test func aBadNightReachesTheGeneratedDay() throws {
         let ctx = try Fixtures.context()
         Fixtures.stockLibrary(ctx)
-        let inputs = Energy.inputs(today: reading(50, 5.25, 55), history: history(28), onCycle: false, in: tz)
+        let inputs = Energy.inputs(today: reading(50, 5.25, 55), history: history(28), cycleDay: nil, in: tz)
         var rng = SeededRNG(seed: 3)
         let day = try DayService.ensureToday(ctx, now: Fixtures.date(today), in: tz, inputs: inputs, rng: &rng)
         #expect(day.tier == .low)

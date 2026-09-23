@@ -2,7 +2,7 @@
 
 Stages follow `PLAN.md` §11; this file only tracks concrete checkable tasks, updated as development progresses. Design intent, formulas, and data model definitions stay authoritative in `PLAN.md` — not repeated here.
 
-Current status: Stage 4 code done (calendar, day detail, rating summary; 317 Core tests), device check pending. Stage 3 code done and running on the phone with HealthKit access; open until the device checks in the Stage 3 list pass. Stage 2 done — scheduling, occurrences, load → slots, routine completion, the overdue ladder, day-4 auto-skip, flexible Sunday settlement, the backlog, doing a flexible routine ahead, ad-hoc replacement and degraded_text, plus a two-week scenario test and simulator-only time travel (250 Core tests). Next: Stage 3. Stage 1 below as it stood: done, reviewed, and extended. `ensureToday`, catch-up, sampling, scoring,
+Current status: Stage 3.5 code done (one difficulty axis, cycle days 1–3, foreground re-read; `SchemaV2`, 337 Core tests), device checks pending. Stage 4 code done (calendar, day detail, rating summary), device check pending. Stage 3 code done and running on the phone with HealthKit access; open until the device checks in the Stage 3 list pass. Stage 2 done — scheduling, occurrences, load → slots, routine completion, the overdue ladder, day-4 auto-skip, flexible Sunday settlement, the backlog, doing a flexible routine ahead, ad-hoc replacement and degraded_text, plus a two-week scenario test and simulator-only time travel (250 Core tests). Next: Stage 3. Stage 1 below as it stood: done, reviewed, and extended. `ensureToday`, catch-up, sampling, scoring,
 streak, the ledger, the today page, the payout reveal and the exports are in; 162 Core tests. Two inputs are still stubs, by
 design: `tier` is always `normal` until Stage 3 reads HealthKit, and `routineLoad` is always 0
 until Stage 2 schedules routines — both are `DayInputs` parameters, so wiring them is a one-line
@@ -131,6 +131,22 @@ Code is done: Core tested (`EnergyTests`, `HealthBucketsTests`, `AutoVerifyTests
 - [x] `mindfulSession` auto-verification, sessions accumulate per day (drawn down as items claim them)
 - [x] Auto-verify runs on every foreground for today, and during catch-up on each ended day **before** it is judged — a workout on a day the app never opened still counts on that day instead of being docked. `RoutineOccurrence` gained `sourceTypeRaw` (defaulted, still `SchemaV1`; export carries it); `Completion.complete` / `completeRoutine` take a `source`
 - Not covered, by design: `calendar_workout_weekly` (the epic's, Stage 5); T groups; ad-hoc occurrences (no routine to read a rule from). A light version shorter than the routine's threshold (weight training: light 20 min, rule 40) won't auto-verify — tap it
+
+## Stage 3.5 — one difficulty axis, cycle days, foreground re-read
+
+Done when: the first day of a period offers a walk instead of strength training
+
+Code done (`SchemaV2`, 337 Core tests). Four changes that belong together because they share one migration:
+
+- [x] **`intensity` removed from both libraries** — `QuestTemplate`, `RoutineTask`, both seed CSVs, `Composition.allowedIntensities` and the `Sampling` filter. Difficulty already says how hard a thing is and the composition table is what filters a low day; for routines nothing read `intensity` at all. What this gives up: a physically demanding *easy* quest can now show up on a very-low day, since nothing separates exertion from resistance any more
+- [x] **`degraded_text` → downgrade versions.** A lighter version is a `RoutineTask` row of its own, linked from its parent's `downgradeIDs` (CSV column `downgrade_of`, `|`-separated parent texts). It carries its own points, its own auto-verify rule (the walk verifies at 30 min, not the strength session's 40), and is never scheduled on its own. Several on offer → one drawn at random when the day is generated. `RoutineOccurrence` gained `degradedRoutineID` and `degradedBasePoints`
+- [x] **The light version pays — and is charged — its own points.** Reverses the earlier "same points either way": otherwise the row's `base_points` is a field nothing reads. `RoutineOccurrence.effectiveBasePoints` is the one place that decides
+- [x] **Cycle days 1–3 hold the tier at `low`** (`Cycle.day` + `Energy.cap`), which is what triggers the downgrade — no separate cycle rule anywhere. Counted in calendar days from the round's start, so a missed log still counts; `DailyContext.cycleDay` records it. `HealthService` reads two weeks of `menstrualFlow` instead of one day
+- [x] **Body data re-read on every foreground**, and a day already on screen can be re-planned after confirming (`Replan`): finished work untouched, open slots redrawn, open routines' downgrade decision redone. A failed read never re-plans
+- [x] `SchemaV2` + a lightweight migration stage; JSON export `schemaVersion` 3 (carries `cycleDay` and `degradedBasePoints`)
+- [x] `SeedImporter` now also links downgrade versions onto rows the DB already has — the one thing the merge writes to an existing row, and it only ever adds an id
+- [ ] Device check: on the phone, a real day 1 shows the walk instead of weight training, and the day detail says "cycle day 1"
+- [ ] Device check: opening the app before the watch has synced, then again after, offers the re-plan and doesn't disturb anything already done
 
 ## Stage 4 — Monthly calendar page
 

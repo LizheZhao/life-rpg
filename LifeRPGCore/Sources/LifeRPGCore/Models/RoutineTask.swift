@@ -6,14 +6,16 @@ import SwiftData
     public var text: String = ""
     public var basePoints: Int = 15
     public var difficultyRaw: String = Difficulty.easy.rawValue
-    public var intensityRaw: String = Intensity.low.rawValue
     public var kindRaw: String = RecurrenceKind.weekly.rawValue
     public var spec: String = ""                  // "MON,THU" / "3" / "1:SAT" / "2:SAT"
     public var anchorWeekKey: String?             // everyNWeeksOnWeekday only, e.g. "2026-W38"
     public var weeklyTarget: Int = 1
     public var flexibleWithinWeek: Bool = false
     public var countsForClear: Bool = true
-    public var degradedText: String?
+    // The routine's downgrade versions, as ids of other `RoutineTask` rows (`PLAN.md` §4). A
+    // downgrade version is a routine like any other — its own text, points and auto-verify rule —
+    // it simply is never scheduled on its own. Empty = this routine has no lighter version.
+    public var downgradeIDs: [UUID] = []
     public var launchURLString: String?
     public var autoVerifyRule: String?
     public var lastCompletedDayKey: String?
@@ -24,11 +26,6 @@ import SwiftData
     public var difficulty: Difficulty {
         get { Difficulty(rawValue: difficultyRaw) ?? .easy }
         set { difficultyRaw = newValue.rawValue }
-    }
-
-    public var intensity: Intensity {
-        get { Intensity(rawValue: intensityRaw) ?? .low }
-        set { intensityRaw = newValue.rawValue }
     }
 
     public var kind: RecurrenceKind {

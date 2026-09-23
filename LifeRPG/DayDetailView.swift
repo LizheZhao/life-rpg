@@ -80,7 +80,7 @@ struct DayDetailView: View {
 
     private func bodySection(_ c: DailyContext) -> some View {
         Section("Body") {
-            LabeledContent("Tier", value: c.tier.rawValue + (c.onCycle ? " · cycle" : ""))
+            LabeledContent("Tier", value: c.tier.rawValue + cycleNote(c))
             LabeledContent("Readiness", value: "\(c.readiness)")
             LabeledContent("Energy", value: c.energy.formatted(.number.precision(.fractionLength(3))))
             LabeledContent("HRV", value: c.hrv.map { "\(Int($0.rounded())) ms" } ?? "—")
@@ -88,6 +88,13 @@ struct DayDetailView: View {
             LabeledContent("Resting HR", value: c.restingHR.map { "\(Int($0.rounded())) bpm" } ?? "—")
             LabeledContent("Routine load · random slots", value: "\(c.routineLoad) · \(c.randomSlots)")
         }
+    }
+
+    /// Days 1–3 are why the tier reads `low` on a day the body data alone would have called
+    /// normal, so the day detail says which day it was.
+    private func cycleNote(_ c: DailyContext) -> String {
+        if let day = c.cycleDay { return " · cycle day \(day)" }
+        return c.onCycle ? " · cycle" : ""
     }
 
     private func questRow(_ line: DayRecord.QuestLine) -> some View {

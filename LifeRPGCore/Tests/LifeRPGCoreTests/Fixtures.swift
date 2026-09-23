@@ -37,7 +37,6 @@ extension Fixtures {
     static func quest(_ context: ModelContext,
                       _ text: String,
                       _ difficulty: Difficulty = .easy,
-                      intensity: Intensity = .low,
                       hidden: Bool = false,
                       weekendOnly: Bool = false,
                       affinity: Int = 0,
@@ -48,7 +47,6 @@ extension Fixtures {
         let t = QuestTemplate()
         t.text = text
         t.difficulty = difficulty
-        t.intensity = intensity
         t.hiddenEligible = hidden
         t.weekendOnly = weekendOnly
         t.affinity = affinity

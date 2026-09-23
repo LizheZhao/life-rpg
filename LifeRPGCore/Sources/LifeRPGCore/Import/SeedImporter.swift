@@ -26,11 +26,28 @@ public enum SeedImporter {
             result.questTemplates += 1
         }
 
-        var knownRoutines = Set(try context.fetch(FetchDescriptor<RoutineTask>()).map(\.text))
-        for seed in try SeedParser.routines(csv: routinesCSV)
-        where knownRoutines.insert(seed.text).inserted {
-            context.insert(RoutineTask(seed: seed))
+        let routineSeeds = try SeedParser.routines(csv: routinesCSV)
+        var routinesByText = Dictionary(
+            try context.fetch(FetchDescriptor<RoutineTask>()).map { ($0.text, $0) },
+            uniquingKeysWith: { a, _ in a })
+        for seed in routineSeeds where routinesByText[seed.text] == nil {
+            let routine = RoutineTask(seed: seed)
+            context.insert(routine)
+            routinesByText[seed.text] = routine
             result.routineTasks += 1
+        }
+
+        // Linking a downgrade version onto its parent is the one thing that does reach a row the
+        // DB already has — and it only ever *adds* an id that isn't there yet. Without this, a
+        // store seeded before downgrade versions existed would keep parents that offer nothing,
+        // because their rows are never re-inserted.
+        for seed in routineSeeds where !seed.downgradeOf.isEmpty {
+            guard let version = routinesByText[seed.text] else { continue }
+            for parentText in seed.downgradeOf {
+                guard let parent = routinesByText[parentText],
+                      !parent.downgradeIDs.contains(version.id) else { continue }
+                parent.downgradeIDs.append(version.id)
+            }
         }
 
         try context.save()
@@ -43,7 +60,6 @@ extension QuestTemplate {
         self.init()
         text = seed.text
         difficulty = seed.difficulty
-        intensity = seed.intensity
         hiddenEligible = seed.hiddenEligible
         weekendOnly = seed.weekendOnly
         // Only store an override when it differs from the difficulty default.
@@ -63,13 +79,11 @@ extension RoutineTask {
         text = seed.text
         basePoints = seed.basePoints
         difficulty = seed.difficulty
-        intensity = seed.intensity
         kind = seed.kind
         spec = seed.spec
         weeklyTarget = seed.weeklyTarget
         flexibleWithinWeek = seed.flexibleWithinWeek
         countsForClear = seed.countsForClear
-        degradedText = seed.degradedText
         launchURLString = seed.launchURLString
         autoVerifyRule = seed.autoVerifyRule
         isActive = seed.isActive

@@ -38,8 +38,8 @@ struct DifficultyTests {
 struct SeedParserTests {
     @Test func sideQuestRow() throws {
         let csv = """
-        text,difficulty,intensity,hidden_eligible,weekend_only,cooldown_days,auto_verify,launch_url,variants,notes
-        Photograph a set of things in a given color,E,low,TRUE,FALSE,7,,,Red|Blue| Yellow ,Parameterized color
+        text,difficulty,hidden_eligible,weekend_only,cooldown_days,auto_verify,launch_url,variants,notes
+        Photograph a set of things in a given color,E,TRUE,FALSE,7,,,Red|Blue| Yellow ,Parameterized color
         """
         let s = try #require(try SeedParser.sideQuests(csv: csv).first)
         #expect(s.difficulty == .easy)
@@ -53,8 +53,8 @@ struct SeedParserTests {
 
     @Test func routineRow() throws {
         let csv = """
-        text,frequency_kind,frequency_spec,weekly_target,base_points,difficulty,intensity,flexible_within_week,counts_for_clear,is_active,degraded_text,auto_verify,launch_url,notes
-        Go to the office,weekly,"MON,THU",2,5,E,low,FALSE,FALSE,FALSE,,,,"Disabled, for now"
+        text,frequency_kind,frequency_spec,weekly_target,base_points,difficulty,flexible_within_week,counts_for_clear,is_active,downgrade_of,auto_verify,launch_url,notes
+        Go to the office,weekly,"MON,THU",2,5,E,FALSE,FALSE,FALSE,,,,"Disabled, for now"
         """
         let r = try #require(try SeedParser.routines(csv: csv).first)
         #expect(r.kind == .weekly)
@@ -62,11 +62,27 @@ struct SeedParserTests {
         #expect(r.weeklyTarget == 2)
         #expect(!r.countsForClear)
         #expect(!r.isActive)
-        #expect(r.degradedText == nil)
+        #expect(r.downgradeOf.isEmpty)
+    }
+
+    /// A downgrade version is never scheduled on its own, so it may leave the frequency columns
+    /// empty — and `downgrade_of` takes several parents, `|`-separated because routine texts
+    /// contain commas.
+    @Test func downgradeVersionRow() throws {
+        let csv = """
+        text,frequency_kind,frequency_spec,weekly_target,base_points,difficulty,flexible_within_week,counts_for_clear,is_active,downgrade_of,auto_verify,launch_url,notes
+        "Walk, 30 minutes",,,,10,E,TRUE,TRUE,TRUE,Workout: dumbbell training|Workout: weight training,calendar_workout:30,,
+        """
+        let r = try #require(try SeedParser.routines(csv: csv).first)
+        #expect(r.text == "Walk, 30 minutes")
+        #expect(r.basePoints == 10)
+        #expect(r.difficulty == .easy)
+        #expect(r.downgradeOf == ["Workout: dumbbell training", "Workout: weight training"])
+        #expect(r.autoVerifyRule == "calendar_workout:30")
     }
 
     @Test func invalidDifficultyReportsRow() {
-        let csv = "text,difficulty,intensity,hidden_eligible,weekend_only\nFoo,Z,low,FALSE,FALSE\n"
+        let csv = "text,difficulty,hidden_eligible,weekend_only\nFoo,Z,FALSE,FALSE\n"
         #expect(throws: SeedError.invalidValue(row: 2, column: "difficulty", value: "Z")) {
             try SeedParser.sideQuests(csv: csv)
         }
@@ -74,7 +90,7 @@ struct SeedParserTests {
 
     @Test func missingColumn() {
         #expect(throws: SeedError.missingColumn("weekend_only")) {
-            try SeedParser.sideQuests(csv: "text,difficulty,intensity,hidden_eligible\n")
+            try SeedParser.sideQuests(csv: "text,difficulty,hidden_eligible\n")
         }
     }
 
@@ -99,7 +115,10 @@ struct SeedParserTests {
         #expect(!office.isActive)
         let clean = try #require(seeds.first { $0.text.hasPrefix("Clean and tidy") })
         #expect(clean.text == "Clean and tidy the apartment (vacuum, dishes, dust, litter box, water fountain)")
-        #expect(clean.degradedText == "Just the litter box and dishes")
+        #expect(clean.downgradeOf.isEmpty)
+        let walk = try #require(seeds.first { $0.text == "Walk, 30 minutes" })
+        #expect(walk.downgradeOf == ["Workout: dumbbell training", "Workout: weight training"])
+        #expect(walk.basePoints == 10)
         let bills = try #require(seeds.first { $0.text == "Review bills/statements" })
         #expect(bills.kind == .nthWeekdayOfMonth)
         #expect(bills.spec == "-1:SAT")

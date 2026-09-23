@@ -8,17 +8,24 @@ import SwiftData
 /// schedules, so the number that sizes the random slots and the routines on the page can't disagree.
 public struct DayInputs: Equatable, Sendable {
     public var tier: Tier
-    public var onCycle: Bool
+    /// Which day of the period this is, 1-based (`Cycle.day`), or nil. Days 1–3 are already
+    /// reflected in `tier` — `Energy.cap` holds it down to `low` — so nothing downstream reads
+    /// this except the day's own record.
+    public var cycleDay: Int?
     public var energy: Double
     public var readiness: Int
     public var hrv: Double?
     public var sleepHours: Double?
     public var restingHR: Double?
 
-    public init(tier: Tier = .normal, onCycle: Bool = false,
+    /// True on any day inside a period, which is what the day's record and `PLAN.md` §5 call
+    /// "on cycle".
+    public var onCycle: Bool { cycleDay != nil }
+
+    public init(tier: Tier = .normal, cycleDay: Int? = nil,
                 energy: Double = 1.0, readiness: Int = 75) {
         self.tier = tier
-        self.onCycle = onCycle
+        self.cycleDay = cycleDay
         self.energy = energy
         self.readiness = readiness
     }
@@ -105,18 +112,21 @@ public enum DayService {
         }
 
         let weekKey = DayKey.weekKey(of: today, in: timeZone) ?? now.weekKey(in: timeZone)
-        let due = Schedule.dueRoutines(try context.fetch(FetchDescriptor<RoutineTask>()),
+        let routines = try context.fetch(FetchDescriptor<RoutineTask>())
+        let due = Schedule.dueRoutines(routines,
                                        occurrences: try context.fetch(FetchDescriptor<RoutineOccurrence>()),
                                        on: today, in: timeZone)
         for routine in due {
+            let light = Degrade.pick(for: routine, tier: inputs.tier, in: routines, rng: &rng)
             context.insert(RoutineOccurrence(routine: routine, dueDayKey: today, weekKey: weekKey,
-                                             tier: inputs.tier))
+                                             downgrade: light))
         }
 
         let day = DailyContext()
         day.dayKey = today
         day.tier = inputs.tier
         day.onCycle = inputs.onCycle
+        day.cycleDay = inputs.cycleDay
         day.energy = inputs.energy
         day.readiness = inputs.readiness
         day.hrv = inputs.hrv
@@ -126,43 +136,55 @@ public enum DayService {
         day.randomSlots = Composition.slots(routineLoad: due.count)
         context.insert(day)
 
-        let templates = try Sampling.activeTemplates(context)
-        let allowed = Composition.allowedIntensities(tier: inputs.tier, onCycle: inputs.onCycle)
         var drawn: Set<UUID> = []
-
-        for slot in Composition.plan(tier: inputs.tier, slots: day.randomSlots, rng: &rng) {
-            if slot.isTrivialGroup {
-                let pool = Sampling.eligible(templates, difficulty: .trivial, dayKey: today,
-                                             allowedIntensities: allowed, excluding: drawn, in: timeZone)
-                let group = Sampling.pickDistinct(3, from: pool, rng: &rng)
-                if group.count == 3 {
-                    let variants = group.map { Sampling.variant(of: $0, rng: &rng) ?? "" }
-                    let quest = DailyQuest(group: group, variants: variants,
-                                           dayKey: today, weekKey: weekKey)
-                    context.insert(quest)
-                    for t in group {
-                        t.lastServedDayKey = today
-                        drawn.insert(t.id)
-                    }
-                    continue
-                }
-                // Fewer than three T items available: the slot falls back to a normal E draw.
-            }
-            let pool = Sampling.eligible(templates, difficulty: slot.difficulty, dayKey: today,
-                                         allowedIntensities: allowed, excluding: drawn, in: timeZone)
-            guard let template = Sampling.pick(from: pool, rng: &rng) else { continue }
-            context.insert(DailyQuest(template: template, slot: slot.difficulty,
-                                      dayKey: today, weekKey: weekKey,
-                                      variant: Sampling.variant(of: template, rng: &rng)))
-            template.lastServedDayKey = today
-            drawn.insert(template.id)
-        }
+        try fill(context, plan: Composition.plan(tier: inputs.tier, slots: day.randomSlots, rng: &rng),
+                 on: today, weekKey: weekKey, excluding: &drawn, in: timeZone, rng: &rng)
 
         try context.save()
         if let e = evidence[today] {
             try AutoVerify.run(on: today, evidence: e, in: context, now: now, timeZone: timeZone, rng: &rng)
         }
         return day
+    }
+
+    /// Draws one template into each planned slot, skipping anything in `drawn` and adding what
+    /// it draws to it. Shared by the first generation of a day and by `Replan`, so a re-plan
+    /// fills a slot exactly the way the morning would have.
+    static func fill(_ context: ModelContext,
+                     plan: [Composition.Slot],
+                     on dayKey: String,
+                     weekKey: String,
+                     excluding drawn: inout Set<UUID>,
+                     in timeZone: TimeZone = .current,
+                     rng: inout some RandomNumberGenerator) throws {
+        let templates = try Sampling.activeTemplates(context)
+        for slot in plan {
+            if slot.isTrivialGroup {
+                let pool = Sampling.eligible(templates, difficulty: .trivial, dayKey: dayKey,
+                                             excluding: drawn, in: timeZone)
+                let group = Sampling.pickDistinct(3, from: pool, rng: &rng)
+                if group.count == 3 {
+                    let variants = group.map { Sampling.variant(of: $0, rng: &rng) ?? "" }
+                    let quest = DailyQuest(group: group, variants: variants,
+                                           dayKey: dayKey, weekKey: weekKey)
+                    context.insert(quest)
+                    for t in group {
+                        t.lastServedDayKey = dayKey
+                        drawn.insert(t.id)
+                    }
+                    continue
+                }
+                // Fewer than three T items available: the slot falls back to a normal E draw.
+            }
+            let pool = Sampling.eligible(templates, difficulty: slot.difficulty, dayKey: dayKey,
+                                         excluding: drawn, in: timeZone)
+            guard let template = Sampling.pick(from: pool, rng: &rng) else { continue }
+            context.insert(DailyQuest(template: template, slot: slot.difficulty,
+                                      dayKey: dayKey, weekKey: weekKey,
+                                      variant: Sampling.variant(of: template, rng: &rng)))
+            template.lastServedDayKey = dayKey
+            drawn.insert(template.id)
+        }
     }
 
     /// Whether the hidden slot may be drawn: every `countsForClear` routine done, every random
@@ -195,10 +217,9 @@ public enum DayService {
         guard !existing.contains(where: \.isHiddenSlot),
               try hiddenUnlocked(on: dayKey, in: context) else { return nil }
 
-        let allowed = Composition.allowedIntensities(tier: inputs.tier, onCycle: inputs.onCycle)
         let drawn = Set(existing.compactMap(\.templateID) + existing.flatMap(\.trivialTemplateIDs))
         let pool = Sampling.eligibleHidden(try Sampling.activeTemplates(context), dayKey: dayKey,
-                                           allowedIntensities: allowed, excluding: drawn, in: timeZone)
+                                           excluding: drawn, in: timeZone)
         guard let template = Sampling.pick(from: pool, rng: &rng) else { return nil }
 
         let weekKey = DayKey.weekKey(of: dayKey, in: timeZone) ?? ""
@@ -252,10 +273,11 @@ extension DailyQuest {
 
 extension RoutineOccurrence {
     /// One routine due on one day. Text, points and the full-clear flag are snapshotted, so
-    /// editing the routine later can't rewrite what was asked of you that day. On a low `tier`
-    /// day a routine with a light version starts out as that version (`Degrade`).
+    /// editing the routine later can't rewrite what was asked of you that day. `downgrade` is the
+    /// lighter version drawn for the day (`Degrade.pick`), if any: the occurrence starts out as
+    /// that version, and keeps the original beside it so it can be switched back.
     public convenience init(routine: RoutineTask, dueDayKey: String, weekKey: String,
-                            tier: Tier = .normal) {
+                            downgrade: RoutineTask? = nil) {
         self.init()
         routineID = routine.id
         self.dueDayKey = dueDayKey
@@ -263,8 +285,10 @@ extension RoutineOccurrence {
         textSnapshot = routine.text
         basePoints = routine.basePoints
         countsForClear = routine.countsForClear
-        if let light = Degrade.text(for: routine, tier: tier) {
-            degradedTextSnapshot = light
+        if let downgrade {
+            degradedTextSnapshot = downgrade.text
+            degradedRoutineID = downgrade.id
+            degradedBasePoints = downgrade.basePoints
             usedDegraded = true
         }
     }

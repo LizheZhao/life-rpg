@@ -13,7 +13,7 @@ import SwiftData
 public enum JSONExport {
     /// Bumped only when the model changes shape, independently of the GitHub tag. Import reads
     /// this and nothing else, so it has to move in step with `SchemaV1` → `SchemaV2`.
-    public static let schemaVersion = 2
+    public static let schemaVersion = 3
 
     public struct Snapshot: Codable, Equatable, Sendable {
         public var schemaVersion: Int
@@ -74,6 +74,7 @@ public enum JSONExport {
         public var replacesQuestID: UUID?
         public var adHocSourceRoutineID: UUID?
         public var degradedText: String?
+        public var degradedBasePoints: Int?
         public var sourceType: String
     }
 
@@ -86,6 +87,7 @@ public enum JSONExport {
         public var readiness: Int
         public var tier: String
         public var onCycle: Bool
+        public var cycleDay: Int?
         public var routineLoad: Int
         public var randomSlots: Int
     }
@@ -136,12 +138,13 @@ public enum JSONExport {
                            awardedPoints: $0.awardedPoints, penaltyApplied: $0.penaltyApplied,
                            skipped: $0.skipped, completedAt: $0.completedAt,
                            replacesQuestID: $0.replacesQuestID, adHocSourceRoutineID: $0.adHocSourceRoutineID,
-                           degradedText: $0.degradedTextSnapshot, sourceType: $0.sourceTypeRaw)
+                           degradedText: $0.degradedTextSnapshot,
+                           degradedBasePoints: $0.degradedBasePoints, sourceType: $0.sourceTypeRaw)
             },
             dailyContexts: try context.fetch(FetchDescriptor<DailyContext>()).sorted { $0.dayKey < $1.dayKey }.map {
                 Context(dayKey: $0.dayKey, hrv: $0.hrv, sleepHours: $0.sleepHours, restingHR: $0.restingHR,
                         energy: $0.energy, readiness: $0.readiness, tier: $0.tierRaw, onCycle: $0.onCycle,
-                        routineLoad: $0.routineLoad, randomSlots: $0.randomSlots)
+                        cycleDay: $0.cycleDay, routineLoad: $0.routineLoad, randomSlots: $0.randomSlots)
             },
             ratings: try context.fetch(FetchDescriptor<QuestRating>()).sorted { $0.timestamp < $1.timestamp }.map {
                 Rating(id: $0.id, targetID: $0.targetID, targetKind: $0.targetKindRaw,

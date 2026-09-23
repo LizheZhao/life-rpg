@@ -119,12 +119,12 @@ public enum Completion {
         if flexible {
             guard occurrence.dueDayKey <= dayKey,
                   DayKey.weekKey(of: dayKey, in: timeZone) == occurrence.weekKey else { return nil }
-            return Scoring.routinePoints(basePoints: occurrence.basePoints, tier: tier, late: false)
+            return Scoring.routinePoints(basePoints: occurrence.effectiveBasePoints, tier: tier, late: false)
         }
         guard let roundDay = Schedule.roundDay(due: occurrence.dueDayKey, on: dayKey, in: timeZone) else {
             return nil
         }
-        return Scoring.routinePoints(basePoints: occurrence.basePoints, tier: tier, late: roundDay > 1)
+        return Scoring.routinePoints(basePoints: occurrence.effectiveBasePoints, tier: tier, late: roundDay > 1)
     }
 
     /// Completes a routine occurrence on `dayKey`, paying `routinePayout`. Returns the points.
@@ -180,8 +180,8 @@ public enum Completion {
     /// arrives the occurrence already exists, so it is neither created again nor counted as load.
     ///
     /// On a low day with a light version on offer, `light` says which version was done — there is
-    /// no open occurrence to switch afterwards, so the choice is made here. Same points either way;
-    /// ignored when there is no light version.
+    /// no open occurrence to switch afterwards, so the choice is made here. The light version pays
+    /// its own points; ignored when there is no light version.
     @discardableResult
     public static func completeAhead(_ routine: RoutineTask,
                                      on dayKey: String,
@@ -194,12 +194,15 @@ public enum Completion {
         guard let ahead = Schedule.aheadCandidates([routine], occurrences: all, on: dayKey, in: timeZone).first,
               let week = DayKey.weekKey(of: dayKey, in: timeZone) else { throw Failure.nothingAhead }
 
-        let points = Scoring.routinePoints(basePoints: routine.basePoints, tier: tier, late: false)
         let lastCompletedBefore = routine.lastCompletedDayKey
         let anchorBefore = routine.anchorWeekKey
+        // No open occurrence exists yet, so the light-version choice is made here rather than
+        // switched afterwards; `light: false` does the original even on a low day.
+        let downgrade = light ? Degrade.pick(for: routine, tier: tier,
+                                             in: try context.fetch(FetchDescriptor<RoutineTask>())) : nil
         let occurrence = RoutineOccurrence(routine: routine, dueDayKey: ahead.nextDueDayKey, weekKey: week,
-                                           tier: tier)
-        occurrence.usedDegraded = light && occurrence.degradedTextSnapshot != nil
+                                           downgrade: downgrade)
+        let points = Scoring.routinePoints(basePoints: occurrence.effectiveBasePoints, tier: tier, late: false)
         occurrence.completedDayKey = dayKey
         occurrence.completedAt = now
         occurrence.awardedPoints = points

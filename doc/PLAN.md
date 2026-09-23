@@ -27,7 +27,9 @@ CloudKit-ready constraints are followed from day one: every `@Model` property ge
 
 ## 2. Difficulty standard: resistance, not exertion
 
-Difficulty tiers are graded by **psychological resistance**, not time or physical effort. "Message a friend you haven't talked to in a long time" is H, "walk by the river" is M — this is intentional, because what needs pushing is exactly the high-resistance stuff. The physical-exertion dimension is carried separately by the `intensity` field, used only for filtering down at low energy.
+Difficulty tiers are graded by **psychological resistance**, not time or physical effort. "Message a friend you haven't talked to in a long time" is H, "walk by the river" is M — this is intentional, because what needs pushing is exactly the high-resistance stuff.
+
+There is **one** difficulty axis and no second one. An earlier draft carried a separate `intensity` (low/medium/high) for physical exertion, used only to filter the pool down at low energy — but the composition table below already does that by dropping the hard slots, and for routines nothing ever read it. Two metrics for "how hard" is how they drift apart, so `intensity` was removed (`SchemaV2`).
 
 | Tier | Points | Notes |
 |---|---|---|
@@ -120,16 +122,19 @@ The value is drawn once, when the day is generated, and snapshotted onto the `Da
 
 When Saturday's weight training gets broken by social plans, it's allowed to shift to any day that week — the check changes from "was it done today" to "has the weekly count hit `weekly_target`," settled on Sunday to determine any shortfall. Once the week's target is met (ahead completions included), its remaining scheduled days that week don't generate it at all. Exercise, project work, job applications, and studying all have this on; taking out the trash and cleaning the litter box must be done same-day, so it's off.
 
-### Degradable (degraded_text)
+### Downgrade versions
 
-On low-energy days, routines aren't penalized for being skipped — instead they're automatically swapped for a degraded version: running becomes an incline walk, weight training becomes light dumbbells or bodyweight work, and completing it still awards full points. This has to be encoded in the app, not left to willpower in the moment, because the goal is to lower intensity, not skip entirely.
+On low-energy days, routines aren't penalized for being skipped — instead they're automatically swapped for a lighter version: running becomes an incline walk, strength training becomes a walk. This has to be encoded in the app, not left to willpower in the moment, because the goal is to lower the effort, not skip entirely.
 
-**Only routines with a non-empty `degraded_text` can degrade**; routines without one stay as-is regardless of tier.
+**A downgrade version is a routine row of its own**, listed on its parent as `downgradeIDs` (the seed CSV says `downgrade_of`, naming the parents by text, `|`-separated). It therefore carries its own text, its own `base_points` and its own `auto_verify` rule — a 30-minute walk verifies as a 30-minute walk, not against the 40-minute rule of the session it replaced. It is never scheduled on its own; it is only ever reached through the routine that offers it. Routines with no downgrade version stay as-is regardless of tier.
 
-- **Low day** = tier `low` or `veryLow` — the same rule as the 1.3× multiplier (`Tier.isLow`).
-- **Decided when the day is generated**: the occurrence starts out as the light version. An overdue one carried from an earlier day keeps the version it was created with; a flexible routine done ahead on a low day asks which version was done.
-- **The original can still be chosen**, for the same points, until the occurrence is done or skipped. `usedDegraded` records which version was actually done. The original wording stays in `textSnapshot`, the light one sits beside it.
+- **Low day** = tier `low` or `veryLow` — the same rule as the 1.3× multiplier (`Tier.isLow`), and what the first three cycle days produce.
+- **Decided when the day is generated**: the occurrence starts out as the light version, and with several on offer one is drawn at random. An overdue one carried from an earlier day keeps the version it was created with; a flexible routine done ahead on a low day asks which version was done.
+- **The light version pays its own points.** A walk pays what a walk is worth, not what the session would have — otherwise the row's `base_points` would be data nothing reads. The overdue penalty follows the same number: a missed walk costs what a walk is worth.
+- **The original can still be chosen**, for the original's points, until the occurrence is done or skipped. `usedDegraded` records which version was actually done. The original wording stays in `textSnapshot`, the light one sits beside it.
 - **Ad-hoc routines never degrade** — they are picked on purpose, on the spot.
+
+A strength routine's downgrade versions are all deliberately *other kinds of thing* (a walk), never lighter weights. That is what makes the cycle rule below mean what it says.
 
 ### Overdue penalty
 
@@ -205,7 +210,10 @@ Readiness uses the proxy above for phase one; once the Oura API v2 (`/v2/usercol
 
 ### Menstrual cycle
 
-Determined by a HealthKit `menstrualFlow` entry that day. On cycle days, the tier is capped at normal and `intensity = high` templates are excluded — but it's not forced down to low, since being on a cycle doesn't mean being weak.
+Determined by HealthKit `menstrualFlow` entries. Two weeks of them are read rather than just today's, because what matters is **which day of the round** today is: the count runs in calendar days from the day the round started (`Cycle.day`), so a day that was never logged in the middle still counts, and a gap of more than a day starts a new round. A round that stops being logged stops counting after its third day.
+
+- **Days 1–3 are held down to tier `low`** (`Energy.cap`). That single line is the whole rule: a low day already means fewer and easier random slots, the 1.3× effort multiplier, and every routine that offers one swapped for its downgrade version — so there is no strength training on day 1, there is a walk. A measured `veryLow` stays `veryLow`; the cap never pushes a tier up.
+- **Day 4 onwards** is capped at normal, as before — being on a period is not the same as being weak.
 
 ### Auto-verification
 
@@ -304,7 +312,6 @@ enum Difficulty: String, Codable, CaseIterable {
     }
 }
 
-enum Intensity: String, Codable { case low, medium, high }
 enum Tier: String, Codable { case veryLow, low, normal, high }
 enum RecurrenceKind: String, Codable {
     case weekly, everyNDays, monthly, nthWeekdayOfMonth, everyNWeeksOnWeekday
@@ -314,7 +321,6 @@ enum RecurrenceKind: String, Codable {
     var id: UUID = UUID()
     var text: String = ""
     var difficultyRaw: String = Difficulty.easy.rawValue
-    var intensityRaw: String = Intensity.low.rawValue
     var hiddenEligible: Bool = false
     var weekendOnly: Bool = false          // excluded from the pool Mon–Fri
     var cooldownDaysOverride: Int?
@@ -332,14 +338,13 @@ enum RecurrenceKind: String, Codable {
     var text: String = ""
     var basePoints: Int = 15
     var difficultyRaw: String = Difficulty.easy.rawValue
-    var intensityRaw: String = Intensity.low.rawValue
     var kindRaw: String = RecurrenceKind.weekly.rawValue
     var spec: String = ""                  // "MON,THU" / "3" / "1:SAT" / "2:SAT"
     var anchorWeekKey: String?             // everyNWeeksOnWeekday only: a week the routine is due, e.g. "2026-W38"
     var weeklyTarget: Int = 1
     var flexibleWithinWeek: Bool = false
     var countsForClear: Bool = true
-    var degradedText: String?
+    var downgradeIDs: [UUID] = []          // lighter versions, themselves RoutineTask rows
     var launchURLString: String?
     var autoVerifyRule: String?
     var lastCompletedDayKey: String?
@@ -377,6 +382,8 @@ enum RecurrenceKind: String, Codable {
     var textSnapshot: String = ""
     var usedDegraded: Bool = false
     var basePoints: Int = 0
+    var degradedRoutineID: UUID?           // which downgrade version was drawn
+    var degradedBasePoints: Int?           // its points; what the light version pays and is charged
     var countsForClear: Bool = true        // snapshot; false = recorded but doesn't gate full-clear
     var awardedPoints: Int?                // late make-up = half of base × m
     var penaltyApplied: Int = 0            // running total of escalating deductions
@@ -412,6 +419,7 @@ enum RecurrenceKind: String, Codable {
     var readiness: Int = 75
     var tierRaw: String = Tier.normal.rawValue
     var onCycle: Bool = false
+    var cycleDay: Int?                     // 1-based day of the period; 1–3 hold the tier at low
     var routineLoad: Int = 0
     var randomSlots: Int = 3
 }
@@ -509,7 +517,6 @@ func sample(difficulty: Difficulty, context c: DailyContext, _ ctx: ModelContext
     let pool = (try? ctx.fetch(FetchDescriptor<QuestTemplate>(
         predicate: #Predicate { $0.isActive })))?
         .filter { $0.difficulty == difficulty }
-        .filter { allowedIntensity(c).contains($0.intensity) }
         .filter { !$0.weekendOnly || isWeekend(c.dayKey) }
         .filter { !inCooldown($0, today: c.dayKey) } ?? []
     let weighted = pool.flatMap { t in
@@ -550,6 +557,14 @@ func rerollCost(_ q: DailyQuest) -> Int {
 
 `ensureToday` is hooked to `scenePhase` becoming `.active`, so it refreshes even if the app crosses midnight while backgrounded and is then brought back to the foreground. `now` and `rng` are injected so tests can fix the date and use a seeded generator.
 
+**Body data is read on every foreground, not only when the day is generated.** The day is generated the first time the app is opened that day, which can be before the watch has synced last night's sleep, or before a period was logged — so the tier it was locked to can simply be wrong. When a fresh reading disagrees, the app **asks** (`Replan.preview`), and only on confirmation re-plans the day (`Replan.apply`):
+
+- **What is done is never touched.** Completed quests keep their text, their points and their ledger entry; an awarded value is never recomputed. Completed and skipped routines are left alone.
+- Open slots are redrawn for the new tier's composition. A dropped one is marked `replaced` rather than deleted — the row stays as the record that it was once asked of you, and full-clear, streak and the calendar all skip `replaced` rows already.
+- A slot the new composition asks for that a *finished* quest already answers is not drawn again.
+- Open routines have their downgrade decision made again — a period logged at noon is exactly this case.
+- A reading that did not actually come back never re-plans anything: denied HealthKit access returns the `normal` defaults, and those must not read as "your day got easier".
+
 ---
 
 ## 9. Monthly calendar page
@@ -583,7 +598,7 @@ The web prototype's save file is base64 JSON, with timestamps, quest text, point
 | 0 | project, model, seed from the two CSVs | DB has data, app runs | **done** |
 | 1 | Today page, random slot generation, completion rolls, payout reveal, ledger, HUD | Ready for daily use | **done, reviewed** |
 | 2 | Routine layer: frequency scheduling, overdue, degrade, movable-within-week, ad-hoc replacement | Saturday no longer stacks up to ten tasks | parsing done, scheduling next |
-| 3 | HealthKit and Calendar: energy, readiness proxy, tier adjustment, auto-verification, cycle | Tier actually drops on a bad sleep night | code done, device checks pending |
+| 3 | HealthKit and Calendar: energy, readiness proxy, tier adjustment, auto-verification, cycle | Tier actually drops on a bad sleep night | code done, device checks pending; extended with cycle days 1–3 and the foreground re-read |
 | 4 | Monthly calendar page and day detail | Any day can be reviewed | code done, device check pending |
 | 5 | Epic, paid reroll, redemption page (including estimatedCost conversion), quest library management and affinity feedback | Coins have somewhere to go | reroll pricing done |
 | 6 | JSON export/import, web version migration | Balance matches exactly | export done, import pending |
