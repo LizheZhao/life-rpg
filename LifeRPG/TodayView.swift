@@ -29,10 +29,10 @@ struct TodayView: View {
     @State private var addingAdHoc = false
     @State private var roll: Roll?
     @State private var actionError: String?
-    @State private var exportingJSON = false
-    @State private var exportingCSV = false
-    @State private var jsonDocument: JSONSnapshotDocument?
-    @State private var csvDocument: FeedbackCSVDocument?
+    /// One export at a time, through one `fileExporter` — the JSON dump and the CSV folder are
+    /// the same kind of thing to the save dialog, so they don't need a presentation each.
+    @State private var pendingExport: ExportDocument?
+    @State private var exporting = false
 
     /// A payout that has already happened and is already in the ledger, waiting to be shown.
     private struct Roll: Identifiable {
@@ -361,19 +361,12 @@ struct TodayView: View {
             .sheet(isPresented: $addingAdHoc) {
                 AdHocView(today: today, tier: tier)
             }
-            .fileExporter(isPresented: $exportingJSON,
-                          document: jsonDocument,
-                          contentType: .json,
-                          defaultFilename: JSONExport.filename()) { result in
+            .fileExporter(isPresented: $exporting,
+                          document: pendingExport,
+                          contentType: pendingExport?.contentType ?? .json,
+                          defaultFilename: pendingExport?.filename) { result in
                 if case .failure(let error) = result { actionError = "Export failed: \(error)" }
-                jsonDocument = nil
-            }
-            .fileExporter(isPresented: $exportingCSV,
-                          document: csvDocument,
-                          contentType: .folder,
-                          defaultFilename: CSVExport.folderName()) { result in
-                if case .failure(let error) = result { actionError = "Export failed: \(error)" }
-                csvDocument = nil
+                pendingExport = nil
             }
         }
     }
@@ -638,39 +631,60 @@ struct TodayView: View {
     }
 
     private func prepareJSONExport() {
-        do {
-            jsonDocument = JSONSnapshotDocument(data: try JSONExport.data(context))
-            exportingJSON = true
-        } catch {
-            actionError = "Export failed: \(error)"
-        }
+        export { .json(try JSONExport.data(context), name: JSONExport.filename()) }
     }
 
     private func prepareCSVExport() {
+        export { .folder(try CSVExport.files(context), name: CSVExport.folderName()) }
+    }
+
+    /// Builds the document, then opens the system save dialog. The dialog is a separate process
+    /// and can take a second or two to come up the first time — it is not instant.
+    private func export(_ build: () throws -> ExportDocument) {
         do {
-            csvDocument = FeedbackCSVDocument(files: try CSVExport.files(context))
-            exportingCSV = true
+            pendingExport = try build()
+            exporting = true
         } catch {
             actionError = "Export failed: \(error)"
         }
     }
 }
 
-/// The JSON history dump, wrapped for `fileExporter`. Export only — import lands in Stage 6.
-struct JSONSnapshotDocument: FileDocument {
-    static var readableContentTypes: [UTType] { [.json] }
+/// Anything the page exports: the JSON history dump, or the feedback logs as a folder of CSVs.
+/// One document type, because one `fileExporter` has to be able to present either.
+/// Export only — import lands in Stage 6.
+struct ExportDocument: FileDocument {
+    static var readableContentTypes: [UTType] { [.json, .folder] }
 
-    let data: Data
+    let contentType: UTType
+    let filename: String
+    private let wrapper: FileWrapper
 
-    init(data: Data) { self.data = data }
+    static func json(_ data: Data, name: String) -> ExportDocument {
+        ExportDocument(contentType: .json, filename: name,
+                       wrapper: FileWrapper(regularFileWithContents: data))
+    }
+
+    static func folder(_ files: [CSVExport.File], name: String) -> ExportDocument {
+        var children: [String: FileWrapper] = [:]
+        for file in files {
+            children[file.name] = FileWrapper(regularFileWithContents: Data(file.contents.utf8))
+        }
+        return ExportDocument(contentType: .folder, filename: name,
+                              wrapper: FileWrapper(directoryWithFileWrappers: children))
+    }
+
+    private init(contentType: UTType, filename: String, wrapper: FileWrapper) {
+        self.contentType = contentType
+        self.filename = filename
+        self.wrapper = wrapper
+    }
 
     init(configuration: ReadConfiguration) throws {
         throw CocoaError(.featureUnsupported)
     }
 
-    func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper {
-        FileWrapper(regularFileWithContents: data)
-    }
+    func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper { wrapper }
 }
 
 #Preview {
