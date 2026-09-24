@@ -17,7 +17,10 @@ public struct DayRecord {
     public enum RoutineStatus: Equatable, Sendable {
         case done
         case doneAhead(on: String)        // completed earlier in the week, before its due day
-        case late(on: String)             // made up on day 2 or 3, at half pay
+        // Completed after its due day. Timing only: a fixed routine's make-up (half pay) and a
+        // flexible one moved later in the week (full pay) both land here — what it paid is
+        // `awardedPoints`, and a fixed make-up also carries its earlier `penaltyApplied`.
+        case late(on: String)
         case skipped                      // by hand, or automatically on day 4
         case notDone
     }
@@ -35,8 +38,8 @@ public struct DayRecord {
     public let quests: [QuestLine]
     /// Routines due on this day, whenever (or whether) they were done.
     public let routines: [RoutineLine]
-    /// Routines completed on this day but due on another: late make-ups and flexible ones done
-    /// ahead. Listed here as well, since this is the day the work (and the ledger entry) happened.
+    /// Routines completed on this day but due on another: done after the due day (a
+    /// make-up, or a flexible one moved later) or flexible ones done ahead. Listed here as well, since this is the day the work (and the ledger entry) happened.
     public let completedForOtherDays: [RoutineLine]
     /// This day's ledger entries other than quest / routine payouts, which the lines above
     /// already show: redemptions, rerolls, penalties, skips, adjustments, the grant.

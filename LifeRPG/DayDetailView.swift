@@ -167,7 +167,8 @@ struct DayDetailView: View {
         switch line.status {
         case .done: parts.append("Done")
         case .doneAhead(let on): parts.append("Done ahead on \(on)")
-        case .late(let on): parts.append("Made up late on \(on)")
+        // Timing only; the points beside it say whether it paid half (a make-up) or full.
+        case .late(let on): parts.append("Done on \(on)")
         case .skipped: parts.append("Skipped")
         case .notDone: parts.append("Not done")
         }
