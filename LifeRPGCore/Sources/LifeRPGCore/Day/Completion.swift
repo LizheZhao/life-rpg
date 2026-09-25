@@ -41,6 +41,7 @@ public enum Completion {
                                 in context: ModelContext,
                                 now: Date = Date(),
                                 source: SourceType = .manual,
+                                timeZone: TimeZone = .current,
                                 rng: inout some RandomNumberGenerator) throws -> Int {
         guard quest.completedAt == nil else { throw Failure.alreadyCompleted }
         guard !quest.replaced else { throw Failure.replaced }
@@ -50,6 +51,9 @@ public enum Completion {
         }
 
         let points = Scoring.questPoints(quest, tier: tier, rng: &rng)
+        // Every other slot is done on its own day. The epic lives all week, so its payout and its
+        // cooldown are booked to the day it was actually done, not the day it was drawn.
+        let doneOn = quest.slot == .epic ? now.dayKey(in: timeZone) : quest.dayKey
         let templates = try templates(of: quest, in: context)
         let cooldownBefore = templates.map(\.lastCompletedDayKey)
 
@@ -58,9 +62,9 @@ public enum Completion {
         quest.completedAt = now
         quest.sourceType = source
         for template in templates {
-            template.lastCompletedDayKey = quest.dayKey        // cooldown counts from completion
+            template.lastCompletedDayKey = doneOn              // cooldown counts from completion
         }
-        let entry = Economy.record(context, kind: .quest, points: points, dayKey: quest.dayKey,
+        let entry = Economy.record(context, kind: .quest, points: points, dayKey: doneOn,
                                    refID: quest.id, note: quest.textSnapshot, now: now)
 
         do {

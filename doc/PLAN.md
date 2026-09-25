@@ -69,6 +69,8 @@ Unlocks once all `counts_for_clear` routines and all random slots for the day ar
 
 Generated every Monday, valid through Sunday, visible from the start, doesn't count toward full-clear, and isn't penalized if skipped. Can be extended a week by spending coins (max twice) or rerolled.
 
+Only one epic is live at a time: an extended epic runs into the next week, and that week draws no epic of its own. If the app is first opened midweek, the epic is drawn that day and still ends on Sunday. It is paid on the day it is completed, and the calendar highlights the week it was completed in — for an extended epic, that is the later week. One that runs out unfinished stays in history as not done.
+
 ### Ad-hoc routine replacing a random quest
 
 A routine can be manually added for the day, but must specify which random slot it replaces. The replaced random quest is marked `replaced` and doesn't count toward full-clear. The replacement is free, but the cost is that this routine now loses points if not done.

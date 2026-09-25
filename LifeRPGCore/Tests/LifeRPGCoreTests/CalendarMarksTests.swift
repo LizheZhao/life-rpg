@@ -106,8 +106,17 @@ struct CalendarMarksTests {
             quest("2026-09-28", .epic, week: "2026-W40"),                 // Monday of W40, done
             quest("2026-09-21", .epic, done: false, week: "2026-W39"),    // open: not highlighted
             quest("2026-09-17", .hard, week: "2026-W38"),                 // not an epic
-        ])
+        ], in: Fixtures.tokyo)
         #expect(weeks == ["2026-W40"])
+    }
+
+    /// Decided with the user: an extended epic lights up the week it was **completed** in.
+    /// Drawn Monday of W38, extended, finished Wednesday of W39 → W39, and W38 stays plain.
+    @Test func extendedEpicHighlightsTheWeekItWasCompleted() {
+        let epic = quest("2026-09-14", .epic, done: false, week: "2026-W38")
+        epic.extensionCount = 1
+        epic.completedAt = Fixtures.date("2026-09-23")
+        #expect(CalendarMarks.epicWeeks([epic], in: Fixtures.tokyo) == ["2026-W39"])
     }
 
     /// The page passes its `@Query` arrays; the store gives the same answer from the same rows.

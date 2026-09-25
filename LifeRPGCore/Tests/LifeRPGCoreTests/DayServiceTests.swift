@@ -50,7 +50,7 @@ struct DayServiceTests {
 
     private func seedRoutines(_ ctx: ModelContext) throws {
         // Header only on the side: the stock library supplies the quests.
-        let sideHeader = try Fixtures.csv("side_quests.csv").split(separator: "\n")[0] + "\n"
+        let sideHeader = try Fixtures.csv("side_quests.csv").split(whereSeparator: \.isNewline)[0] + "\n"
         try SeedImporter.mergeSeeds(ctx, sideQuestsCSV: String(sideHeader),
                                     routinesCSV: Fixtures.csv("routine_quests.csv"))
     }

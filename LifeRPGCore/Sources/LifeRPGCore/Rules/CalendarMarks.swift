@@ -54,9 +54,15 @@ public enum CalendarMarks {
         return done <= o.dueDayKey
     }
 
-    /// Weeks whose epic was completed, by `weekKey` — a week can span two months, so the page
-    /// highlights a row by the week it belongs to, never by its position in the grid.
-    public static func epicWeeks(_ quests: [DailyQuest]) -> Set<String> {
-        Set(quests.filter { $0.slot == .epic && $0.completedAt != nil && !$0.replaced }.map(\.weekKey))
+    /// Weeks in which an epic was completed, as `weekKey`s — a week can span two months, so the
+    /// page highlights a row by the week it belongs to, never by its position in the grid.
+    ///
+    /// **The week it was completed in, not the row's `weekKey`** (decided with the user). An
+    /// extended epic drawn in W38 and finished in W39 lights up W39, and W38 stays plain.
+    public static func epicWeeks(_ quests: [DailyQuest], in timeZone: TimeZone = .current) -> Set<String> {
+        Set(quests.compactMap { q in
+            guard q.slot == .epic, !q.replaced, let done = q.completedAt else { return nil }
+            return done.weekKey(in: timeZone)
+        })
     }
 }

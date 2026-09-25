@@ -74,7 +74,8 @@ public enum DayService {
         return days
     }
 
-    /// Generates today's context, today's routine occurrences and random slots, once.
+    /// Generates today's context, today's routine occurrences and random slots, once — and the
+    /// week's epic, if none is live (`Epic.ensure`).
     ///
     /// The routines come first because their count sizes the random slots (`PLAN.md` §3). Only
     /// routines **due today** count toward that load; an overdue one carried from an earlier day
@@ -103,7 +104,13 @@ public enum DayService {
             try judge(day, ctx)
         })
 
+        let weekKey = DayKey.weekKey(of: today, in: timeZone) ?? now.weekKey(in: timeZone)
+
         if let existing = try dailyContext(for: today, in: context) {
+            // A day generated before epics existed (or before the library had any) still gets one.
+            if try Epic.ensure(context, on: today, weekKey: weekKey, in: timeZone, rng: &rng) != nil {
+                try context.save()
+            }
             // Every foreground re-checks today: a workout that synced since the last one lands now.
             if let e = evidence[today] {
                 try AutoVerify.run(on: today, evidence: e, in: context, now: now, timeZone: timeZone, rng: &rng)
@@ -111,7 +118,6 @@ public enum DayService {
             return existing
         }
 
-        let weekKey = DayKey.weekKey(of: today, in: timeZone) ?? now.weekKey(in: timeZone)
         let routines = try context.fetch(FetchDescriptor<RoutineTask>())
         let due = Schedule.dueRoutines(routines,
                                        occurrences: try context.fetch(FetchDescriptor<RoutineOccurrence>()),
@@ -139,6 +145,8 @@ public enum DayService {
         var drawn: Set<UUID> = []
         try fill(context, plan: Composition.plan(tier: inputs.tier, slots: day.randomSlots),
                  on: today, weekKey: weekKey, excluding: &drawn, in: timeZone, rng: &rng)
+        // Outside the composition table: the epic takes no slot and doesn't size anything.
+        try Epic.ensure(context, on: today, weekKey: weekKey, in: timeZone, rng: &rng)
 
         try context.save()
         if let e = evidence[today] {

@@ -33,6 +33,7 @@ struct TodayView: View {
     /// the same kind of thing to the save dialog, so they don't need a presentation each.
     @State private var pendingExport: ExportDocument?
     @State private var exporting = false
+    @State private var confirmingExtend: DailyQuest?
 
     /// A payout that has already happened and is already in the ledger, waiting to be shown.
     private struct Roll: Identifiable {
@@ -83,6 +84,37 @@ struct TodayView: View {
                 ForEach(overdueRoutines) { routineRow($0, note: .overdue) }
                 ForEach(todaysRoutines) { routineRow($0) }
             }
+        }
+    }
+
+    /// The week's epic, on every day it is live — its row carries the day it was drawn, so it is
+    /// looked up by `Epic.current` rather than by today's `dayKey`. Done, it stays until Sunday.
+    @ViewBuilder private var epicSection: some View {
+        if let epic = currentEpic {
+            Section {
+                questRow(epic)
+                if epic.completedAt == nil { extendRow(epic) }
+            } header: {
+                Text("Epic · until \(Epic.lastDayKey(of: epic) ?? "Sunday")")
+            }
+        }
+    }
+
+    /// Why extending is off is Core's rule (`Epic.blocked`); the row only shows it.
+    private func extendRow(_ epic: DailyQuest) -> some View {
+        let blocked = Epic.blocked(epic, on: today, balance: balance)
+        return HStack(alignment: .firstTextBaseline) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Extended \(epic.extensionCount)/\(Epic.maxExtensions)")
+                    .font(.caption).foregroundStyle(.secondary)
+                if let blocked {
+                    Text(blocked.description).font(.caption).foregroundStyle(.secondary)
+                }
+            }
+            Spacer()
+            Button("Extend a week · \(Epic.extensionCost)") { confirmingExtend = epic }
+                .buttonStyle(.bordered)
+                .disabled(blocked != nil)
         }
     }
 
@@ -230,10 +262,11 @@ struct TodayView: View {
     private var canAddAdHoc: Bool { !AdHoc.replaceableSlots(quests, on: today).isEmpty }
 
     private var quests: [DailyQuest] { allQuests.filter { $0.dayKey == today } }
+    private var currentEpic: DailyQuest? { Epic.current(allQuests, on: today) }
     /// Easy first, the way the composition table is written — the query itself has no order
     /// beyond `dayKey`, so without this the rows shuffle on every regeneration.
     private var randomQuests: [DailyQuest] {
-        quests.filter { !$0.isHiddenSlot }
+        quests.filter { !$0.isHiddenSlot && $0.slot != .epic }
             .sorted { a, b in
                 let ra = Difficulty.allCases.firstIndex(of: a.slot) ?? 0
                 let rb = Difficulty.allCases.firstIndex(of: b.slot) ?? 0
@@ -282,6 +315,8 @@ struct TodayView: View {
         }
 
         Section { hud } header: { Text(today) }
+
+        epicSection
 
         routinesSection
 
@@ -347,6 +382,16 @@ struct TodayView: View {
                 } else {
                     Text("\(action.label)\n\nThis is final — completion cannot be undone.")
                 }
+            }
+            // Spending is as final as completing, so it asks too.
+            .alert("Extend the epic?",
+                   isPresented: Binding(get: { confirmingExtend != nil },
+                                        set: { if !$0 { confirmingExtend = nil } }),
+                   presenting: confirmingExtend) { epic in
+                Button("Spend \(Epic.extensionCost)") { extend(epic) }
+                Button("Cancel", role: .cancel) {}
+            } message: { epic in
+                Text("\(epic.textSnapshot)\n\nOne more week, for \(Epic.extensionCost) coins. The week it runs into gets no new epic.")
             }
             .overlay {
                 if let roll {
@@ -605,7 +650,8 @@ struct TodayView: View {
                         questID: quest.id,
                         templateID: quest.templateID,
                         text: quest.textSnapshot,
-                        dayKey: quest.dayKey)
+                        // The epic lives all week; it was done (and rated) today, not on Monday.
+                        dayKey: quest.slot == .epic ? today : quest.dayKey)
         }
     }
 
@@ -615,6 +661,16 @@ struct TodayView: View {
         Feedback.rate(context, target: .quest, id: roll.templateID, questID: roll.questID,
                       text: roll.text, rating: rating, dayKey: roll.dayKey)
         try? context.save()
+    }
+
+    private func extend(_ epic: DailyQuest) {
+        do {
+            try Epic.extend(epic, on: today, in: context)
+            actionError = nil
+        } catch {
+            actionError = "\(error)"
+        }
+        confirmingExtend = nil
     }
 
     private func revealHidden() {
