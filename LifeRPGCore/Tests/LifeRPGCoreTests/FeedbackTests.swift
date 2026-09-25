@@ -71,6 +71,25 @@ struct FeedbackTests {
         #expect(try Feedback.comments(ctx, for: id).map(\.comment) == ["better at 80°", "too hot"])
     }
 
+    /// The library page rates from outside a completion: no `questID`, and every rating stays as
+    /// history, newest first. The page and the store read the same rows the same way.
+    @Test func ratingHistoryReadsNewestFirstAndAgreesWithTheStore() throws {
+        let ctx = try Fixtures.context()
+        let walk = Fixtures.quest(ctx, "Go for a walk")
+        for (day, value) in [("2026-09-01", -1), ("2026-09-10", 1), ("2026-09-05", 0)] {
+            Feedback.rate(ctx, target: .quest, id: walk.id, text: walk.text, rating: value,
+                          dayKey: day, now: Fixtures.date(day))
+        }
+        Feedback.rate(ctx, target: .quest, id: UUID(), text: "other", rating: 2, dayKey: "2026-09-11")
+        try ctx.save()
+
+        let rows = try ctx.fetch(FetchDescriptor<QuestRating>())
+        #expect(Feedback.ratings(rows, for: walk.id).map(\.rating) == [1, 0, -1])
+        #expect(Feedback.ratings(rows, for: walk.id).allSatisfy { $0.questID == nil })
+        #expect(Feedback.latestRatings(rows)[walk.id]?.rating == 1)
+        #expect(Feedback.latestRatings(rows).mapValues(\.id) == (try Feedback.latestRatings(ctx)).mapValues(\.id))
+    }
+
     /// The feedback tables are the one thing the seed CSVs cannot rebuild, so they have to ride
     /// along in the export.
     @Test func feedbackIsCarriedInTheJSONExport() throws {

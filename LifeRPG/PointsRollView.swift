@@ -111,8 +111,9 @@ struct PointsRollView: View {
 
     /// Asked here rather than on a separate screen because this is the one moment the answer is
     /// cheap and honest — you have just done the thing. `QuestRating` keeps every answer with its
-    /// date, so changing your mind later is a new row, not an overwrite.
-    private static let scale: [(value: Int, symbol: String, label: String)] = [
+    /// date, so changing your mind later is a new row, not an overwrite. The library page rates on
+    /// the same scale, so it reads this one rather than keeping its own.
+    static let scale: [(value: Int, symbol: String, label: String)] = [
         (-2, "hand.thumbsdown.fill", "Hated it"),
         (-1, "hand.thumbsdown", "Rather not"),
         (0, "minus", "Fine"),

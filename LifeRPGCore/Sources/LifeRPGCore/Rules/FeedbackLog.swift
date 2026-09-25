@@ -50,14 +50,26 @@ public enum Feedback {
     }
 
     /// The newest rating per target — what "how do I feel about this one now" means.
-    public static func latestRatings(_ context: ModelContext) throws -> [UUID: QuestRating] {
+    ///
+    /// The array overloads here exist so a page can hand in the rows its `@Query` already holds
+    /// rather than re-filtering beside Core.
+    public static func latestRatings(_ rows: [QuestRating]) -> [UUID: QuestRating] {
         var newest: [UUID: QuestRating] = [:]
-        for row in try context.fetch(FetchDescriptor<QuestRating>()) {
+        for row in rows {
             guard let id = row.targetID else { continue }
             if let existing = newest[id], existing.timestamp >= row.timestamp { continue }
             newest[id] = row
         }
         return newest
+    }
+
+    public static func latestRatings(_ context: ModelContext) throws -> [UUID: QuestRating] {
+        latestRatings(try context.fetch(FetchDescriptor<QuestRating>()))
+    }
+
+    /// Every rating of one target, newest first — the history a changed opinion leaves behind.
+    public static func ratings(_ rows: [QuestRating], for id: UUID) -> [QuestRating] {
+        rows.filter { $0.targetID == id }.sorted { $0.timestamp > $1.timestamp }
     }
 
     /// Average rating per target over a window, best first. `since` is inclusive; pass nil for all
@@ -81,9 +93,11 @@ public enum Feedback {
             .map { $0 }
     }
 
+    public static func comments(_ rows: [QuestComment], for id: UUID) -> [QuestComment] {
+        rows.filter { $0.targetID == id }.sorted { $0.timestamp > $1.timestamp }
+    }
+
     public static func comments(_ context: ModelContext, for id: UUID) throws -> [QuestComment] {
-        try context.fetch(FetchDescriptor<QuestComment>())
-            .filter { $0.targetID == id }
-            .sorted { $0.timestamp > $1.timestamp }
+        comments(try context.fetch(FetchDescriptor<QuestComment>()), for: id)
     }
 }
