@@ -33,8 +33,8 @@ struct TodayView: View {
     /// the same kind of thing to the save dialog, so they don't need a presentation each.
     @State private var pendingExport: ExportDocument?
     @State private var exporting = false
-    @State private var confirmingExtend: DailyQuest?
-    @State private var confirmingReroll: DailyQuest?
+    /// A purchase waiting for its confirmation. Spending is as final as completing, so it asks too.
+    @State private var spending: Spend?
     /// A reroll that was refused only once it tried to draw (nothing else in the pool).
     @State private var rerollRefusal: String?
 
@@ -50,6 +50,32 @@ struct TodayView: View {
         var templateID: UUID?
         var text: String
         var dayKey: String
+    }
+
+    /// Everything bought from a row's swipe actions. The rules and prices are Core's; this only
+    /// says what the confirmation reads.
+    private enum Spend {
+        case reroll(DailyQuest)
+        case extend(DailyQuest)
+        case cancelQuest(DailyQuest)
+        case cancelRoutine(RoutineOccurrence)
+
+        var title: String {
+            switch self {
+            case .reroll: "Reroll?"
+            case .extend: "Extend the epic?"
+            case .cancelQuest, .cancelRoutine: "Cancel it?"
+            }
+        }
+
+        var cost: Int {
+            switch self {
+            case .reroll(let q): Reroll.cost(for: q)
+            case .extend: Epic.extensionCost
+            case .cancelQuest(let q): Redemption.cancelCost(for: q.slot) ?? 0
+            case .cancelRoutine: Redemption.cancelRoutineCost
+            }
+        }
     }
 
     private enum PendingAction {
@@ -84,8 +110,12 @@ struct TodayView: View {
         // cost points every day they stay undone, so they are never folded away.
         if !overdueRoutines.isEmpty || !todaysRoutines.isEmpty {
             Section("Routines") {
-                ForEach(overdueRoutines) { routineRow($0, note: .overdue) }
-                ForEach(todaysRoutines) { routineRow($0) }
+                ForEach(overdueRoutines) { o in
+                    routineRow(o, note: .overdue).swipeActions(edge: .trailing) { cancelRoutineButton(o) }
+                }
+                ForEach(todaysRoutines) { o in
+                    routineRow(o).swipeActions(edge: .trailing) { cancelRoutineButton(o) }
+                }
             }
         }
     }
@@ -95,29 +125,14 @@ struct TodayView: View {
     @ViewBuilder private var epicSection: some View {
         if let epic = currentEpic {
             Section {
-                questRow(epic).swipeActions(edge: .trailing) { rerollButton(epic) }
-                if epic.completedAt == nil { extendRow(epic) }
-            } header: {
-                Text("Epic · until \(Epic.lastDayKey(of: epic) ?? "Sunday")")
-            }
-        }
-    }
-
-    /// Why extending is off is Core's rule (`Epic.blocked`); the row only shows it.
-    private func extendRow(_ epic: DailyQuest) -> some View {
-        let blocked = Epic.blocked(epic, on: today, balance: balance)
-        return HStack(alignment: .firstTextBaseline) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Extended \(epic.extensionCount)/\(Epic.maxExtensions)")
-                    .font(.caption).foregroundStyle(.secondary)
-                if let blocked {
-                    Text(blocked.description).font(.caption).foregroundStyle(.secondary)
+                questRow(epic).swipeActions(edge: .trailing) {
+                    rerollButton(epic)
+                    extendButton(epic)
                 }
+            } header: {
+                Text("Epic · until \(Epic.lastDayKey(of: epic) ?? "Sunday")"
+                     + (epic.extensionCount > 0 ? " · extended \(epic.extensionCount)/\(Epic.maxExtensions)" : ""))
             }
-            Spacer()
-            Button("Extend a week · \(Epic.extensionCost)") { confirmingExtend = epic }
-                .buttonStyle(.bordered)
-                .disabled(blocked != nil)
         }
     }
 
@@ -133,7 +148,10 @@ struct TodayView: View {
                 else if quest.isTrivialGroup {
                     trivialGroupRow(quest).swipeActions(edge: .trailing) { rerollButton(quest) }
                 } else {
-                    questRow(quest).swipeActions(edge: .trailing) { rerollButton(quest) }
+                    questRow(quest).swipeActions(edge: .trailing) {
+                        rerollButton(quest)
+                        cancelQuestButton(quest)
+                    }
                 }
             }
         }
@@ -287,6 +305,7 @@ struct TodayView: View {
         occurrences.filter { $0.dueDayKey == today }.sorted { $0.textSnapshot < $1.textSnapshot }
     }
     private var flexibleIDs: Set<UUID> { Set(routines.filter(\.flexibleWithinWeek).map(\.id)) }
+    private func isFlexible(_ o: RoutineOccurrence) -> Bool { o.routineID.map(flexibleIDs.contains) ?? false }
     // Which rows are overdue, open this week or in the backlog is Core's rule; these only hand
     // it the rows the queries already hold.
     private var overdueRoutines: [RoutineOccurrence] {
@@ -306,7 +325,8 @@ struct TodayView: View {
     private var totalEarned: Int { Economy.totalEarned(ledger) }
     /// The rule itself lives in Core; this only hands it the rows the query already has.
     private var streak: Int {
-        Streak.current(days: Streak.completedDayKeys(allQuests), today: today)
+        Streak.current(days: Streak.completedDayKeys(allQuests),
+                       frozen: Streak.frozenDayKeys(ledger), today: today)
     }
     private var hiddenUnlocked: Bool {
         (try? DayService.hiddenUnlocked(on: today, in: context)) ?? false
@@ -391,17 +411,15 @@ struct TodayView: View {
                     Text("\(action.label)\n\nThis is final — completion cannot be undone.")
                 }
             }
-            // Only reachable when the reroll can go through: the swipe button is greyed out otherwise.
-            .alert("Reroll?",
-                   isPresented: Binding(get: { confirmingReroll != nil },
-                                        set: { if !$0 { confirmingReroll = nil } }),
-                   presenting: confirmingReroll) { quest in
-                Button("Spend \(Reroll.cost(for: quest))") { reroll(quest) }
-                Button("Cancel", role: .cancel) {}
-            } message: { quest in
-                Text("\(slotText(quest))\n\n" + (quest.slot == .epic
-                    ? "Swap it for a different epic for \(Reroll.cost(for: quest)) coins. It keeps the same deadline. Once extended, an epic can't be rerolled."
-                    : "Swap it for a different \(quest.slot.code) for \(Reroll.cost(for: quest)) coins. The next reroll of this slot today costs more."))
+            // Only reachable when the purchase can go through: its swipe button is greyed out otherwise.
+            .alert(spending?.title ?? "",
+                   isPresented: Binding(get: { spending != nil },
+                                        set: { if !$0 { spending = nil } }),
+                   presenting: spending) { spend in
+                Button("Spend \(spend.cost)") { buy(spend) }
+                Button("Keep it", role: .cancel) {}
+            } message: { spend in
+                Text(message(for: spend))
             }
             .alert("Can't reroll",
                    isPresented: Binding(get: { rerollRefusal != nil },
@@ -410,16 +428,6 @@ struct TodayView: View {
                 Button("OK", role: .cancel) {}
             } message: { reason in
                 Text(reason)
-            }
-            // Spending is as final as completing, so it asks too.
-            .alert("Extend the epic?",
-                   isPresented: Binding(get: { confirmingExtend != nil },
-                                        set: { if !$0 { confirmingExtend = nil } }),
-                   presenting: confirmingExtend) { epic in
-                Button("Spend \(Epic.extensionCost)") { extend(epic) }
-                Button("Cancel", role: .cancel) {}
-            } message: { epic in
-                Text("\(epic.textSnapshot)\n\nOne more week, for \(Epic.extensionCost) coins. The week it runs into gets no new epic.")
             }
             .overlay {
                 if let roll {
@@ -508,7 +516,7 @@ struct TodayView: View {
     /// A routine pays a fixed amount, so the badge shows one number rather than a range — the
     /// same number `Completion.completeRoutine` will pay today (half for an overdue one).
     private func routineRow(_ occurrence: RoutineOccurrence, note: RoutineNote? = nil) -> some View {
-        let flexible = occurrence.routineID.map(flexibleIDs.contains) ?? false
+        let flexible = isFlexible(occurrence)
         let pays = Completion.routinePayout(occurrence, flexible: flexible, on: today, tier: tier)
         return HStack(alignment: .firstTextBaseline) {
             badge("R", range: pays.map { $0...$0 })
@@ -569,13 +577,23 @@ struct TodayView: View {
         }
     }
 
-    /// A slot an ad-hoc routine took over: kept on the page as a record, no longer to do.
+    private func replacedNote(_ reason: ReplacedReason) -> String {
+        switch reason {
+        case .replan: "Dropped — the day was re-planned"
+        case .cancelled: "Cancelled"
+        case .rerolled: "Rerolled away"
+        case .adHoc: "Replaced"
+        }
+    }
+
+    /// A slot that is no longer today's ask — taken over by an ad-hoc routine, dropped by a
+    /// re-plan, or cancelled: kept on the page as a record, no longer to do.
     private func replacedRow(_ quest: DailyQuest) -> some View {
         HStack(alignment: .firstTextBaseline) {
             badge(quest.isTrivialGroup ? "T×3" : quest.slot.code)
             VStack(alignment: .leading, spacing: 2) {
                 Text(slotText(quest)).strikethrough().foregroundStyle(.secondary)
-                Text(quest.replacedReason == .replan ? "Dropped — the day was re-planned" : "Replaced")
+                Text(replacedNote(quest.replacedReason))
                     .font(.caption).foregroundStyle(.tertiary)
             }
         }
@@ -691,42 +709,85 @@ struct TodayView: View {
         try? context.save()
     }
 
-    /// Offered on every open slot, greyed out when it can't go through.
+    // Swipe actions. Whether each can go through is Core's rule; when it can't, the button is
+    // simply greyed out and shows no price.
+
     @ViewBuilder private func rerollButton(_ quest: DailyQuest) -> some View {
         if quest.completedAt == nil {
-            // Whether it can go through is Core's rule (`Reroll.blocked`); when it can't, the
-            // button is simply greyed out.
-            let open = Reroll.blocked(for: quest, on: today, balance: balance) == nil
-            Button { confirmingReroll = quest } label: {
-                Label(open ? "Reroll · \(Reroll.cost(for: quest))" : "Reroll", systemImage: "dice")
-            }
-            .tint(open ? .orange : .gray)
-            .disabled(!open)
+            spendButton(.reroll(quest), "Reroll", "dice", .orange,
+                        open: Reroll.blocked(for: quest, on: today, balance: balance) == nil)
         }
     }
 
-    private func reroll(_ quest: DailyQuest) {
+    @ViewBuilder private func extendButton(_ epic: DailyQuest) -> some View {
+        if epic.completedAt == nil {
+            spendButton(.extend(epic), "Extend", "calendar.badge.plus", .blue,
+                        open: Epic.blocked(epic, on: today, balance: balance) == nil)
+        }
+    }
+
+    @ViewBuilder private func cancelQuestButton(_ quest: DailyQuest) -> some View {
+        if quest.completedAt == nil, Redemption.cancelCost(for: quest.slot) != nil {
+            spendButton(.cancelQuest(quest), "Cancel", "xmark", .red,
+                        open: Redemption.blocked(cancelling: quest, on: today, balance: balance) == nil)
+        }
+    }
+
+    /// Only the routines a cancel can apply to get the button at all — a flexible one or a
+    /// check-in never could, so a permanently grey button there would just be noise.
+    @ViewBuilder private func cancelRoutineButton(_ o: RoutineOccurrence) -> some View {
+        let blocked = Redemption.blocked(cancelling: o, flexible: isFlexible(o), on: today, balance: balance)
+        if blocked != .notAvailable, blocked != .alreadyCompleted {
+            spendButton(.cancelRoutine(o), "Cancel", "xmark", .red, open: blocked == nil)
+        }
+    }
+
+    private func spendButton(_ spend: Spend, _ name: String, _ icon: String, _ color: Color,
+                             open: Bool) -> some View {
+        Button { spending = spend } label: {
+            Label(open ? "\(name) · \(spend.cost)" : name, systemImage: icon)
+        }
+        .tint(open ? color : .gray)
+        .disabled(!open)
+    }
+
+    private func message(for spend: Spend) -> String {
+        switch spend {
+        case .reroll(let q):
+            "\(slotText(q))\n\n" + (q.slot == .epic
+                ? "Swap it for a different epic for \(spend.cost) coins. It keeps the same deadline. Once extended, an epic can't be rerolled."
+                : "Swap it for a different \(q.slot.code) for \(spend.cost) coins. The next reroll of this slot today costs more.")
+        case .extend(let q):
+            "\(q.textSnapshot)\n\nOne more week, for \(spend.cost) coins. The week it runs into gets no new epic, and it can't be rerolled any more."
+        case .cancelQuest(let q):
+            "\(slotText(q))\n\nDrop it for \(spend.cost) coins. It no longer blocks the hidden quest, but it earns nothing and doesn't count toward the streak."
+        case .cancelRoutine(let o):
+            "\(o.displayText)\n\nDrop it for \(spend.cost) coins. No more overdue deductions, and it no longer blocks the hidden quest. Deductions already charged stay."
+        }
+    }
+
+    private func buy(_ spend: Spend) {
         var rng = SystemRandomNumberGenerator()
         do {
-            try Reroll.perform(quest, on: today, in: context, rng: &rng)
+            switch spend {
+            case .reroll(let q): try Reroll.perform(q, on: today, in: context, rng: &rng)
+            case .extend(let q): try Epic.extend(q, on: today, in: context)
+            case .cancelQuest(let q): try Redemption.cancel(q, on: today, in: context)
+            case .cancelRoutine(let o):
+                try Redemption.cancel(o, flexible: isFlexible(o), on: today, in: context)
+            }
             actionError = nil
-        } catch let refused as Reroll.Blocked {
-            // Nothing was charged; say why in the same kind of popup the rule would have shown.
-            rerollRefusal = "\(slotText(quest))\n\n\(refused.description). Nothing was charged."
+        } catch let refused as Purchase.Blocked {
+            // Only a reroll can be refused this late (nothing left to draw); nothing was charged.
+            if case .reroll(let q) = spend {
+                rerollRefusal = "\(slotText(q))\n\n\(refused.description). Nothing was charged."
+            } else {
+                actionError = refused.description
+            }
         } catch {
             actionError = "\(error)"
         }
-        confirmingReroll = nil
-    }
-
-    private func extend(_ epic: DailyQuest) {
-        do {
-            try Epic.extend(epic, on: today, in: context)
-            actionError = nil
-        } catch {
-            actionError = "\(error)"
-        }
-        confirmingExtend = nil
+        spending = nil
     }
 
     private func revealHidden() {

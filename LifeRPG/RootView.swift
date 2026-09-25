@@ -36,6 +36,8 @@ struct RootView: View {
                 .tabItem { Label("Today", systemImage: "checklist") }
             CalendarView(today: today)
                 .tabItem { Label("Calendar", systemImage: "calendar") }
+            RewardsView(today: today)
+                .tabItem { Label("Rewards", systemImage: "gift") }
             DebugView(seedStatus: seedStatus, today: today, sensorReport: sensorReport,
                       refresh: { Task { await refresh() } })
                 .tabItem { Label("Debug", systemImage: "wrench.and.screwdriver") }

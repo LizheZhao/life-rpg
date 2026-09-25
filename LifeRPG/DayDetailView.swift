@@ -133,6 +133,7 @@ struct DayDetailView: View {
             switch q.replacedReason {
             case .replan: return "Dropped when the day was re-planned"
             case .rerolled: return "Rerolled away"
+            case .cancelled: return "Cancelled"
             case .adHoc: return "Replaced by an ad-hoc routine"
             }
         }

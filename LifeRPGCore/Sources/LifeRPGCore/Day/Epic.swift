@@ -23,7 +23,7 @@ public enum Epic {
         case alreadyCompleted
         case expired(lastDayKey: String)
         case maxExtensions
-        case blocked(Reroll.Blocked)
+        case blocked(Purchase.Blocked)
 
         public var description: String {
             switch self {
@@ -112,7 +112,7 @@ public enum Epic {
         if epic.completedAt != nil { return .alreadyCompleted }
         if let last = lastDayKey(of: epic, in: timeZone), dayKey > last { return .expired(lastDayKey: last) }
         if epic.extensionCount >= maxExtensions { return .maxExtensions }
-        if let b = Reroll.blocked(cost: extensionCost, balance: balance, completed: false) {
+        if let b = Purchase.blocked(cost: extensionCost, balance: balance) {
             return .blocked(b)
         }
         return nil

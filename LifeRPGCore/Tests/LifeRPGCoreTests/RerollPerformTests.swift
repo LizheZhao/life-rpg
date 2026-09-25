@@ -91,7 +91,7 @@ struct RerollPerformTests {
             seen.insert(q.templateID!)
         }
         let balance = try Economy.balance(ctx)
-        #expect(throws: Reroll.Blocked.noCandidates) { try reroll(q, friday, ctx) }
+        #expect(throws: Purchase.Blocked.noCandidates) { try reroll(q, friday, ctx) }
         #expect(try Economy.balance(ctx) == balance)
         #expect(!q.replaced)
     }
@@ -105,7 +105,7 @@ struct RerollPerformTests {
         #expect(throws: Completion.Failure.replaced) {
             try Completion.complete(old, tier: .normal, in: ctx, rng: &rng)
         }
-        #expect(Reroll.blocked(for: old, on: friday, balance: 1000) == .notRerollable)
+        #expect(Reroll.blocked(for: old, on: friday, balance: 1000) == .notAvailable)
     }
 
     /// Full clear, streak and the calendar skip the swapped-away row like any replaced one.
@@ -139,8 +139,8 @@ struct RerollPerformTests {
         let hidden = DailyQuest()
         hidden.dayKey = friday
         hidden.isHiddenSlot = true
-        #expect(Reroll.blocked(for: hidden, on: friday, balance: 1000) == .notRerollable)
-        #expect(Reroll.blocked(for: try slot(ctx, .easy, on: friday), on: saturday, balance: 1000) == .notRerollable)
+        #expect(Reroll.blocked(for: hidden, on: friday, balance: 1000) == .notAvailable)
+        #expect(Reroll.blocked(for: try slot(ctx, .easy, on: friday), on: saturday, balance: 1000) == .notAvailable)
     }
 
     @Test func theBalanceRuleHolds() throws {
@@ -148,7 +148,7 @@ struct RerollPerformTests {
         try day(ctx, friday, fund: 9)
         let q = try slot(ctx, .easy, on: friday)
         // 9 on top of the default nothing: can't afford 10.
-        #expect(throws: Reroll.Blocked.tooExpensive(cost: 10, balance: 9)) { try reroll(q, friday, ctx) }
+        #expect(throws: Purchase.Blocked.tooExpensive(cost: 10, balance: 9)) { try reroll(q, friday, ctx) }
         Economy.record(ctx, kind: .adjust, points: 1, dayKey: friday)
         _ = try reroll(q, friday, ctx)
         #expect(try Economy.balance(ctx) == 0)
@@ -178,7 +178,7 @@ struct RerollPerformTests {
         let spends = try ctx.fetch(FetchDescriptor<LedgerEntry>()).filter { $0.kind == "reroll" }
         #expect(spends.allSatisfy { $0.dayKey == wednesday })
         // All three epics have been on the page this week: nothing left to swap to, nothing charged.
-        #expect(throws: Reroll.Blocked.noCandidates) { try reroll(epic, wednesday, ctx) }
+        #expect(throws: Purchase.Blocked.noCandidates) { try reroll(epic, wednesday, ctx) }
     }
 
     /// Decided with the user: once extended, the epic is kept — no more rerolls.
@@ -196,7 +196,7 @@ struct RerollPerformTests {
         let ctx = try Fixtures.context()
         try day(ctx, monday, epics: 1)
         let epic = try #require(try Epic.current(on: monday, in: ctx, timeZone: tz))
-        #expect(throws: Reroll.Blocked.noCandidates) { try reroll(epic, monday, ctx) }
+        #expect(throws: Purchase.Blocked.noCandidates) { try reroll(epic, monday, ctx) }
         #expect(!epic.replaced)
     }
 }

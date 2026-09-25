@@ -25,48 +25,14 @@ public enum Reroll {
                             : cost(base: quest.slot.rerollBase, rerollCount: quest.rerollCount)
     }
 
-    /// Why a reroll isn't available, or nil when it is.
-    public enum Blocked: Error, Equatable, Sendable, CustomStringConvertible {
-        case inDebt(balance: Int)
-        case tooExpensive(cost: Int, balance: Int)
-        case alreadyCompleted
-        /// Hidden, already replaced or rerolled away, or not on today's page.
-        case notRerollable
-        /// Decided with the user: the epic can be rerolled any number of times until it is
-        /// extended. Paying to keep it and then swapping it away would waste the extension.
-        case epicExtended
-        /// Nothing else in the pool right now (small library, everything on cooldown). Nothing
-        /// is charged.
-        case noCandidates
-
-        public var description: String {
-            switch self {
-            case .inDebt(let balance):
-                "Balance is \(balance) — clear the debt by completing quests first"
-            case .tooExpensive(let cost, let balance):
-                "Costs \(cost), balance is \(balance)"
-            case .alreadyCompleted:
-                "Already completed"
-            case .notRerollable:
-                "Can't be rerolled"
-            case .epicExtended:
-                "An extended epic can't be rerolled"
-            case .noCandidates:
-                "Nothing else to draw right now"
-            }
-        }
-    }
-
     /// The balance rule: a reroll can never take you below zero, and you can't reroll while already
     /// there (`PLAN.md` §6). Spending down to exactly zero is allowed — that is not debt.
     ///
     /// Penalties are the only thing that may push the balance negative, because they are something
     /// that happens *to* you; a purchase you chose to make should not.
-    public static func blocked(cost: Int, balance: Int, completed: Bool) -> Blocked? {
+    public static func blocked(cost: Int, balance: Int, completed: Bool) -> Purchase.Blocked? {
         if completed { return .alreadyCompleted }
-        if balance < 0 { return .inDebt(balance: balance) }
-        if balance < cost { return .tooExpensive(cost: cost, balance: balance) }
-        return nil
+        return Purchase.blocked(cost: cost, balance: balance)
     }
 
     /// Whether `quest` may be rerolled on `dayKey` at all, then whether it is affordable.
@@ -74,13 +40,13 @@ public enum Reroll {
     /// until it is extended.
     /// The hidden quest is the reward for a cleared day, not a slot, and is never rerolled.
     public static func blocked(for quest: DailyQuest, on dayKey: String, balance: Int,
-                               in timeZone: TimeZone = .current) -> Blocked? {
+                               in timeZone: TimeZone = .current) -> Purchase.Blocked? {
         if quest.completedAt != nil { return .alreadyCompleted }
         if quest.slot == .epic {
-            guard Epic.covers(quest, dayKey, in: timeZone) else { return .notRerollable }
+            guard Epic.covers(quest, dayKey, in: timeZone) else { return .notAvailable }
             if quest.extensionCount > 0 { return .epicExtended }
         } else {
-            guard quest.dayKey == dayKey, !quest.isHiddenSlot, !quest.replaced else { return .notRerollable }
+            guard quest.dayKey == dayKey, !quest.isHiddenSlot, !quest.replaced else { return .notAvailable }
         }
         return blocked(cost: cost(for: quest), balance: balance, completed: false)
     }
@@ -115,7 +81,7 @@ public enum Reroll {
             fresh = try DayService.fill(context, plan: [quest.slot], on: dayKey, weekKey: quest.weekKey,
                                         excluding: &drawn, in: timeZone, rng: &rng).first
         }
-        guard let fresh else { throw Blocked.noCandidates }
+        guard let fresh else { throw Purchase.Blocked.noCandidates }
 
         fresh.rerollCount = quest.rerollCount + 1
         quest.replaced = true

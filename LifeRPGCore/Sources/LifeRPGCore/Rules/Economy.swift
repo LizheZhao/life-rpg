@@ -5,8 +5,11 @@ import SwiftData
 /// no cached balance field, and adding one is how the two numbers start disagreeing.
 public enum Economy {
     /// Ledger kinds. Spending and penalties are stored as negative `points`.
+    ///
+    /// `freeze` is the one entry booked to a day other than the one it happened on: its `dayKey`
+    /// is the missed day it covers (`Streak.frozenDayKeys`), and `timestamp` is when it was bought.
     public enum Kind: String, CaseIterable, Sendable {
-        case quest, routine, redeem, reroll, penalty, skip, adjust, grant
+        case quest, routine, redeem, reroll, penalty, skip, adjust, grant, freeze
     }
 
     /// Current balance; may be negative, which is displayed in red rather than clamped.

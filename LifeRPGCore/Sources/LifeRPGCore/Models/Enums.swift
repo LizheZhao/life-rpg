@@ -85,6 +85,9 @@ public enum ReplacedReason: String, Codable, CaseIterable, Sendable {
     /// Paid to swap for a different draw (`Reroll.perform`). The replacement is a new row carrying
     /// `rerollCount + 1`; this one stays so the day's history still shows what was swapped away.
     case rerolled
+    /// Bought off (`Redemption.cancel`): no longer asked of you, and no longer gating the clear,
+    /// but it earned nothing and doesn't count toward the streak.
+    case cancelled
 }
 
 public enum RecurrenceKind: String, Codable, CaseIterable, Sendable {

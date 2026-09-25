@@ -267,6 +267,8 @@ Pricing must be noticeably higher than the payout from completing the underlying
 | Extend epic by a week | 400 |
 | Streak freeze | 300 |
 
+Cancel, reroll and the epic extension are swipe actions on the row they act on; the Rewards page holds the rewards you enter yourself and the streak freeze. A cancelled quest or routine no longer blocks the hidden quest but earns nothing and gives no streak day. Only fixed routines can be cancelled, since flexible ones already move within the week. T, hidden and the epic can't be cancelled. A streak freeze is bought after the break, to cover one missed day right behind the current streak; it keeps the run from breaking without adding a day to it.
+
 ### Reroll
 
 Escalates by 1.5x, rounded up, resets daily. Base is E 10, M 20, H 30 — so E goes 10 / 15 / 23 / 34, H goes 30 / 45 / 68 / 102. Epic reroll is a flat 80 each time, with no limit until the epic is extended; an extended epic can't be rerolled.
