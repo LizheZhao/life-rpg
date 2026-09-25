@@ -34,6 +34,9 @@ struct TodayView: View {
     @State private var pendingExport: ExportDocument?
     @State private var exporting = false
     @State private var confirmingExtend: DailyQuest?
+    @State private var confirmingReroll: DailyQuest?
+    /// A reroll that was refused only once it tried to draw (nothing else in the pool).
+    @State private var rerollRefusal: String?
 
     /// A payout that has already happened and is already in the ledger, waiting to be shown.
     private struct Roll: Identifiable {
@@ -92,7 +95,7 @@ struct TodayView: View {
     @ViewBuilder private var epicSection: some View {
         if let epic = currentEpic {
             Section {
-                questRow(epic)
+                questRow(epic).swipeActions(edge: .trailing) { rerollButton(epic) }
                 if epic.completedAt == nil { extendRow(epic) }
             } header: {
                 Text("Epic · until \(Epic.lastDayKey(of: epic) ?? "Sunday")")
@@ -127,7 +130,11 @@ struct TodayView: View {
             }
             ForEach(randomQuests) { quest in
                 if quest.replaced { replacedRow(quest) }
-                else if quest.isTrivialGroup { trivialGroupRow(quest) } else { questRow(quest) }
+                else if quest.isTrivialGroup {
+                    trivialGroupRow(quest).swipeActions(edge: .trailing) { rerollButton(quest) }
+                } else {
+                    questRow(quest).swipeActions(edge: .trailing) { rerollButton(quest) }
+                }
             }
         }
     }
@@ -266,7 +273,8 @@ struct TodayView: View {
     /// Easy first, the way the composition table is written — the query itself has no order
     /// beyond `dayKey`, so without this the rows shuffle on every regeneration.
     private var randomQuests: [DailyQuest] {
-        quests.filter { !$0.isHiddenSlot && $0.slot != .epic }
+        // A rerolled-away row is history, not today's work: the day detail shows it, this page doesn't.
+        quests.filter { !$0.isHiddenSlot && $0.slot != .epic && !($0.replaced && $0.replacedReason == .rerolled) }
             .sorted { a, b in
                 let ra = Difficulty.allCases.firstIndex(of: a.slot) ?? 0
                 let rb = Difficulty.allCases.firstIndex(of: b.slot) ?? 0
@@ -382,6 +390,26 @@ struct TodayView: View {
                 } else {
                     Text("\(action.label)\n\nThis is final — completion cannot be undone.")
                 }
+            }
+            // Only reachable when the reroll can go through: the swipe button is greyed out otherwise.
+            .alert("Reroll?",
+                   isPresented: Binding(get: { confirmingReroll != nil },
+                                        set: { if !$0 { confirmingReroll = nil } }),
+                   presenting: confirmingReroll) { quest in
+                Button("Spend \(Reroll.cost(for: quest))") { reroll(quest) }
+                Button("Cancel", role: .cancel) {}
+            } message: { quest in
+                Text("\(slotText(quest))\n\n" + (quest.slot == .epic
+                    ? "Swap it for a different epic for \(Reroll.cost(for: quest)) coins. It keeps the same deadline. Once extended, an epic can't be rerolled."
+                    : "Swap it for a different \(quest.slot.code) for \(Reroll.cost(for: quest)) coins. The next reroll of this slot today costs more."))
+            }
+            .alert("Can't reroll",
+                   isPresented: Binding(get: { rerollRefusal != nil },
+                                        set: { if !$0 { rerollRefusal = nil } }),
+                   presenting: rerollRefusal) { _ in
+                Button("OK", role: .cancel) {}
+            } message: { reason in
+                Text(reason)
             }
             // Spending is as final as completing, so it asks too.
             .alert("Extend the epic?",
@@ -661,6 +689,34 @@ struct TodayView: View {
         Feedback.rate(context, target: .quest, id: roll.templateID, questID: roll.questID,
                       text: roll.text, rating: rating, dayKey: roll.dayKey)
         try? context.save()
+    }
+
+    /// Offered on every open slot, greyed out when it can't go through.
+    @ViewBuilder private func rerollButton(_ quest: DailyQuest) -> some View {
+        if quest.completedAt == nil {
+            // Whether it can go through is Core's rule (`Reroll.blocked`); when it can't, the
+            // button is simply greyed out.
+            let open = Reroll.blocked(for: quest, on: today, balance: balance) == nil
+            Button { confirmingReroll = quest } label: {
+                Label(open ? "Reroll · \(Reroll.cost(for: quest))" : "Reroll", systemImage: "dice")
+            }
+            .tint(open ? .orange : .gray)
+            .disabled(!open)
+        }
+    }
+
+    private func reroll(_ quest: DailyQuest) {
+        var rng = SystemRandomNumberGenerator()
+        do {
+            try Reroll.perform(quest, on: today, in: context, rng: &rng)
+            actionError = nil
+        } catch let refused as Reroll.Blocked {
+            // Nothing was charged; say why in the same kind of popup the rule would have shown.
+            rerollRefusal = "\(slotText(quest))\n\n\(refused.description). Nothing was charged."
+        } catch {
+            actionError = "\(error)"
+        }
+        confirmingReroll = nil
     }
 
     private func extend(_ epic: DailyQuest) {

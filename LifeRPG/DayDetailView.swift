@@ -130,9 +130,11 @@ struct DayDetailView: View {
 
     private func questStatus(_ q: DailyQuest) -> String {
         if q.replaced {
-            return q.replacedReason == .replan
-                ? "Dropped when the day was re-planned"
-                : "Replaced by an ad-hoc routine"
+            switch q.replacedReason {
+            case .replan: return "Dropped when the day was re-planned"
+            case .rerolled: return "Rerolled away"
+            case .adHoc: return "Replaced by an ad-hoc routine"
+            }
         }
         var parts: [String] = []
         if let at = q.completedAt { parts.append("Done \(at.formatted(date: .omitted, time: .shortened))") }

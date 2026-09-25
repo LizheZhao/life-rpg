@@ -1,11 +1,13 @@
 import Foundation
 import SwiftData
 
-/// Paying to swap a random slot for a different draw (`PLAN.md` §6).
+/// Paying to swap a random slot — or the week's epic — for a different draw (`PLAN.md` §6).
 ///
-/// Only the pricing and the affordability rule live here for now — the swap itself lands with the
-/// reroll UI. The price is the part that had to be settled early: it is the first thing coins are
-/// ever spent on, so it decides whether the balance means anything.
+/// **The old row is kept.** It is marked `replaced` with reason `.rerolled`, and the replacement is
+/// a new row carrying `rerollCount + 1`. `DailyQuest` is the history the calendar, day detail and
+/// summary read, so overwriting it in place would erase what was swapped away. Everything that
+/// already skips `replaced` rows (full clear, streak, calendar dots, ad-hoc, re-plan, auto-verify)
+/// skips a rerolled-away one for free.
 public enum Reroll {
     /// `base × 1.5^n`, rounded **up**, where `n` is how many times this slot has already been
     /// rerolled today. Bases are T 5, E 10, M 20, H 30, EPIC 80.
@@ -17,15 +19,25 @@ public enum Reroll {
         Int((Double(base) * pow(1.5, Double(max(0, rerollCount)))).rounded(.up))
     }
 
+    /// The epic is a flat 80 every time (`PLAN.md` §6) — it doesn't escalate.
     public static func cost(for quest: DailyQuest) -> Int {
-        cost(base: quest.slot.rerollBase, rerollCount: quest.rerollCount)
+        quest.slot == .epic ? quest.slot.rerollBase
+                            : cost(base: quest.slot.rerollBase, rerollCount: quest.rerollCount)
     }
 
     /// Why a reroll isn't available, or nil when it is.
-    public enum Blocked: Equatable, Sendable, CustomStringConvertible {
+    public enum Blocked: Error, Equatable, Sendable, CustomStringConvertible {
         case inDebt(balance: Int)
         case tooExpensive(cost: Int, balance: Int)
         case alreadyCompleted
+        /// Hidden, already replaced or rerolled away, or not on today's page.
+        case notRerollable
+        /// Decided with the user: the epic can be rerolled any number of times until it is
+        /// extended. Paying to keep it and then swapping it away would waste the extension.
+        case epicExtended
+        /// Nothing else in the pool right now (small library, everything on cooldown). Nothing
+        /// is charged.
+        case noCandidates
 
         public var description: String {
             switch self {
@@ -35,6 +47,12 @@ public enum Reroll {
                 "Costs \(cost), balance is \(balance)"
             case .alreadyCompleted:
                 "Already completed"
+            case .notRerollable:
+                "Can't be rerolled"
+            case .epicExtended:
+                "An extended epic can't be rerolled"
+            case .noCandidates:
+                "Nothing else to draw right now"
             }
         }
     }
@@ -51,7 +69,69 @@ public enum Reroll {
         return nil
     }
 
-    public static func blocked(for quest: DailyQuest, balance: Int) -> Blocked? {
-        blocked(cost: cost(for: quest), balance: balance, completed: quest.completedAt != nil)
+    /// Whether `quest` may be rerolled on `dayKey` at all, then whether it is affordable.
+    /// A regular slot (T group included) only on its own day; the epic on any day it is live,
+    /// until it is extended.
+    /// The hidden quest is the reward for a cleared day, not a slot, and is never rerolled.
+    public static func blocked(for quest: DailyQuest, on dayKey: String, balance: Int,
+                               in timeZone: TimeZone = .current) -> Blocked? {
+        if quest.completedAt != nil { return .alreadyCompleted }
+        if quest.slot == .epic {
+            guard Epic.covers(quest, dayKey, in: timeZone) else { return .notRerollable }
+            if quest.extensionCount > 0 { return .epicExtended }
+        } else {
+            guard quest.dayKey == dayKey, !quest.isHiddenSlot, !quest.replaced else { return .notRerollable }
+        }
+        return blocked(cost: cost(for: quest), balance: balance, completed: false)
+    }
+
+    /// Swaps `quest` for a fresh draw of the same slot and charges for it. Returns the new row.
+    ///
+    /// Nothing the day has already served is drawn again — including what earlier rerolls swapped
+    /// away — so a reroll can't bounce between two quests. When the pool has nothing else, the
+    /// reroll is refused and nothing is charged. The spend is booked to `dayKey`, the day it
+    /// happened, which for the epic is not the day it was drawn.
+    @discardableResult
+    public static func perform(_ quest: DailyQuest, on dayKey: String, in context: ModelContext,
+                               timeZone: TimeZone = .current, now: Date = Date(),
+                               rng: inout some RandomNumberGenerator) throws -> DailyQuest {
+        if let b = blocked(for: quest, on: dayKey, balance: try Economy.balance(context), in: timeZone) {
+            throw b
+        }
+        let price = cost(for: quest)
+
+        let fresh: DailyQuest?
+        if quest.slot == .epic {
+            let epicRaw = Difficulty.epic.rawValue
+            let seen = try context.fetch(FetchDescriptor<DailyQuest>(
+                predicate: #Predicate { $0.slotRaw == epicRaw }))
+                .filter { $0.dayKey == quest.dayKey }.compactMap(\.templateID)
+            fresh = try Epic.draw(context, on: quest.dayKey, weekKey: quest.weekKey, servedOn: dayKey,
+                                  avoiding: Set(seen), strict: true, in: timeZone, rng: &rng)
+            // Same `dayKey`, so the same deadline. Never extended: `blocked` refuses that.
+        } else {
+            let today = try DayService.quests(on: dayKey, in: context)
+            var drawn = Set(today.compactMap(\.templateID) + today.flatMap(\.trivialTemplateIDs))
+            fresh = try DayService.fill(context, plan: [quest.slot], on: dayKey, weekKey: quest.weekKey,
+                                        excluding: &drawn, in: timeZone, rng: &rng).first
+        }
+        guard let fresh else { throw Blocked.noCandidates }
+
+        fresh.rerollCount = quest.rerollCount + 1
+        quest.replaced = true
+        quest.replacedReason = .rerolled
+        let entry = Economy.record(context, kind: .reroll, points: -price, dayKey: dayKey,
+                                   refID: quest.id, note: "Reroll: \(quest.textSnapshot)", now: now)
+        do {
+            try context.save()
+        } catch {
+            // Same rule as completion: nothing happened until it is on disk.
+            quest.replaced = false
+            quest.replacedReasonRaw = nil
+            context.delete(fresh)
+            context.delete(entry)
+            throw error
+        }
+        return fresh
     }
 }

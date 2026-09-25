@@ -79,16 +79,28 @@ public enum Epic {
             predicate: #Predicate { $0.slotRaw == epicRaw }))
         guard current(rows, on: dayKey, in: timeZone) == nil else { return nil }
 
-        let templates = try Sampling.activeTemplates(context)
         let previous = rows.filter { $0.dayKey < dayKey }.max { $0.dayKey < $1.dayKey }?.templateID
-        var pool = Sampling.eligible(templates, difficulty: .epic, dayKey: dayKey, in: timeZone)
-        if pool.count > 1, let previous { pool.removeAll { $0.id == previous } }
+        return try draw(context, on: dayKey, weekKey: weekKey, servedOn: dayKey,
+                        avoiding: previous.map { [$0] } ?? [], in: timeZone, rng: &rng)
+    }
+
+    /// One epic row. `avoiding` is dropped from the pool while anything else is left (`strict`
+    /// makes it a hard exclusion — a reroll must never hand back the epic it just swapped away).
+    /// `dayKey` is the row's own key, which fixes its window; `servedOn` is today, for cooldown.
+    static func draw(_ context: ModelContext, on dayKey: String, weekKey: String, servedOn: String,
+                     avoiding: Set<UUID>, strict: Bool = false,
+                     in timeZone: TimeZone = .current,
+                     rng: inout some RandomNumberGenerator) throws -> DailyQuest? {
+        let templates = try Sampling.activeTemplates(context)
+        var pool = Sampling.eligible(templates, difficulty: .epic, dayKey: servedOn, in: timeZone)
+        let others = pool.filter { !avoiding.contains($0.id) }
+        if strict || !others.isEmpty { pool = others }
         guard let template = Sampling.pick(from: pool, rng: &rng) else { return nil }
 
         let quest = DailyQuest(template: template, slot: .epic, dayKey: dayKey, weekKey: weekKey,
                                variant: Sampling.variant(of: template, rng: &rng))
         context.insert(quest)
-        template.lastServedDayKey = dayKey
+        template.lastServedDayKey = servedOn
         return quest
     }
 

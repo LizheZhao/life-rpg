@@ -156,16 +156,19 @@ public enum DayService {
     }
 
     /// Draws one template into each planned slot, skipping anything in `drawn` and adding what
-    /// it draws to it. Shared by the first generation of a day and by `Replan`, so a re-plan
-    /// fills a slot exactly the way the morning would have.
+    /// it draws to it. Shared by the first generation of a day, by `Replan` and by `Reroll`, so
+    /// a re-plan or a reroll fills a slot exactly the way the morning would have. Returns the rows
+    /// it inserted.
+    @discardableResult
     static func fill(_ context: ModelContext,
                      plan: [Difficulty],
                      on dayKey: String,
                      weekKey: String,
                      excluding drawn: inout Set<UUID>,
                      in timeZone: TimeZone = .current,
-                     rng: inout some RandomNumberGenerator) throws {
+                     rng: inout some RandomNumberGenerator) throws -> [DailyQuest] {
         let templates = try Sampling.activeTemplates(context)
+        var inserted: [DailyQuest] = []
         for slot in plan {
             if slot == .trivial {
                 let pool = Sampling.eligible(templates, difficulty: .trivial, dayKey: dayKey,
@@ -176,6 +179,7 @@ public enum DayService {
                     let quest = DailyQuest(group: group, variants: variants,
                                            dayKey: dayKey, weekKey: weekKey)
                     context.insert(quest)
+                    inserted.append(quest)
                     for t in group {
                         t.lastServedDayKey = dayKey
                         drawn.insert(t.id)
@@ -188,12 +192,15 @@ public enum DayService {
             let pool = Sampling.eligible(templates, difficulty: difficulty, dayKey: dayKey,
                                          excluding: drawn, in: timeZone)
             guard let template = Sampling.pick(from: pool, rng: &rng) else { continue }
-            context.insert(DailyQuest(template: template, slot: difficulty,
-                                      dayKey: dayKey, weekKey: weekKey,
-                                      variant: Sampling.variant(of: template, rng: &rng)))
+            let quest = DailyQuest(template: template, slot: difficulty,
+                                   dayKey: dayKey, weekKey: weekKey,
+                                   variant: Sampling.variant(of: template, rng: &rng))
+            context.insert(quest)
+            inserted.append(quest)
             template.lastServedDayKey = dayKey
             drawn.insert(template.id)
         }
+        return inserted
     }
 
     /// Whether the hidden slot may be drawn: every `countsForClear` routine done, every random

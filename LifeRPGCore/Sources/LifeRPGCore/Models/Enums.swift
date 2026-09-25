@@ -82,6 +82,9 @@ public enum ReplacedReason: String, Codable, CaseIterable, Sendable {
     /// The day was re-planned after a fresh body reading and the new composition no longer has
     /// that slot (`PLAN.md` §5).
     case replan
+    /// Paid to swap for a different draw (`Reroll.perform`). The replacement is a new row carrying
+    /// `rerollCount + 1`; this one stays so the day's history still shows what was swapped away.
+    case rerolled
 }
 
 public enum RecurrenceKind: String, Codable, CaseIterable, Sendable {

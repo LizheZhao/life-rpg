@@ -47,8 +47,9 @@ struct RerollTests {
     @Test func theQuestOverloadReadsTheCompletionState() {
         let quest = DailyQuest()
         quest.slot = .easy
-        #expect(Reroll.blocked(for: quest, balance: 100) == nil)
+        quest.dayKey = "2026-09-18"
+        #expect(Reroll.blocked(for: quest, on: "2026-09-18", balance: 100) == nil)
         quest.completedAt = Date()
-        #expect(Reroll.blocked(for: quest, balance: 100) == .alreadyCompleted)
+        #expect(Reroll.blocked(for: quest, on: "2026-09-18", balance: 100) == .alreadyCompleted)
     }
 }

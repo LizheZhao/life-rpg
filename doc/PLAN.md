@@ -269,9 +269,9 @@ Pricing must be noticeably higher than the payout from completing the underlying
 
 ### Reroll
 
-Escalates by 1.5x, rounded up, resets daily. Base is E 10, M 20, H 30 — so E goes 10 / 15 / 23 / 34, H goes 30 / 45 / 68 / 102. Epic reroll is a flat 80, once per week.
+Escalates by 1.5x, rounded up, resets daily. Base is E 10, M 20, H 30 — so E goes 10 / 15 / 23 / 34, H goes 30 / 45 / 68 / 102. Epic reroll is a flat 80 each time, with no limit until the epic is extended; an extended epic can't be rerolled.
 
-**A reroll records what it swapped away.** Escalation has to accumulate on the day's slot, which is tempting to implement by overwriting the `DailyQuest` row in place — but that row *is* the history the calendar and the summary read, so overwriting it erases what was rerolled away. Instead the old row is kept and marked `rerolledAway`, and the replacement carries `rerollCount + 1`. Rerolled-away rows are skipped by full-clear and streak the same way `replaced` ones are. Escalation still resets daily, because a new day means new rows starting at zero.
+**A reroll records what it swapped away.** Escalation has to accumulate on the day's slot, which is tempting to implement by overwriting the `DailyQuest` row in place — but that row *is* the history the calendar and the summary read, so overwriting it erases what was rerolled away. Instead the old row is kept and marked `replaced` with reason `rerolled`, and the replacement carries `rerollCount + 1`. Being a `replaced` row, it is skipped by full-clear, streak and the calendar like any other. Nothing the day already served is drawn again, and when nothing else is left the reroll is refused without charging. The hidden quest is never rerolled. The epic reroll keeps the old epic's deadline. Escalation still resets daily, because a new day means new rows starting at zero.
 
 **A reroll can never take the balance below zero.** Spending down to exactly zero is fine — that is not debt. Penalties are the only thing allowed to push the balance negative, because they are something that happens to you; a purchase you chose to make is not. Combined with the rule below, that gives two separate refusals: "clear the debt first" and "you can't afford it".
 
