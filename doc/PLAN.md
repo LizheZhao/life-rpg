@@ -79,6 +79,12 @@ A routine can be manually added for the day, but must specify which random slot 
 - **Which slot**: any random slot of today that is not done, not hidden and not already replaced. Final, like completion.
 - **Independent of the library**: the ad-hoc occurrence carries no `routineID`, so it is never flexible, never counts toward a weekly target and never moves the routine's next due date. It is always on the fixed overdue ladder and always gates the full-clear — even when picked from a `counts_for_clear = false` routine, which would otherwise make it a free pass out of a hard slot.
 
+- **Where**: replacing is a swipe action on the slot itself, so the slot is already chosen. The + on the today page does something else — see below.
+
+### Adding a routine on top of the day
+
+The + on the today page adds a routine (from the library or written on the spot, same two tabs) **without replacing anything** (decided with the user). It is extra work, so it is never a liability: it doesn't gate the hidden quest and is never charged when left undone — its round still ends, and it is skipped on day 4. Done, it pays like any routine. Like a replacement, it carries no `routineID`, so the library's schedule never sees it.
+
 ### Cooldown
 
 Cooldown counts from the **completion** day, not the draw day: after completing a quest it isn't eligible again for its cooldown period — T and E are 3 days, M is 7 days, H is 14 days; individual entries can override this in the CSV.

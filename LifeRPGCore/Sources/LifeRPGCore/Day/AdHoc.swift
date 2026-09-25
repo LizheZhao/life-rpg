@@ -1,7 +1,8 @@
 import Foundation
 import SwiftData
 
-/// An ad-hoc routine replacing a random slot (`PLAN.md` §3).
+/// An ad-hoc routine: replacing a random slot (`replace`), or added on top of the day (`add`)
+/// (`PLAN.md` §3).
 ///
 /// The slot is marked `replaced` and no longer counts toward the full-clear or the streak; in its
 /// place an occurrence due today is created. The swap itself is free — the cost is that the
@@ -73,6 +74,49 @@ public enum AdHoc {
         let dayKey = quest.dayKey
         guard isReplaceable(quest, on: dayKey) else { throw Failure.notReplaceable }
 
+        let occurrence = try makeOccurrence(source, on: dayKey, in: context, timeZone: timeZone)
+        occurrence.countsForClear = true
+        occurrence.replacesQuestID = quest.id
+
+        context.insert(occurrence)
+        quest.replaced = true
+        quest.replacedReason = .adHoc
+        do {
+            try context.save()
+        } catch {
+            quest.replaced = false
+            quest.replacedReasonRaw = nil
+            context.delete(occurrence)
+            throw error
+        }
+        return occurrence
+    }
+
+    /// Adds a routine for `dayKey` **on top of** the day, replacing nothing (decided with the
+    /// user; replacing a slot is `replace`, from that slot's swipe action).
+    ///
+    /// Extra work, so it is never a liability: `countsForClear = false`, which means it doesn't
+    /// gate the hidden quest and is never charged when left undone — its round still ends and it is
+    /// skipped on day 4. Done, it pays like any routine. Same independence from the library as a
+    /// replacement: `routineID` stays nil.
+    @discardableResult
+    public static func add(_ source: Source, on dayKey: String, in context: ModelContext,
+                           timeZone: TimeZone = .current) throws -> RoutineOccurrence {
+        let occurrence = try makeOccurrence(source, on: dayKey, in: context, timeZone: timeZone)
+        occurrence.countsForClear = false
+        context.insert(occurrence)
+        do {
+            try context.save()
+        } catch {
+            context.delete(occurrence)
+            throw error
+        }
+        return occurrence
+    }
+
+    /// The occurrence both `replace` and `add` create, before either says whether it gates.
+    private static func makeOccurrence(_ source: Source, on dayKey: String, in context: ModelContext,
+                                       timeZone: TimeZone) throws -> RoutineOccurrence {
         let occurrence = RoutineOccurrence()
         switch source {
         case .routine(let routine):
@@ -89,21 +133,7 @@ public enum AdHoc {
             occurrence.basePoints = base
         }
         occurrence.dueDayKey = dayKey
-        occurrence.weekKey = DayKey.weekKey(of: dayKey, in: timeZone) ?? quest.weekKey
-        occurrence.countsForClear = true
-        occurrence.replacesQuestID = quest.id
-
-        context.insert(occurrence)
-        quest.replaced = true
-        quest.replacedReason = .adHoc
-        do {
-            try context.save()
-        } catch {
-            quest.replaced = false
-            quest.replacedReasonRaw = nil
-            context.delete(occurrence)
-            throw error
-        }
+        occurrence.weekKey = DayKey.weekKey(of: dayKey, in: timeZone) ?? ""
         return occurrence
     }
 

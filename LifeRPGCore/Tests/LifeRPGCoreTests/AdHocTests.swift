@@ -162,6 +162,51 @@ struct AdHocTests {
         #expect(try ctx.fetch(FetchDescriptor<LedgerEntry>()).contains { $0.kind == "skip" && $0.dayKey == mon })
     }
 
+    // MARK: adding on top (decided with the user)
+
+    /// Extra work: nothing replaced, nothing gated, nothing charged if left undone.
+    @Test func addingReplacesNothingAndGatesNothing() throws {
+        let (ctx, quests) = try generated()
+        let o = try AdHoc.add(.custom(text: "Fix the bike", difficulty: .hard), on: fri, in: ctx, timeZone: tz)
+        #expect(quests.allSatisfy { !$0.replaced })
+        #expect(o.dueDayKey == fri)
+        #expect(o.weekKey == "2026-W38")
+        #expect(o.basePoints == 38)
+        #expect(o.routineID == nil)
+        #expect(o.replacesQuestID == nil)
+        #expect(!o.countsForClear)
+
+        var rng = SeededRNG(seed: 4)
+        for quest in quests {
+            quest.trivialDone = quest.trivialDone.map { _ in true }
+            try Completion.complete(quest, tier: .normal, in: ctx, rng: &rng)
+        }
+        #expect(try DayService.hiddenUnlocked(on: fri, in: ctx))     // the added one is still open
+    }
+
+    @Test func anAddedRoutineUndoneCostsNothing() throws {
+        let (ctx, _) = try generated()
+        let o = try AdHoc.add(.custom(text: "x", difficulty: .medium), on: fri, in: ctx, timeZone: tz)
+        for day in [fri, sat, sun] { try Overdue.settle(day, in: ctx, timeZone: tz) }
+        #expect(try Economy.balance(ctx) == 0)
+        #expect(o.skipped)                                           // its round still ends
+    }
+
+    @Test func anAddedRoutinePaysWhenDone() throws {
+        let (ctx, _) = try generated()
+        let r = routine(ctx, "Deep clean")
+        let o = try AdHoc.add(.routine(r), on: fri, in: ctx, timeZone: tz)
+        #expect(o.adHocSourceRoutineID == r.id)
+        try Completion.completeRoutine(o, on: fri, tier: .normal, in: ctx, timeZone: tz)
+        #expect(try Economy.balance(ctx) == 30)
+        // Once on the page, it isn't offered again.
+        #expect(!AdHoc.libraryCandidates([r], occurrences: try ctx.fetch(FetchDescriptor<RoutineOccurrence>()),
+                                         on: fri).contains { $0.id == r.id })
+        #expect(throws: AdHoc.Failure.alreadyOnToday) {
+            try AdHoc.add(.routine(r), on: fri, in: ctx, timeZone: tz)
+        }
+    }
+
     // MARK: the library tab
 
     /// Active routines not already on today's page — neither scheduled today nor already added.

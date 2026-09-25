@@ -26,7 +26,10 @@ struct TodayView: View {
     /// Collapsed by default: it lists every flexible routine still short this week, which is most
     /// of them early in the week, and none of it is today's work.
     @AppStorage("aheadExpanded") private var aheadExpanded = false
-    @State private var addingAdHoc = false
+    /// The slot whose "Replace" swipe action opened the ad-hoc sheet.
+    @State private var replacing: DailyQuest?
+    /// The + button: a routine added on top of the day, replacing nothing.
+    @State private var adding = false
     @State private var roll: Roll?
     @State private var actionError: String?
     /// One export at a time, through one `fileExporter` — the JSON dump and the CSV folder are
@@ -146,11 +149,15 @@ struct TodayView: View {
             ForEach(randomQuests) { quest in
                 if quest.replaced { replacedRow(quest) }
                 else if quest.isTrivialGroup {
-                    trivialGroupRow(quest).swipeActions(edge: .trailing) { rerollButton(quest) }
+                    trivialGroupRow(quest).swipeActions(edge: .trailing) {
+                        rerollButton(quest)
+                        replaceButton(quest)
+                    }
                 } else {
                     questRow(quest).swipeActions(edge: .trailing) {
                         rerollButton(quest)
                         cancelQuestButton(quest)
+                        replaceButton(quest)
                     }
                 }
             }
@@ -283,8 +290,8 @@ struct TodayView: View {
         Degrade.versions(of: routine, in: routines).map(\.text).joined(separator: " / ")
     }
 
-    /// An ad-hoc routine takes over a random slot, so there has to be one it may take.
-    private var canAddAdHoc: Bool { !AdHoc.replaceableSlots(quests, on: today).isEmpty }
+    /// Which slots an ad-hoc routine may take over is `AdHoc`'s rule.
+    private var replaceableIDs: Set<UUID> { Set(AdHoc.replaceableSlots(quests, on: today).map(\.id)) }
 
     private var quests: [DailyQuest] { allQuests.filter { $0.dayKey == today } }
     private var currentEpic: DailyQuest? { Epic.current(allQuests, on: today) }
@@ -369,9 +376,8 @@ struct TodayView: View {
             .navigationTitle("Today")
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button { addingAdHoc = true } label: { Image(systemName: "plus") }
-                        .accessibilityLabel("Add a routine for today")
-                        .disabled(!canAddAdHoc)
+                    Button { adding = true } label: { Image(systemName: "plus") }
+                        .accessibilityLabel("Add for today")
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
@@ -439,8 +445,11 @@ struct TodayView: View {
                     .transition(.opacity)
                 }
             }
-            .sheet(isPresented: $addingAdHoc) {
-                AdHocView(today: today, tier: tier)
+            .sheet(isPresented: $adding) {
+                AdHocView(today: today, tier: tier, slot: nil)
+            }
+            .sheet(item: $replacing) { slot in
+                AdHocView(today: today, tier: tier, slot: slot)
             }
             .fileExporter(isPresented: $exporting,
                           document: pendingExport,
@@ -538,6 +547,9 @@ struct TodayView: View {
                     let replaced = allQuests.first { $0.id == questID }
                     Text("Added today · replaces \(replaced.map(slotText) ?? "a random slot")")
                         .font(.caption).foregroundStyle(.secondary)
+                } else if occurrence.routineID == nil {
+                    // Added with + on top of the day (`AdHoc.add`): extra, never a liability.
+                    Text("Added today · extra, no penalty").font(.caption).foregroundStyle(.secondary)
                 }
                 if !occurrence.countsForClear {
                     Text("Doesn't gate the hidden quest").font(.caption).foregroundStyle(.secondary)
@@ -723,6 +735,17 @@ struct TodayView: View {
         if epic.completedAt == nil {
             spendButton(.extend(epic), "Extend", "calendar.badge.plus", .blue,
                         open: Epic.blocked(epic, on: today, balance: balance) == nil)
+        }
+    }
+
+    /// Free — the price of an ad-hoc routine is that it now loses points if left undone — so it
+    /// only appears where it applies rather than sitting greyed out on every row.
+    @ViewBuilder private func replaceButton(_ quest: DailyQuest) -> some View {
+        if replaceableIDs.contains(quest.id) {
+            Button { replacing = quest } label: {
+                Label("Replace", systemImage: "arrow.triangle.swap")
+            }
+            .tint(.indigo)
         }
     }
 

@@ -2,17 +2,20 @@ import LifeRPGCore
 import SwiftData
 import SwiftUI
 
-/// Adding a routine for the day in place of one random slot (`PLAN.md` §3): pick it from the
-/// routine library or write one, choose the slot it takes over, confirm. Which slots and which
-/// routines qualify, and what a custom task is worth, are `AdHoc`'s rules — this only renders them.
+/// Adding a routine for the day (`PLAN.md` §3), two ways:
+/// - from a random slot's "Replace" swipe action, in place of that slot (`AdHoc.replace`);
+/// - from the today page's +, on top of the day, replacing nothing (`AdHoc.add`).
+/// Either way: pick the routine from the library or write one, confirm. Which routines qualify
+/// and what a custom task is worth are `AdHoc`'s rules — this only renders them.
 struct AdHocView: View {
     let today: String
     let tier: Tier
+    /// The slot being taken over, or nil when adding on top of the day.
+    let slot: DailyQuest?
 
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
 
-    @Query(sort: \DailyQuest.dayKey) private var allQuests: [DailyQuest]
     @Query private var occurrences: [RoutineOccurrence]
     @Query private var routines: [RoutineTask]
 
@@ -21,18 +24,17 @@ struct AdHocView: View {
     @State private var routineID: UUID?
     @State private var text = ""
     @State private var difficulty: Difficulty = .easy
-    @State private var slotID: UUID?
     @State private var confirming = false
     @State private var error: String?
 
     private var candidates: [RoutineTask] {
         AdHoc.libraryCandidates(routines, occurrences: occurrences, on: today)
     }
-    private var slots: [DailyQuest] {
-        AdHoc.replaceableSlots(allQuests.filter { $0.dayKey == today }, on: today)
-    }
     private var chosenRoutine: RoutineTask? { candidates.first { $0.id == routineID } }
-    private var chosenSlot: DailyQuest? { slots.first { $0.id == slotID } }
+    private var slotText: String {
+        guard let slot else { return "" }
+        return slot.isTrivialGroup ? slot.trivialGroup.joined(separator: " · ") : slot.textSnapshot
+    }
 
     private var source: AdHoc.Source? {
         switch tab {
@@ -54,6 +56,20 @@ struct AdHocView: View {
     var body: some View {
         NavigationStack {
             Form {
+                if let slot {
+                    Section {
+                        HStack {
+                            Text(slot.isTrivialGroup ? "T×3" : slot.slot.code)
+                                .font(.caption.bold()).frame(minWidth: 32)
+                            Text(slotText).strikethrough().foregroundStyle(.secondary)
+                        }
+                    } header: {
+                        Text("Replaces")
+                    } footer: {
+                        Text("The replaced quest no longer counts toward today's clear. The new routine does — and like any routine, it loses points each day it stays undone.")
+                    }
+                }
+
                 Section {
                     Picker("Source", selection: $tab) {
                         Text("From library").tag(Tab.library)
@@ -62,31 +78,15 @@ struct AdHocView: View {
                     .pickerStyle(.segmented)
                     .listRowBackground(Color.clear)
                     .listRowInsets(EdgeInsets())
+                } footer: {
+                    if slot == nil {
+                        Text("Extra work on top of today. It replaces nothing, doesn't block the hidden quest and costs nothing if left undone — done, it pays like any routine.")
+                    }
                 }
 
                 switch tab {
                 case .library: librarySection
                 case .custom: customSection
-                }
-
-                Section {
-                    if slots.isEmpty {
-                        Text("Every random slot is done or already replaced.").foregroundStyle(.secondary)
-                    }
-                    ForEach(slots) { quest in
-                        choiceRow(selected: slotID == quest.id) {
-                            HStack {
-                                Text(quest.isTrivialGroup ? "T×3" : quest.slot.code)
-                                    .font(.caption.bold()).frame(minWidth: 32)
-                                Text(quest.isTrivialGroup ? quest.trivialGroup.joined(separator: " · ")
-                                                          : quest.textSnapshot)
-                            }
-                        } action: { slotID = quest.id }
-                    }
-                } header: {
-                    Text("Replaces")
-                } footer: {
-                    Text("The replaced quest no longer counts toward today's clear. The new routine does — and like any routine, it loses points each day it stays undone.")
                 }
 
                 if let error {
@@ -100,15 +100,19 @@ struct AdHocView: View {
                     Button("Cancel") { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Replace") { confirming = true }
-                        .disabled(source == nil || chosenSlot == nil)
+                    Button(slot == nil ? "Add" : "Replace") { confirming = true }
+                        .disabled(source == nil)
                 }
             }
-            .alert("Replace this slot?", isPresented: $confirming) {
-                Button("Replace") { replace() }
+            .alert(slot == nil ? "Add for today?" : "Replace this slot?", isPresented: $confirming) {
+                Button(slot == nil ? "Add" : "Replace") { commit() }
                 Button("Cancel", role: .cancel) {}
             } message: {
-                Text("\(chosenSlot?.textSnapshot ?? "") → \(sourceText)\n\nThis is final — the slot can't be brought back.")
+                if slot == nil {
+                    Text("\(sourceText)\n\nThis is final — it stays on today's page.")
+                } else {
+                    Text("\(slotText) → \(sourceText)\n\nThis is final — the slot can't be brought back.")
+                }
             }
         }
     }
@@ -168,10 +172,14 @@ struct AdHocView: View {
         Scoring.routinePoints(basePoints: base, tier: tier, late: false)
     }
 
-    private func replace() {
-        guard let source, let slot = chosenSlot else { return }
+    private func commit() {
+        guard let source else { return }
         do {
-            try AdHoc.replace(slot, with: source, in: context)
+            if let slot {
+                try AdHoc.replace(slot, with: source, in: context)
+            } else {
+                try AdHoc.add(source, on: today, in: context)
+            }
             dismiss()
         } catch {
             self.error = "\(error)"
@@ -180,6 +188,9 @@ struct AdHocView: View {
 }
 
 #Preview {
-    AdHocView(today: Date().dayKey, tier: .normal)
+    let quest = DailyQuest()
+    quest.textSnapshot = "Compliment a stranger"
+    quest.slot = .medium
+    return AdHocView(today: Date().dayKey, tier: .normal, slot: quest)
         .modelContainer(for: LifeRPGSchema.models, inMemory: true)
 }
