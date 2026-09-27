@@ -340,4 +340,41 @@ struct AdHocTests {
         fresh.completedDayKey = fri
         #expect(CalendarMarks.marks(quests: [], occurrences: [o, fresh])[fri]?.routinesCleared == true)
     }
+
+    // MARK: finding what already exists
+
+    /// Saturday's flexible session still open on Sunday is on the page, so the library leaves it
+    /// out — `onPageOccurrence` is what lets the sheet show it (and mark it done) anyway.
+    @Test func anOpenSessionFromEarlierInTheWeekIsFoundOnThePage() throws {
+        let ctx = try Fixtures.context()
+        let grocery = routine(ctx, "Grocery shopping and cleaning out the fridge", flexible: true)
+        let other = routine(ctx, "Cat grooming", spec: "SUN")
+        let sat = scheduled(ctx, grocery, due: self.sat)
+        let all = try ctx.fetch(FetchDescriptor<RoutineOccurrence>())
+
+        #expect(!AdHoc.libraryCandidates([grocery, other], occurrences: all, on: sun).contains { $0.id == grocery.id })
+        #expect(AdHoc.onPageOccurrence(for: grocery, occurrences: all, on: sun)?.id == sat.id)
+        #expect(AdHoc.onPageOccurrence(for: other, occurrences: all, on: sun) == nil)
+
+        try Completion.completeRoutine(sat, on: sun, tier: .normal, in: ctx, timeZone: tz)
+        // Done on an earlier due day: no longer on the page at all.
+        #expect(AdHoc.onPageOccurrence(for: grocery, occurrences: all, on: sun) == nil)
+    }
+
+    @Test func similarRoutinesMatchWhatWasTyped() throws {
+        let ctx = try Fixtures.context()
+        let grocery = routine(ctx, "Grocery shopping and cleaning out the fridge")
+        let project = routine(ctx, "Work on project")
+        let study = routine(ctx, "学习 LeetCode")
+        let all = [grocery, project, study]
+
+        #expect(AdHoc.similarRoutines(to: "Grocery Shopping", in: all).map(\.id) == [grocery.id])
+        #expect(AdHoc.similarRoutines(to: "went shop", in: all).map(\.id) == [grocery.id])   // "shop" ⊂ "shopping"
+        #expect(AdHoc.similarRoutines(to: "project work", in: all).map(\.id) == [project.id])
+        #expect(AdHoc.similarRoutines(to: "学习", in: all).map(\.id) == [study.id])
+        #expect(AdHoc.similarRoutines(to: "Social time", in: all).isEmpty)
+        #expect(AdHoc.similarRoutines(to: "the and", in: all).isEmpty)       // filler only
+        project.isActive = false
+        #expect(AdHoc.similarRoutines(to: "project", in: all).isEmpty)
+    }
 }

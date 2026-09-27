@@ -189,6 +189,7 @@ Code done: `Core/Rules/CalendarMarks.swift`, `Core/Time/MonthGrid.swift`, `Core/
   - **Routine replace** — `AdHoc.replaceRoutine`, free for something at least as heavy (`Failure.tooLight`). New optional `RoutineOccurrence.replacedByID` (lightweight migration fills nil). Fixed: keeps the due day, the ladder carries on. Flexible: due today; the swapped session leaves the week's target (`Overdue.weekly`)
   - Ad-hoc tasks picked from the library count toward that routine's weekly target — `Schedule.doneThisWeek`, used by scheduling, do-ahead and Sunday settlement
   - Today page: "Ahead this week" open by default on Sat/Sun, header shows Sunday night's bill from `Overdue.weekly` (same rule as the settlement); skipped/cancelled routine rows no longer offer "Done"
+  - Ad-hoc sheet no longer hides routines already on the page: they are listed with where they are and a Done button (`AdHoc.onPageOccurrence`); a custom task shows similar library routines as it is typed (`AdHoc.similarRoutines`, word / prefix / CJK-character overlap)
 - [ ] Device check: open the app 00:00–05:00 and confirm nothing is settled; replace an overdue routine and an epic; watch the Sunday bill drop as flexible sessions are done
 
 ## Stage 6 — Backup and migration

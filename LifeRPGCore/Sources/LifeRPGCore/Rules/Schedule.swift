@@ -195,7 +195,7 @@ public enum Schedule {
         }.count
     }
 
-    static func isOpen(_ o: RoutineOccurrence) -> Bool { o.completedDayKey == nil && !o.skipped }
+    public static func isOpen(_ o: RoutineOccurrence) -> Bool { o.completedDayKey == nil && !o.skipped }
 
     static func isFlexible(_ o: RoutineOccurrence, _ flexible: Set<UUID>) -> Bool {
         o.routineID.map(flexible.contains) ?? false

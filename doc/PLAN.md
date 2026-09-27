@@ -84,6 +84,8 @@ A routine can be manually added for the day, but must specify which random slot 
 - **Where**: replacing is a swipe action on the slot itself, so the slot is already chosen. The + on the today page does something else — see below.
 - **Counts for the routine** (decided with the user, reversing the original rule): an ad-hoc task picked **from the library** that gets done counts as a session of that routine toward its weekly target (`Schedule.doneThisWeek`), whether it replaced a slot, a routine or was added with +. Doing the routine is doing the routine, whichever button it was logged through. A custom one counts for nothing. It still has no `routineID`, so it never moves `lastCompletedDayKey` and is never itself flexible.
 
+- **Finding what already exists**: the library tab also lists, in its own group, the routines left out because they are already on today's page — with where they are (due today, overdue, open since an earlier day this week) and, when adding, a Done button that completes that very occurrence. A custom task being typed shows the library routines whose wording is close (`AdHoc.similarRoutines`), since a custom task counts toward no weekly target. Both only point; neither stops you writing a new one.
+
 ### Replacing a routine
 
 A routine on today's page — due today, overdue, or a flexible session still open this week — can be swapped from its own swipe action for a routine from the library or a task written on the spot (decided with the user). **Free, but only for something worth at least as much** as the version currently asked for (`effectiveBasePoints`): anything lighter would be a cancel without the 200.

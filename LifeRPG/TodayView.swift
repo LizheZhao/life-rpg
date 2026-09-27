@@ -586,13 +586,13 @@ struct TodayView: View {
                 }
                 if let questID = occurrence.replacesQuestID {
                     let replaced = allQuests.first { $0.id == questID }
-                    Text("Added today · replaces \(replaced.map(slotText) ?? "a random slot")")
+                    Text("\(addedOn(occurrence)) · replaces \(replaced.map(slotText) ?? "a random slot")")
                         .font(.caption).foregroundStyle(.secondary)
                 } else if let replaced = occurrences.first(where: { $0.replacedByID == occurrence.id }) {
                     Text("Replaces \(replaced.displayText)").font(.caption).foregroundStyle(.secondary)
                 } else if occurrence.routineID == nil {
                     // Added with + on top of the day (`AdHoc.add`): extra, never a liability.
-                    Text("Added today · extra, no penalty").font(.caption).foregroundStyle(.secondary)
+                    Text("\(addedOn(occurrence)) · extra, no penalty").font(.caption).foregroundStyle(.secondary)
                 }
                 if !occurrence.countsForClear {
                     Text("Doesn't gate the hidden quest").font(.caption).foregroundStyle(.secondary)
@@ -608,6 +608,12 @@ struct TodayView: View {
                     .buttonStyle(.bordered)
             }
         }
+    }
+
+    /// An ad-hoc occurrence still open from an earlier day is overdue like any other; its note
+    /// shouldn't claim it was added today.
+    private func addedOn(_ o: RoutineOccurrence) -> String {
+        o.dueDayKey == today ? "Added today" : "Added \(o.dueDayKey)"
     }
 
     /// A routine with a light version on offer today: which one is chosen, and — while it is

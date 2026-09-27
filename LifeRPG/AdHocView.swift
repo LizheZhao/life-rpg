@@ -33,6 +33,8 @@ struct AdHocView: View {
     @State private var difficulty: Difficulty = .easy
     @State private var confirming = false
     @State private var error: String?
+    /// An occurrence already on today's page, about to be marked done from here instead of retyped.
+    @State private var markingDone: RoutineOccurrence?
 
     private var slot: DailyQuest? {
         if case .slot(let q) = target { q } else { nil }
@@ -54,6 +56,20 @@ struct AdHocView: View {
             .filter { $0.basePoints >= minimumBase }
     }
     private var chosenRoutine: RoutineTask? { candidates.first { $0.id == routineID } }
+
+    /// Routines `candidates` leaves out because they are already on today's page — listed anyway,
+    /// with where they are, so the library never looks like it is missing one.
+    private var onPage: [(routine: RoutineTask, occurrence: RoutineOccurrence)] {
+        let downgrades = Degrade.versionIDs(in: routines)
+        return routines.filter { $0.isActive && !downgrades.contains($0.id) }
+            .sorted { $0.text < $1.text }
+            .compactMap { r in
+                AdHoc.onPageOccurrence(for: r, occurrences: occurrences, on: today).map { (r, $0) }
+            }
+    }
+
+    /// Library routines close to what is being typed as a custom task.
+    private var similar: [RoutineTask] { AdHoc.similarRoutines(to: text, in: routines) }
     private var slotText: String {
         switch target {
         case .slot(let slot): slot.isTrivialGroup ? slot.trivialGroup.joined(separator: " · ") : slot.textSnapshot
@@ -160,10 +176,18 @@ struct AdHocView: View {
             .onAppear {
                 if !difficulties.contains(difficulty), let first = difficulties.first { difficulty = first }
             }
+            .alert("Mark as done?",
+                   isPresented: Binding(get: { markingDone != nil }, set: { if !$0 { markingDone = nil } }),
+                   presenting: markingDone) { o in
+                Button("Complete") { markDone(o) }
+                Button("Cancel", role: .cancel) {}
+            } message: { o in
+                Text("\(o.displayText)\n\nThe one already on today's page — it counts for that routine as usual. This is final — completion cannot be undone.")
+            }
         }
     }
 
-    private var librarySection: some View {
+    @ViewBuilder private var librarySection: some View {
         Section {
             if candidates.isEmpty {
                 Text(minimumBase > 0
@@ -182,9 +206,43 @@ struct AdHocView: View {
         } header: {
             Text("Routine")
         }
+        if !onPage.isEmpty {
+            Section {
+                ForEach(onPage, id: \.occurrence.id) { entry in onPageRow(entry.routine, entry.occurrence) }
+            } header: {
+                Text("Already on today's page")
+            } footer: {
+                Text(isAdding ? "Did one of these? Mark it done here — adding it again wouldn't count for the routine."
+                              : "These are already on today's page, so they can't be picked here.")
+            }
+        }
     }
 
-    private var customSection: some View {
+    /// One routine already on the page: where it is, and — when adding — a way to mark it done.
+    private func onPageRow(_ r: RoutineTask, _ o: RoutineOccurrence) -> some View {
+        let pays = Completion.routinePayout(o, flexible: r.flexibleWithinWeek, on: today, tier: tier)
+        return HStack(alignment: .firstTextBaseline) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(o.displayText)
+                Text(whereNote(o, flexible: r.flexibleWithinWeek)).font(.caption).foregroundStyle(.secondary)
+            }
+            Spacer()
+            if let points = o.awardedPoints {
+                Text("+\(points)").monospacedDigit().foregroundStyle(.green)
+            } else if isAdding, let pays, Schedule.isOpen(o) {
+                Button("Done · \(pays)") { markingDone = o }.buttonStyle(.bordered)
+            }
+        }
+    }
+
+    private func whereNote(_ o: RoutineOccurrence, flexible: Bool) -> String {
+        if o.completedDayKey != nil { return "Done today" }
+        if o.dueDayKey == today { return "Due today" }
+        return flexible ? "Open since \(o.dueDayKey) · any day this week"
+                        : "Overdue since \(o.dueDayKey)"
+    }
+
+    @ViewBuilder private var customSection: some View {
         Section {
             TextField("What needs doing", text: $text)
             Picker("Difficulty", selection: $difficulty) {
@@ -198,6 +256,43 @@ struct AdHocView: View {
         } footer: {
             if let base = AdHoc.basePoints(for: difficulty) {
                 Text("Pays \(pays(base)) — the middle of \(difficulty.code)'s range.")
+            }
+        }
+        if !similar.isEmpty {
+            Section {
+                ForEach(similar) { r in similarRow(r) }
+            } header: {
+                Text("Similar in your library")
+            } footer: {
+                Text("A custom task counts toward no routine's weekly target. If it's one of these, use that instead.")
+            }
+        }
+    }
+
+    /// A library routine close to the custom text: on the page → mark that one done; otherwise →
+    /// switch to the library tab with it selected.
+    @ViewBuilder private func similarRow(_ r: RoutineTask) -> some View {
+        if let o = AdHoc.onPageOccurrence(for: r, occurrences: occurrences, on: today) {
+            onPageRow(r, o)
+        } else if candidates.contains(where: { $0.id == r.id }) {
+            Button {
+                routineID = r.id
+                tab = .library
+            } label: {
+                HStack {
+                    Text(r.text)
+                    Spacer()
+                    Text("Use this").font(.caption).foregroundStyle(.tint)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+        } else {
+            // Replacing a routine and too light to stand in for it.
+            HStack {
+                Text(r.text).foregroundStyle(.secondary)
+                Spacer()
+                Text("worth \(r.basePoints)").font(.caption).foregroundStyle(.secondary)
             }
         }
     }
@@ -218,6 +313,16 @@ struct AdHocView: View {
     /// What it pays done today — the same number `Completion.completeRoutine` will pay.
     private func pays(_ base: Int) -> Int {
         Scoring.routinePoints(basePoints: base, tier: tier, late: false)
+    }
+
+    private func markDone(_ o: RoutineOccurrence) {
+        do {
+            try Completion.completeRoutine(o, on: today, tier: tier, in: context)
+            dismiss()
+        } catch {
+            self.error = "\(error)"
+        }
+        markingDone = nil
     }
 
     private func commit() {

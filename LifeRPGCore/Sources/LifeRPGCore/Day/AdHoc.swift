@@ -71,6 +71,78 @@ public enum AdHoc {
         return routines.filter { $0.isActive && !onPage.contains($0.id) }.sorted { $0.text < $1.text }
     }
 
+    /// The occurrence that puts `routine` on `dayKey`'s page — what `libraryCandidates` leaves
+    /// out, so the sheet can list it separately instead of hiding it (a Saturday session still open
+    /// on Sunday used to look like it wasn't in the library at all). An open one first, oldest
+    /// first — that is the one to mark done — else the one done today. Nil = not on the page.
+    public static func onPageOccurrence(for routine: RoutineTask, occurrences: [RoutineOccurrence],
+                                        on dayKey: String) -> RoutineOccurrence? {
+        let mine = occurrences.filter { o in
+            (o.routineID == routine.id || o.adHocSourceRoutineID == routine.id) && !o.isReplaced
+                && (o.dueDayKey == dayKey || (o.dueDayKey < dayKey && Schedule.isOpen(o)))
+        }.sorted { $0.dueDayKey < $1.dueDayKey }
+        return mine.first(where: Schedule.isOpen) ?? mine.first
+    }
+
+    /// Library routines whose wording is close to `text` — shown under a custom task as it is typed,
+    /// so a routine that already exists is used instead of retyped (a custom task counts toward no
+    /// weekly target). Best match first, at most `limit`.
+    ///
+    /// Words are compared case-insensitively with filler words dropped, a shorter word matching the
+    /// start of a longer one ("shop" / "shopping"); CJK text is compared character by character.
+    /// A routine matches when it covers at least half of what was typed. Downgrade versions are left
+    /// out: they are only ever reached through their routine.
+    public static func similarRoutines(to text: String, in routines: [RoutineTask],
+                                       limit: Int = 3) -> [RoutineTask] {
+        let typed = tokens(text)
+        guard !typed.isEmpty else { return [] }
+        let downgrades = Degrade.versionIDs(in: routines)
+        let scored: [(RoutineTask, Double)] = routines.compactMap { r in
+            guard r.isActive, !downgrades.contains(r.id) else { return nil }
+            let theirs = tokens(r.text)
+            let hits = typed.filter { t in theirs.contains { sameWord(t, $0) } }.count
+            let score = Double(hits) / Double(typed.count)
+            return hits > 0 && score >= 0.5 ? (r, score) : nil
+        }
+        return scored.sorted { $0.1 == $1.1 ? $0.0.text < $1.0.text : $0.1 > $1.1 }
+            .prefix(limit).map(\.0)
+    }
+
+    private static let fillerWords: Set<String> = [
+        "a", "an", "and", "the", "of", "to", "for", "in", "on", "out", "with", "my", "some", "just",
+    ]
+
+    static func tokens(_ text: String) -> Set<String> {
+        var out: Set<String> = []
+        var word = ""
+        func flush() {
+            if !word.isEmpty, !fillerWords.contains(word) { out.insert(word) }
+            word = ""
+        }
+        for ch in text.lowercased() {
+            if ch.unicodeScalars.contains(where: isCJK) {
+                flush()
+                out.insert(String(ch))
+            } else if ch.isLetter || ch.isNumber {
+                word.append(ch)
+            } else {
+                flush()
+            }
+        }
+        flush()
+        return out
+    }
+
+    private static func isCJK(_ s: Unicode.Scalar) -> Bool {
+        (0x4E00...0x9FFF).contains(s.value) || (0x3400...0x4DBF).contains(s.value)
+    }
+
+    private static func sameWord(_ a: String, _ b: String) -> Bool {
+        if a == b { return true }
+        let (short, long) = a.count <= b.count ? (a, b) : (b, a)
+        return short.count >= 4 && long.hasPrefix(short)
+    }
+
     /// Replaces `quest` with an ad-hoc routine due that day. Returns the new occurrence.
     @discardableResult
     public static func replace(_ quest: DailyQuest,
