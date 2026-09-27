@@ -203,6 +203,7 @@ private struct LibraryDetailView: View {
     private func rate(_ value: Int) {
         Feedback.rate(context, target: entry.target, id: entry.id, text: entry.text,
                       rating: value, dayKey: today)
+        try? Affinity.sync(context)           // the next draw already weighs it
         save()
     }
 

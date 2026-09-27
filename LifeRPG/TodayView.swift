@@ -718,6 +718,7 @@ struct TodayView: View {
     private func record(rating: Int, for roll: Roll) {
         Feedback.rate(context, target: .quest, id: roll.templateID, questID: roll.questID,
                       text: roll.text, rating: rating, dayKey: roll.dayKey)
+        try? Affinity.sync(context)           // the next draw already weighs it
         try? context.save()
     }
 

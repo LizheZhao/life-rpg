@@ -142,6 +142,8 @@ public enum DayService {
         day.randomSlots = Composition.slots(routineLoad: due.count)
         context.insert(day)
 
+        // The morning's draw weighs every rating given so far (`Affinity`).
+        try Affinity.sync(context)
         var drawn: Set<UUID> = []
         try fill(context, plan: Composition.plan(tier: inputs.tier, slots: day.randomSlots),
                  on: today, weekKey: weekKey, excluding: &drawn, in: timeZone, rng: &rng)

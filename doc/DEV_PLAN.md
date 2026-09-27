@@ -180,7 +180,8 @@ Code done: `Core/Rules/CalendarMarks.swift`, `Core/Time/MonthGrid.swift`, `Core/
   - Streak freeze (300): **bought after the break to patch it** (decided with the user). Only for a single missed day right behind the current run (`Streak.repairableDay`); it bridges the run without counting as a day. Booked as a `freeze` ledger entry dated **the day it covers** — the one entry not dated the day it happened, which is how `Streak.frozenDayKeys` finds it. Offered on the Rewards page only when there is a day to cover
   - Epic extension: done with the epic, now a swipe action on the epic row
 - [x] Quest library management UI: rating and comment entry — `LibraryView` (new tab, **new file: confirm it in Xcode**). Quests grouped by difficulty, routines, searchable; each row shows the latest rating and note count. Detail: rate on the same five-step scale as the payout reveal (`PointsRollView.scale`), notes, and both logs newest first. Every rating and note appends (`questID` nil — not tied to a completion). Array overloads `Feedback.latestRatings(_:)`, `.ratings(_:for:)`, `.comments(_:for:)` so the page passes its `@Query` rows. Scope as written here: no template editing or (de)activation
-- [ ] Feed the latest rating back into `QuestTemplate.affinity`, which is what sampling actually weights on
+- [x] Feed ratings back into `QuestTemplate.affinity`, which is what sampling actually weights on — `Core/Rules/Affinity.swift`, `AffinityTests`. **Decided with the user:** mean of the last 3 ratings, rounded (.5 away from zero). `Affinity.sync` runs in `ensureToday` before the draw and after every rating (payout reveal, Library)
+- [ ] Device check: epic across a week boundary (draw, extend, next Monday draws nothing), a real reroll / cancel / freeze / redemption with enough coins, and a rating moving the next day's draw
 
 ## Stage 6 — Backup and migration
 
