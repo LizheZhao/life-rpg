@@ -28,6 +28,35 @@ struct DayKeyTests {
         #expect(instant.dayKey(in: newYork) == "2026-09-17")
     }
 
+    /// The day ends at 05:00, not midnight: 01:30 is still the evening before.
+    @Test(arguments: [
+        ("2026-09-26T23:59:00-04:00", "2026-09-26"),
+        ("2026-09-27T01:30:00-04:00", "2026-09-26"),
+        ("2026-09-27T04:59:59-04:00", "2026-09-26"),
+        ("2026-09-27T05:00:00-04:00", "2026-09-27"),
+    ])
+    func dayEndsAtFiveInTheMorning(instant: String, expected: String) {
+        #expect(date(instant).dayKey(in: newYork) == expected)
+    }
+
+    /// Sunday night past midnight is still Sunday's week, so the week closes Monday 05:00.
+    @Test func weekClosesMondayAtFive() {
+        #expect(date("2026-09-28T02:00:00-04:00").weekKey(in: newYork) == "2026-W39")
+        #expect(date("2026-09-28T05:00:00-04:00").weekKey(in: newYork) == "2026-W40")
+    }
+
+    /// Havana springs forward at midnight on 2026-03-08; 03:00 that night is still the 7th.
+    @Test func dayBoundarySurvivesDSTAtMidnight() {
+        #expect(date("2026-03-08T03:00:00-04:00").dayKey(in: havana) == "2026-03-07")
+        #expect(date("2026-03-08T06:00:00-04:00").dayKey(in: havana) == "2026-03-08")
+    }
+
+    /// Calendar-dated data (a period logged for a day) keeps the midnight boundary.
+    @Test func calendarDayKeyIgnoresTheShift() {
+        #expect(date("2026-09-27T00:00:00-04:00").calendarDayKey(in: newYork) == "2026-09-27")
+        #expect(date("2026-09-27T00:00:00-04:00").dayKey(in: newYork) == "2026-09-26")
+    }
+
     /// ISO week-year, not the calendar year: 2027-01-01 is a Friday and still belongs to 2026.
     @Test(arguments: [
         ("2026-09-17T12:00:00Z", "2026-W38"),

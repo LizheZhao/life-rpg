@@ -39,8 +39,15 @@ import SwiftData
     // Ad-hoc from the library: which routine it was picked from. History only — nothing reads
     // it back as a schedule link.
     public var adHocSourceRoutineID: UUID?
+    // Swapped by hand for an ad-hoc occurrence (`AdHoc.replaceRoutine`): the id of the one that
+    // took over. The row is also `skipped`, which closes it everywhere; this is what tells "swapped
+    // for something at least as heavy" apart from "gave up" (backlog, day detail, calendar).
+    // Added after V2 shipped: optional, so lightweight migration fills nil.
+    public var replacedByID: UUID?
 
     public init() {}
+
+    public var isReplaced: Bool { replacedByID != nil }
 
     /// What the page shows as the task: the light version while it is the one chosen.
     public var displayText: String {

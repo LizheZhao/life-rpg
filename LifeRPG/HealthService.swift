@@ -101,7 +101,7 @@ final class HealthService {
         }
         let flowDays = try await categorySamples(.menstrualFlow, from: start, to: end)
             .filter { $0.value != none }
-            .map { $0.startDate.dayKey }
+            .map { $0.startDate.calendarDayKey() }
         return Cycle.day(on: dayKey, flowDays: Set(flowDays))
     }
 

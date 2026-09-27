@@ -74,6 +74,7 @@ public enum JSONExport {
         public var completedAt: Date?
         public var replacesQuestID: UUID?
         public var adHocSourceRoutineID: UUID?
+        public var replacedByID: UUID?
         public var degradedText: String?
         public var degradedBasePoints: Int?
         public var sourceType: String
@@ -145,6 +146,7 @@ public enum JSONExport {
                            awardedPoints: $0.awardedPoints, penaltyApplied: $0.penaltyApplied,
                            skipped: $0.skipped, completedAt: $0.completedAt,
                            replacesQuestID: $0.replacesQuestID, adHocSourceRoutineID: $0.adHocSourceRoutineID,
+                           replacedByID: $0.replacedByID,
                            degradedText: $0.degradedTextSnapshot,
                            degradedBasePoints: $0.degradedBasePoints, sourceType: $0.sourceTypeRaw)
             },

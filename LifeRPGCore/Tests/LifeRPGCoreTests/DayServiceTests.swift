@@ -288,14 +288,23 @@ struct DayServiceTests {
         #expect(settled.isEmpty)
     }
 
-    /// Midnight: the same instant is a different day either side of it, and the day key is what
-    /// decides — never the `Date`.
-    @Test func crossingMidnightGeneratesTheNextDay() throws {
+    /// The day ends at 05:00: opening the app at 01:00 is still Friday — nothing is settled and
+    /// no Saturday is generated — and 05:00 is where Saturday begins. The day key is what
+    /// decides, never the `Date`.
+    @Test func dayTurnsOverAtFiveNotMidnight() throws {
         let ctx = try Fixtures.context()
         Fixtures.stockLibrary(ctx)
         var rng = SeededRNG(seed: 1)
         try DayService.ensureToday(ctx, now: Fixtures.date(friday, hour: 23), in: tz, rng: &rng)
-        try DayService.ensureToday(ctx, now: Fixtures.date(saturday, hour: 0), in: tz, rng: &rng)
+        var settled: [String] = []
+        try DayService.ensureToday(ctx, now: Fixtures.date(saturday, hour: 1), in: tz, rng: &rng,
+                                   settle: { day, _ in settled.append(day) })
+        #expect(settled.isEmpty)
+        #expect(try ctx.fetch(FetchDescriptor<DailyContext>()).map(\.dayKey) == [friday])
+
+        try DayService.ensureToday(ctx, now: Fixtures.date(saturday, hour: 5), in: tz, rng: &rng,
+                                   settle: { day, _ in settled.append(day) })
+        #expect(settled == [friday])
         #expect(try ctx.fetch(FetchDescriptor<DailyContext>()).map(\.dayKey).sorted() == [friday, saturday])
     }
 

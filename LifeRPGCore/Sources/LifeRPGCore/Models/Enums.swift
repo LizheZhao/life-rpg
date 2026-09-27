@@ -85,6 +85,9 @@ public enum ReplacedReason: String, Codable, CaseIterable, Sendable {
     /// Paid to swap for a different draw (`Reroll.perform`). The replacement is a new row carrying
     /// `rerollCount + 1`; this one stays so the day's history still shows what was swapped away.
     case rerolled
+    /// The epic, swapped by hand for one you picked from the library or wrote yourself
+    /// (`Epic.replace`). Free, since an epic left undone costs nothing either.
+    case swapped
     /// Bought off (`Redemption.cancel`): no longer asked of you, and no longer gating the clear,
     /// but it earned nothing and doesn't count toward the streak.
     case cancelled

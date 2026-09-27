@@ -23,11 +23,18 @@ struct TodayView: View {
     @Query private var routines: [RoutineTask]
 
     @State private var pending: PendingAction?
-    /// Collapsed by default: it lists every flexible routine still short this week, which is most
-    /// of them early in the week, and none of it is today's work.
+    /// Collapsed by default on weekdays: it lists every flexible routine still short this week,
+    /// which is most of them early in the week, and none of it is today's work. Open by default on
+    /// Saturday and Sunday, when whatever is left there is about to be settled.
     @AppStorage("aheadExpanded") private var aheadExpanded = false
+    /// The day the section was last toggled by hand: that day, the hand wins over the weekend default.
+    @AppStorage("aheadToggledOn") private var aheadToggledOn = ""
     /// The slot whose "Replace" swipe action opened the ad-hoc sheet.
     @State private var replacing: DailyQuest?
+    /// The routine whose "Replace" swipe action opened the ad-hoc sheet.
+    @State private var replacingRoutine: RoutineOccurrence?
+    /// The epic whose "Replace" swipe action opened its sheet.
+    @State private var replacingEpic: DailyQuest?
     /// The + button: a routine added on top of the day, replacing nothing.
     @State private var adding = false
     @State private var roll: Roll?
@@ -114,10 +121,16 @@ struct TodayView: View {
         if !overdueRoutines.isEmpty || !todaysRoutines.isEmpty {
             Section("Routines") {
                 ForEach(overdueRoutines) { o in
-                    routineRow(o, note: .overdue).swipeActions(edge: .trailing) { cancelRoutineButton(o) }
+                    routineRow(o, note: .overdue).swipeActions(edge: .trailing) {
+                        cancelRoutineButton(o)
+                        replaceRoutineButton(o)
+                    }
                 }
                 ForEach(todaysRoutines) { o in
-                    routineRow(o).swipeActions(edge: .trailing) { cancelRoutineButton(o) }
+                    routineRow(o).swipeActions(edge: .trailing) {
+                        cancelRoutineButton(o)
+                        replaceRoutineButton(o)
+                    }
                 }
             }
         }
@@ -131,6 +144,7 @@ struct TodayView: View {
                 questRow(epic).swipeActions(edge: .trailing) {
                     rerollButton(epic)
                     extendButton(epic)
+                    replaceEpicButton(epic)
                 }
             } header: {
                 Text("Epic · until \(Epic.lastDayKey(of: epic) ?? "Sunday")"
@@ -197,14 +211,20 @@ struct TodayView: View {
         // Saturday's session done today counts as Saturday's, and Saturday no longer carries it.
         if !thisWeekRoutines.isEmpty || !aheadCandidates.isEmpty || !doneAhead.isEmpty {
             Section {
-                if aheadExpanded {
-                    ForEach(thisWeekRoutines) { routineRow($0, note: .thisWeek) }
+                if aheadOpen {
+                    ForEach(thisWeekRoutines) { o in
+                        routineRow(o, note: .thisWeek).swipeActions(edge: .trailing) { replaceRoutineButton(o) }
+                    }
                     ForEach(doneAhead) { doneAheadRow($0) }
                     ForEach(aheadCandidates, id: \.routine.id) { aheadRow($0) }
                 }
             } header: {
                 Button {
-                    withAnimation { aheadExpanded.toggle() }
+                    let open = !aheadOpen
+                    withAnimation {
+                        aheadExpanded = open
+                        aheadToggledOn = today
+                    }
                 } label: {
                     HStack {
                         Text("Ahead this week")
@@ -212,9 +232,12 @@ struct TodayView: View {
                         if !doneAhead.isEmpty {
                             Text("· \(doneAhead.count) done").monospacedDigit()
                         }
+                        if weekEndBill > 0 {
+                            Text("· −\(weekEndBill) Sun night").monospacedDigit().foregroundStyle(.red)
+                        }
                         Spacer()
                         Image(systemName: "chevron.right")
-                            .rotationEffect(.degrees(aheadExpanded ? 90 : 0))
+                            .rotationEffect(.degrees(aheadOpen ? 90 : 0))
                     }
                     .contentShape(Rectangle())
                 }
@@ -280,6 +303,17 @@ struct TodayView: View {
 
     private var aheadPending: Int { thisWeekRoutines.count + aheadCandidates.count }
 
+    private var aheadOpen: Bool {
+        aheadToggledOn == today ? aheadExpanded : (DayKey.isWeekend(today) || aheadExpanded)
+    }
+
+    /// What Sunday night's flexible settlement would charge if nothing more is done — the same
+    /// rule that will charge it (`Overdue.weekly`), from the rows the queries already hold.
+    private var weekEndBill: Int {
+        guard let week = DayKey.weekKey(of: today) else { return 0 }
+        return Overdue.weekly(routines, occurrences: occurrences, weekKey: week).total
+    }
+
     /// Whether doing this routine ahead today would offer a lighter version — only on a low day,
     /// which the first three cycle days also are.
     private func offersLightVersion(_ routine: RoutineTask) -> Bool {
@@ -309,7 +343,8 @@ struct TodayView: View {
     private var hiddenQuest: DailyQuest? { quests.first(where: \.isHiddenSlot) }
 
     private var todaysRoutines: [RoutineOccurrence] {
-        occurrences.filter { $0.dueDayKey == today }.sorted { $0.textSnapshot < $1.textSnapshot }
+        // A routine swapped away is gone from the page; its replacement says what it replaced.
+        occurrences.filter { $0.dueDayKey == today && !$0.isReplaced }.sorted { $0.textSnapshot < $1.textSnapshot }
     }
     private var flexibleIDs: Set<UUID> { Set(routines.filter(\.flexibleWithinWeek).map(\.id)) }
     private func isFlexible(_ o: RoutineOccurrence) -> Bool { o.routineID.map(flexibleIDs.contains) ?? false }
@@ -446,10 +481,16 @@ struct TodayView: View {
                 }
             }
             .sheet(isPresented: $adding) {
-                AdHocView(today: today, tier: tier, slot: nil)
+                AdHocView(today: today, tier: tier, target: .add)
             }
             .sheet(item: $replacing) { slot in
-                AdHocView(today: today, tier: tier, slot: slot)
+                AdHocView(today: today, tier: tier, target: .slot(slot))
+            }
+            .sheet(item: $replacingRoutine) { o in
+                AdHocView(today: today, tier: tier, target: .routine(o, flexible: isFlexible(o)))
+            }
+            .sheet(item: $replacingEpic) { epic in
+                EpicReplaceView(today: today, epic: epic)
             }
             .fileExporter(isPresented: $exporting,
                           document: pendingExport,
@@ -547,6 +588,8 @@ struct TodayView: View {
                     let replaced = allQuests.first { $0.id == questID }
                     Text("Added today · replaces \(replaced.map(slotText) ?? "a random slot")")
                         .font(.caption).foregroundStyle(.secondary)
+                } else if let replaced = occurrences.first(where: { $0.replacedByID == occurrence.id }) {
+                    Text("Replaces \(replaced.displayText)").font(.caption).foregroundStyle(.secondary)
                 } else if occurrence.routineID == nil {
                     // Added with + on top of the day (`AdHoc.add`): extra, never a liability.
                     Text("Added today · extra, no penalty").font(.caption).foregroundStyle(.secondary)
@@ -558,6 +601,8 @@ struct TodayView: View {
             Spacer()
             if let points = occurrence.awardedPoints {
                 Text("+\(points)").monospacedDigit().foregroundStyle(.green)
+            } else if occurrence.skipped {
+                Text("Skipped").font(.caption).foregroundStyle(.secondary)
             } else {
                 Button("Done") { pending = .routine(occurrence) }
                     .buttonStyle(.bordered)
@@ -595,6 +640,7 @@ struct TodayView: View {
         case .cancelled: "Cancelled"
         case .rerolled: "Rerolled away"
         case .adHoc: "Replaced"
+        case .swapped: "Swapped"
         }
     }
 
@@ -750,6 +796,26 @@ struct TodayView: View {
         }
     }
 
+    /// Free, for something at least as heavy (`AdHoc.replaceRoutine`); only where it applies.
+    @ViewBuilder private func replaceRoutineButton(_ o: RoutineOccurrence) -> some View {
+        if AdHoc.isReplaceable(o, flexible: isFlexible(o), on: today) {
+            Button { replacingRoutine = o } label: {
+                Label("Replace", systemImage: "arrow.triangle.swap")
+            }
+            .tint(.indigo)
+        }
+    }
+
+    /// Free (`Epic.replace`); gone once the epic is done or extended.
+    @ViewBuilder private func replaceEpicButton(_ epic: DailyQuest) -> some View {
+        if Epic.blockedReplace(epic, on: today) == nil {
+            Button { replacingEpic = epic } label: {
+                Label("Replace", systemImage: "arrow.triangle.swap")
+            }
+            .tint(.indigo)
+        }
+    }
+
     @ViewBuilder private func cancelQuestButton(_ quest: DailyQuest) -> some View {
         if quest.completedAt == nil, Redemption.cancelCost(for: quest.slot) != nil {
             spendButton(.cancelQuest(quest), "Cancel", "xmark", .red,
@@ -782,7 +848,7 @@ struct TodayView: View {
                 ? "Swap it for a different epic for \(spend.cost) coins. It keeps the same deadline. Once extended, an epic can't be rerolled."
                 : "Swap it for a different \(q.slot.code) for \(spend.cost) coins. The next reroll of this slot today costs more.")
         case .extend(let q):
-            "\(q.textSnapshot)\n\nOne more week, for \(spend.cost) coins. The week it runs into gets no new epic, and it can't be rerolled any more."
+            "\(q.textSnapshot)\n\nOne more week, for \(spend.cost) coins. The week it runs into gets no new epic, and it can't be rerolled or replaced any more."
         case .cancelQuest(let q):
             "\(slotText(q))\n\nDrop it for \(spend.cost) coins. It no longer blocks the hidden quest, but it earns nothing and doesn't count toward the streak."
         case .cancelRoutine(let o):

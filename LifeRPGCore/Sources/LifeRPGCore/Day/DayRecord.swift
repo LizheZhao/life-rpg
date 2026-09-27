@@ -22,6 +22,7 @@ public struct DayRecord {
         // `awardedPoints`, and a fixed make-up also carries its earlier `penaltyApplied`.
         case late(on: String)
         case skipped                      // by hand, or automatically on day 4
+        case replaced                     // swapped for an ad-hoc routine (`AdHoc.replaceRoutine`)
         case notDone
     }
 
@@ -97,6 +98,7 @@ public struct DayRecord {
     }
 
     public static func status(of o: RoutineOccurrence) -> RoutineStatus {
+        if o.isReplaced { return .replaced }
         if o.skipped { return .skipped }
         guard let done = o.completedDayKey else { return .notDone }
         if done == o.dueDayKey { return .done }

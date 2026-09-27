@@ -9,8 +9,8 @@ import SwiftData
 /// occurrence now loses points on the fixed ladder if it isn't done. Like completion, it is final.
 ///
 /// The occurrence is **independent of the routine library**: `routineID` stays nil, so it is never
-/// flexible, never counts toward a weekly target, never moves `lastCompletedDayKey` and never
-/// feeds the next due date. It always gates the clear (`countsForClear = true`), even when picked
+/// flexible, never moves `lastCompletedDayKey` and never feeds the next due date. Done, one picked
+/// from the library does count toward that routine's weekly target (`Schedule.doneThisWeek`). It always gates the clear (`countsForClear = true`), even when picked
 /// from a non-scoring routine — otherwise swapping a hard slot for a check-in would be a free pass.
 public enum AdHoc {
     public enum Source {
@@ -26,6 +26,10 @@ public enum AdHoc {
         case noBasePoints
         /// The routine is already on today's page, scheduled or added.
         case alreadyOnToday
+        /// Replacing a routine: done, skipped, already replaced, or outside its round / week.
+        case routineNotReplaceable
+        /// Replacing a routine with something lighter would be a free cancel (a cancel costs 200).
+        case tooLight(minimum: Int)
 
         public var description: String {
             switch self {
@@ -33,6 +37,8 @@ public enum AdHoc {
             case .emptyText: "the task needs a description"
             case .noBasePoints: "pick E, M or H"
             case .alreadyOnToday: "that routine is already on today's page"
+            case .routineNotReplaceable: "this routine can't be replaced"
+            case .tooLight(let minimum): "pick something worth at least \(minimum) points"
             }
         }
     }
@@ -112,6 +118,63 @@ public enum AdHoc {
             throw error
         }
         return occurrence
+    }
+
+    // MARK: replacing a routine
+
+    /// Whether `o` can be swapped on `dayKey`: still open and still completable that day (its due
+    /// day or overdue day 2–3 for a fixed one, any later day of its week for a flexible one).
+    public static func isReplaceable(_ o: RoutineOccurrence, flexible: Bool, on dayKey: String,
+                                     in timeZone: TimeZone = .current) -> Bool {
+        Schedule.isOpen(o) && !o.isReplaced
+            && Completion.routinePayout(o, flexible: flexible, on: dayKey, tier: .normal, in: timeZone) != nil
+    }
+
+    /// The least a replacement may be worth: what the version currently asked for is worth.
+    public static func minimumBase(replacing o: RoutineOccurrence) -> Int { o.effectiveBasePoints }
+
+    /// The custom difficulties heavy enough to replace `o` (their midpoint is at least its base).
+    public static func customDifficulties(replacing o: RoutineOccurrence) -> [Difficulty] {
+        [.easy, .medium, .hard].filter { (basePoints(for: $0) ?? 0) >= minimumBase(replacing: o) }
+    }
+
+    /// Swaps an open routine for an ad-hoc one, free, as long as the new one is worth **at least as
+    /// much** (decided with the user) — otherwise it would be a free cancel.
+    ///
+    /// The old occurrence is closed (`skipped`, with `replacedByID`), so it is never charged again
+    /// and no longer gates the clear; deductions already charged stay. The new one gates exactly
+    /// when the old one did. For a fixed routine it keeps the old due day, so the overdue ladder
+    /// carries on where it was — swapping doesn't buy a fresh round. A flexible session had no
+    /// ladder to carry: the new one is due on `dayKey`, and the swapped session drops out of that
+    /// week's target (`Overdue.weekly`).
+    @discardableResult
+    public static func replaceRoutine(_ o: RoutineOccurrence, flexible: Bool, with source: Source,
+                                      on dayKey: String, in context: ModelContext,
+                                      timeZone: TimeZone = .current) throws -> RoutineOccurrence {
+        guard isReplaceable(o, flexible: flexible, on: dayKey, in: timeZone) else {
+            throw Failure.routineNotReplaceable
+        }
+        let fresh = try makeOccurrence(source, on: dayKey, in: context, timeZone: timeZone)
+        let minimum = minimumBase(replacing: o)
+        guard fresh.basePoints >= minimum else { throw Failure.tooLight(minimum: minimum) }
+        if !flexible {
+            fresh.dueDayKey = o.dueDayKey
+            fresh.weekKey = o.weekKey
+        }
+        fresh.countsForClear = o.countsForClear
+
+        context.insert(fresh)
+        o.skipped = true
+        o.replacedByID = fresh.id
+        do {
+            try context.save()
+        } catch {
+            o.skipped = false
+            o.replacedByID = nil
+            context.delete(fresh)
+            throw error
+        }
+        return fresh
     }
 
     /// The occurrence both `replace` and `add` create, before either says whether it gates.

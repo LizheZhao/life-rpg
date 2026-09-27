@@ -92,6 +92,14 @@ struct AutoVerifyTests {
         #expect(e[sun]?.mindfulMinutes == 5)
     }
 
+    /// A session started at 01:30 belongs to the night before — the day ends at 05:00.
+    @Test func aSessionAfterMidnightCountsForTheDayBefore() {
+        let sessions = [MindfulSession(start: at(sun, 1, 30), end: at(sun, 1, 45))]
+        let e = AutoVerify.evidence(events: [], mindful: sessions, filter: filter, in: tz)
+        #expect(e[sat]?.mindfulMinutes == 15)
+        #expect(e[sun] == nil)
+    }
+
     // MARK: run
 
     @Test func aLongEnoughWorkoutCompletesTheRoutine() throws {

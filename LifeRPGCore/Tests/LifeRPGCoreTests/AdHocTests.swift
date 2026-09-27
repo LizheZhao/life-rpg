@@ -59,10 +59,11 @@ struct AdHocTests {
     }
 
     /// From the library: text and points come from the routine, but the occurrence is not the
-    /// routine's — no `routineID`, so it is never flexible, never counts toward the weekly target
-    /// and never moves `lastCompletedDayKey`. It always gates the clear, whatever the routine says:
-    /// otherwise swapping a hard slot for a non-scoring check-in would be a free pass.
-    @Test func fromTheLibraryIsIndependentOfTheRoutine() throws {
+    /// routine's — no `routineID`, so it is never flexible and never moves `lastCompletedDayKey`.
+    /// It always gates the clear, whatever the routine says: otherwise swapping a hard slot for a
+    /// non-scoring check-in would be a free pass. Done, it **does** count toward the routine's
+    /// weekly target (decided with the user): doing the routine is doing the routine.
+    @Test func fromTheLibraryCountsTowardTheWeeklyTarget() throws {
         let (ctx, quests) = try generated()
         let r = routine(ctx, "Workout: weight training", flexible: true, countsForClear: false)
         let o = try AdHoc.replace(quests[0], with: .routine(r), in: ctx, timeZone: tz)
@@ -72,12 +73,13 @@ struct AdHocTests {
         #expect(o.adHocSourceRoutineID == r.id)
         #expect(o.countsForClear)
 
+        let all = try ctx.fetch(FetchDescriptor<RoutineOccurrence>())
+        #expect(Schedule.dueRoutines([r], occurrences: all, on: sat, in: tz).count == 1)
         try Completion.completeRoutine(o, on: fri, tier: .normal, in: ctx, timeZone: tz)
         #expect(o.awardedPoints == 30)
         #expect(r.lastCompletedDayKey == nil)
-        // Saturday still asks for the routine's own session: the ad-hoc one didn't count.
-        let all = try ctx.fetch(FetchDescriptor<RoutineOccurrence>())
-        #expect(Schedule.dueRoutines([r], occurrences: all, on: sat, in: tz).count == 1)
+        // The week's one session is done, so Saturday no longer asks for it.
+        #expect(Schedule.dueRoutines([r], occurrences: all, on: sat, in: tz).isEmpty)
     }
 
     @Test func onlyAnOpenRandomSlotOfThatDayCanBeReplaced() throws {
@@ -250,5 +252,92 @@ struct AdHocTests {
         let o = try #require(try JSONExport.snapshot(ctx).routineOccurrences.first)
         #expect(o.replacesQuestID == quests[0].id)
         #expect(o.adHocSourceRoutineID == r.id)
+    }
+
+    // MARK: replacing a routine
+
+    private func scheduled(_ ctx: ModelContext, _ r: RoutineTask, due: String) -> RoutineOccurrence {
+        let o = RoutineOccurrence(routine: r, dueDayKey: due, weekKey: DayKey.weekKey(of: due, in: tz)!)
+        ctx.insert(o)
+        return o
+    }
+
+    /// Free, but never for something lighter — that would be a cancel without the 200.
+    @Test func aRoutineCanOnlyBeSwappedForSomethingAsHeavy() throws {
+        let ctx = try Fixtures.context()
+        let trash = routine(ctx, "Take out the trash")          // base 30 in this fixture
+        let o = scheduled(ctx, trash, due: fri)
+        #expect(AdHoc.customDifficulties(replacing: o) == [.hard])
+        #expect(throws: AdHoc.Failure.tooLight(minimum: 30)) {
+            try AdHoc.replaceRoutine(o, flexible: false, with: .custom(text: "x", difficulty: .medium),
+                                     on: fri, in: ctx, timeZone: tz)
+        }
+        #expect(!o.skipped)
+
+        let fresh = try AdHoc.replaceRoutine(o, flexible: false,
+                                             with: .custom(text: "Deep-clean the oven", difficulty: .hard),
+                                             on: fri, in: ctx, timeZone: tz)
+        #expect(o.skipped && o.replacedByID == fresh.id)
+        #expect(fresh.basePoints == 38 && fresh.dueDayKey == fri && fresh.countsForClear)
+        #expect(fresh.routineID == nil)
+        #expect(try ctx.fetch(FetchDescriptor<LedgerEntry>()).isEmpty)
+        #expect(Schedule.backlog(try ctx.fetch(FetchDescriptor<RoutineOccurrence>())).isEmpty)
+        #expect(DayRecord.status(of: o) == .replaced)
+        #expect(throws: AdHoc.Failure.routineNotReplaceable) {
+            try AdHoc.replaceRoutine(o, flexible: false, with: .custom(text: "y", difficulty: .hard),
+                                     on: fri, in: ctx, timeZone: tz)
+        }
+    }
+
+    /// An overdue fixed routine: the swap keeps the old due day, so the ladder carries on — the
+    /// replacement pays the late half and is charged the next rung, not a fresh round. What was
+    /// already charged stays, and the old one is never charged again.
+    @Test func swappingAnOverdueRoutineKeepsItsLadder() throws {
+        let ctx = try Fixtures.context()
+        let r = routine(ctx, "Clean the apartment", spec: "FRI")
+        let o = scheduled(ctx, r, due: fri)
+        try Overdue.settle(fri, in: ctx, timeZone: tz)
+        #expect(o.penaltyApplied == 15)
+
+        let fresh = try AdHoc.replaceRoutine(o, flexible: false,
+                                             with: .custom(text: "Deep-clean the bathroom", difficulty: .hard),
+                                             on: sat, in: ctx, timeZone: tz)
+        #expect(fresh.dueDayKey == fri)
+        try Overdue.settle(sat, in: ctx, timeZone: tz)
+        #expect(o.penaltyApplied == 15)                       // closed, never charged again
+        #expect(fresh.penaltyApplied == 29)                   // round day 2: 75% of 38
+        #expect(try Completion.completeRoutine(fresh, on: sun, tier: .normal, in: ctx, timeZone: tz) == 19)
+    }
+
+    /// A flexible session: the replacement is due today, and the swapped session drops out of the
+    /// week's target rather than counting as a shortfall.
+    @Test func swappingAFlexibleSessionDropsItFromTheWeek() throws {
+        let ctx = try Fixtures.context()
+        let r = routine(ctx, "Work on project", spec: "SAT,SUN", flexible: true)
+        r.weeklyTarget = 2
+        let a = scheduled(ctx, r, due: sat)
+        let b = scheduled(ctx, r, due: sun)
+        let fresh = try AdHoc.replaceRoutine(a, flexible: true,
+                                             with: .custom(text: "Write the cover letter", difficulty: .hard),
+                                             on: sun, in: ctx, timeZone: tz)
+        #expect(fresh.dueDayKey == sun)
+        try Completion.completeRoutine(b, on: sun, tier: .normal, in: ctx, timeZone: tz)
+        try Completion.completeRoutine(fresh, on: sun, tier: .normal, in: ctx, timeZone: tz)
+        try Overdue.settle(sun, in: ctx, timeZone: tz)
+        #expect(try ctx.fetch(FetchDescriptor<LedgerEntry>()).filter { $0.kind == "penalty" }.isEmpty)
+    }
+
+    /// The replacement gates the hidden quest in the old one's place.
+    @Test func theReplacementGatesTheClear() throws {
+        let (ctx, _) = try generated()
+        let r = routine(ctx, "Laundry", spec: "FRI")
+        let o = scheduled(ctx, r, due: fri)
+        let fresh = try AdHoc.replaceRoutine(o, flexible: false,
+                                             with: .custom(text: "Iron everything", difficulty: .hard),
+                                             on: fri, in: ctx, timeZone: tz)
+        let marks = CalendarMarks.marks(quests: [], occurrences: [o, fresh])
+        #expect(marks[fri]?.routinesCleared != true)
+        fresh.completedDayKey = fri
+        #expect(CalendarMarks.marks(quests: [], occurrences: [o, fresh])[fri]?.routinesCleared == true)
     }
 }

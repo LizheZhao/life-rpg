@@ -135,6 +135,7 @@ struct DayDetailView: View {
             case .rerolled: return "Rerolled away"
             case .cancelled: return "Cancelled"
             case .adHoc: return "Replaced by an ad-hoc routine"
+            case .swapped: return "Swapped for a hand-picked epic"
             }
         }
         var parts: [String] = []
@@ -173,6 +174,7 @@ struct DayDetailView: View {
         // Timing only; the points beside it say whether it paid half (a make-up) or full.
         case .late(let on): parts.append("Done on \(on)")
         case .skipped: parts.append("Skipped")
+        case .replaced: parts.append("Replaced by an ad-hoc routine")
         case .notDone: parts.append("Not done")
         }
         if let at = o.completedAt { parts.append(at.formatted(date: .omitted, time: .shortened)) }

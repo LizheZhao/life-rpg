@@ -39,7 +39,7 @@ public enum CalendarMarks {
             }
         }
 
-        let gating = Dictionary(grouping: occurrences.filter(\.countsForClear), by: \.dueDayKey)
+        let gating = Dictionary(grouping: occurrences.filter { $0.countsForClear && !$0.isReplaced }, by: \.dueDayKey)
         for (dayKey, due) in gating where due.allSatisfy(doneOnTime) {
             out[dayKey, default: DayMarks()].routinesCleared = true
         }

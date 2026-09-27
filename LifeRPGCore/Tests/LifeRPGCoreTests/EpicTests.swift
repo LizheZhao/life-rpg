@@ -161,7 +161,7 @@ struct EpicTests {
 
     // MARK: extension
 
-    @Test func extendingPushesItAWeekAndCosts400() throws {
+    @Test func extendingPushesItAWeekAndCosts50() throws {
         let ctx = try Fixtures.context()
         library(ctx)
         try open(ctx, monday)
@@ -171,9 +171,9 @@ struct EpicTests {
         try Epic.extend(epic, on: wednesday, in: ctx, timeZone: tz)
         #expect(epic.extensionCount == 1)
         #expect(Epic.lastDayKey(of: epic, in: tz) == "2026-10-04")
-        #expect(try Economy.balance(ctx) == 600)
+        #expect(try Economy.balance(ctx) == 950)
         let spend = try #require(try ctx.fetch(FetchDescriptor<LedgerEntry>()).first { $0.kind == "redeem" })
-        #expect(spend.points == -400)
+        #expect(spend.points == -50)
         #expect(spend.dayKey == wednesday)
         #expect(spend.refID == epic.id)
 
@@ -196,7 +196,7 @@ struct EpicTests {
         #expect(throws: Epic.Failure.maxExtensions) {
             try Epic.extend(epic, on: monday, in: ctx, timeZone: tz)
         }
-        #expect(try Economy.balance(ctx) == 1200)
+        #expect(try Economy.balance(ctx) == 1900)
     }
 
     /// Same balance rule as a reroll: down to exactly zero is fine, below is not, debt blocks.
@@ -206,8 +206,8 @@ struct EpicTests {
         try open(ctx, monday)
         let epic = try #require(try epics(ctx).first)
 
-        try fund(ctx, 399)
-        #expect(throws: Epic.Failure.blocked(.tooExpensive(cost: 400, balance: 399))) {
+        try fund(ctx, 49)
+        #expect(throws: Epic.Failure.blocked(.tooExpensive(cost: 50, balance: 49))) {
             try Epic.extend(epic, on: monday, in: ctx, timeZone: tz)
         }
         try fund(ctx, 1)
@@ -227,5 +227,67 @@ struct EpicTests {
         #expect(Epic.blocked(epic, on: nextMonday, balance: 1000, in: tz) == .expired(lastDayKey: sunday))
         epic.completedAt = Fixtures.date(wednesday)
         #expect(Epic.blocked(epic, on: wednesday, balance: 1000, in: tz) == .alreadyCompleted)
+    }
+
+    // MARK: replacing by hand
+
+    /// Free, keeps the deadline, and the old one stays as history.
+    @Test func replacingWithALibraryEpicKeepsTheDeadline() throws {
+        let ctx = try Fixtures.context()
+        library(ctx)
+        try open(ctx, monday)
+        let old = try #require(try epics(ctx).first)
+        let templates = try ctx.fetch(FetchDescriptor<QuestTemplate>())
+        let candidates = Epic.replaceCandidates(templates, replacing: old)
+        #expect(candidates.count == 2)
+        #expect(!candidates.contains { $0.id == old.templateID })
+
+        let fresh = try Epic.replace(old, with: .template(candidates[0]), on: wednesday, in: ctx, timeZone: tz)
+        #expect(old.replaced && old.replacedReason == .swapped)
+        #expect(fresh.dayKey == monday)
+        #expect(Epic.lastDayKey(of: fresh, in: tz) == sunday)
+        #expect(fresh.templateID == candidates[0].id)
+        #expect(try Epic.current(on: wednesday, in: ctx, timeZone: tz)?.id == fresh.id)
+        #expect(try ctx.fetch(FetchDescriptor<LedgerEntry>()).isEmpty)
+        #expect(candidates[0].lastServedDayKey == wednesday)
+    }
+
+    /// A hand-written epic has no template and pays an ordinary epic roll.
+    @Test func aCustomEpicPaysAnEpicRoll() throws {
+        let ctx = try Fixtures.context()
+        library(ctx)
+        try open(ctx, monday)
+        let old = try #require(try epics(ctx).first)
+        #expect(throws: Epic.Failure.emptyText) {
+            try Epic.replace(old, with: .custom(text: "  "), on: monday, in: ctx, timeZone: tz)
+        }
+        let fresh = try Epic.replace(old, with: .custom(text: "Run a half marathon"), on: monday,
+                                     in: ctx, timeZone: tz)
+        #expect(fresh.templateID == nil)
+        #expect(fresh.textSnapshot == "Run a half marathon")
+
+        var rng = SeededRNG(seed: 3)
+        let points = try Completion.complete(fresh, tier: .normal, in: ctx,
+                                             now: Fixtures.date(wednesday), timeZone: tz, rng: &rng)
+        #expect((60...150).contains(points))
+    }
+
+    /// Same limits as a reroll: not once extended, not once done, not after it ran out.
+    @Test func whatCantBeReplaced() throws {
+        let ctx = try Fixtures.context()
+        library(ctx)
+        try open(ctx, monday)
+        try fund(ctx, 1000)
+        let epic = try #require(try epics(ctx).first)
+        #expect(throws: Epic.Failure.sameEpic) {
+            let same = try #require(try ctx.fetch(FetchDescriptor<QuestTemplate>()).first { $0.id == epic.templateID })
+            try Epic.replace(epic, with: .template(same), on: monday, in: ctx, timeZone: tz)
+        }
+        #expect(Epic.blockedReplace(epic, on: nextMonday, in: tz) == .expired(lastDayKey: sunday))
+
+        try Epic.extend(epic, on: monday, in: ctx, timeZone: tz)
+        #expect(Epic.blockedReplace(epic, on: monday, in: tz) == .extended)
+        epic.completedAt = Fixtures.date(wednesday)
+        #expect(Epic.blockedReplace(epic, on: wednesday, in: tz) == .alreadyCompleted)
     }
 }

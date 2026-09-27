@@ -88,10 +88,6 @@ public enum Schedule {
         var latest: [UUID: RoutineOccurrence] = [:]
         let existing = Set(occurrences.filter { $0.dueDayKey == dayKey }.compactMap(\.routineID))
         let week = DayKey.weekKey(of: dayKey, in: timeZone)
-        var doneThisWeek: [UUID: Int] = [:]
-        for o in occurrences where o.weekKey == week && o.completedDayKey != nil {
-            if let id = o.routineID { doneThisWeek[id, default: 0] += 1 }
-        }
         for o in occurrences where o.dueDayKey < dayKey {
             guard let id = o.routineID else { continue }
             if let current = latest[id], current.dueDayKey >= o.dueDayKey { continue }
@@ -100,7 +96,8 @@ public enum Schedule {
         return routines.filter { r in
             guard r.isActive, !downgrades.contains(r.id), !existing.contains(r.id),
                   let spec = r.frequency else { return false }
-            if r.flexibleWithinWeek, doneThisWeek[r.id, default: 0] >= r.weeklyTarget { return false }
+            if r.flexibleWithinWeek,
+               doneThisWeek(occurrences, routineID: r.id, weekKey: week) >= r.weeklyTarget { return false }
             let last = latest[r.id]
             let history = History(lastCompletedDayKey: r.lastCompletedDayKey,
                                   latestDueDayKey: last?.dueDayKey,
@@ -163,7 +160,7 @@ public enum Schedule {
             .sorted { $0.text < $1.text }
             .compactMap { r in
                 let mine = occurrences.filter { $0.routineID == r.id && $0.weekKey == week }
-                let done = mine.filter { $0.completedDayKey != nil }.count
+                let done = doneThisWeek(occurrences, routineID: r.id, weekKey: week)
                 guard done < r.weeklyTarget,
                       !mine.contains(where: { isOpen($0) && $0.dueDayKey <= dayKey }),
                       let next = laterThisWeek.first(where: { d in
@@ -181,9 +178,21 @@ public enum Schedule {
     /// Skipped and never done — auto on day 4, or at Sunday settlement — newest first.
     public static func backlog(_ occurrences: [RoutineOccurrence]) -> [RoutineOccurrence] {
         occurrences
-            .filter { $0.skipped && $0.completedDayKey == nil }
+            .filter { $0.skipped && $0.completedDayKey == nil && !$0.isReplaced }
             .sorted { $0.dueDayKey == $1.dueDayKey ? $0.textSnapshot < $1.textSnapshot
                                                    : $0.dueDayKey > $1.dueDayKey }
+    }
+
+    /// Sessions of `routineID` completed in `weekKey`: its own occurrences, plus ad-hoc ones picked
+    /// from it in the library (`adHocSourceRoutineID`) — doing the routine is doing the routine,
+    /// whichever button it was logged through (decided with the user). What a flexible routine's
+    /// weekly target is measured against, everywhere.
+    public static func doneThisWeek(_ occurrences: [RoutineOccurrence], routineID: UUID,
+                                    weekKey: String?) -> Int {
+        occurrences.filter { o in
+            o.weekKey == weekKey && o.completedDayKey != nil
+                && (o.routineID == routineID || o.adHocSourceRoutineID == routineID)
+        }.count
     }
 
     static func isOpen(_ o: RoutineOccurrence) -> Bool { o.completedDayKey == nil && !o.skipped }

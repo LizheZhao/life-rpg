@@ -67,7 +67,9 @@ Unlocks once all `counts_for_clear` routines and all random slots for the day ar
 
 ### Epic
 
-Generated every Monday, valid through Sunday, visible from the start, doesn't count toward full-clear, and isn't penalized if skipped. Can be extended a week by spending coins (max twice) or rerolled.
+Generated every Monday, valid through Sunday, visible from the start, doesn't count toward full-clear, and isn't penalized if skipped. Can be extended a week by spending coins (max twice), rerolled, or replaced by hand.
+
+**Replacing it by hand** (decided with the user) is free: pick another epic from the library (cooldown doesn't apply — choosing is the point) or write one on the spot. A hand-written epic has no template, so it pays an ordinary epic roll (60–150) and starts no cooldown. The new epic keeps the old one's deadline; the old row stays as history, marked `replaced(.swapped)`. Same limits as a reroll: not once it is done, and not once it has been extended. It is free because an epic left undone already costs nothing — the paid reroll stays as the "surprise me" option.
 
 Only one epic is live at a time: an extended epic runs into the next week, and that week draws no epic of its own. If the app is first opened midweek, the epic is drawn that day and still ends on Sunday. It is paid on the day it is completed, and the calendar highlights the week it was completed in — for an extended epic, that is the later week. One that runs out unfinished stays in history as not done.
 
@@ -77,13 +79,27 @@ A routine can be manually added for the day, but must specify which random slot 
 
 - **Source**, on its own page with two tabs: picked from the routine library (active routines with nothing already on today's page — not due today, not added, not still open from an earlier day), or written on the spot with a difficulty. A custom task's base is the midpoint of that difficulty's range: E 10, M 21, H 38. T and EPIC can't be chosen.
 - **Which slot**: any random slot of today that is not done, not hidden and not already replaced. Final, like completion.
-- **Independent of the library**: the ad-hoc occurrence carries no `routineID`, so it is never flexible, never counts toward a weekly target and never moves the routine's next due date. It is always on the fixed overdue ladder and always gates the full-clear — even when picked from a `counts_for_clear = false` routine, which would otherwise make it a free pass out of a hard slot.
+- **Independent of the library**: the ad-hoc occurrence carries no `routineID`, so it is never flexible and never moves the routine's next due date (though done, one picked from the library counts toward its weekly target — below). It is always on the fixed overdue ladder and always gates the full-clear — even when picked from a `counts_for_clear = false` routine, which would otherwise make it a free pass out of a hard slot.
 
 - **Where**: replacing is a swipe action on the slot itself, so the slot is already chosen. The + on the today page does something else — see below.
+- **Counts for the routine** (decided with the user, reversing the original rule): an ad-hoc task picked **from the library** that gets done counts as a session of that routine toward its weekly target (`Schedule.doneThisWeek`), whether it replaced a slot, a routine or was added with +. Doing the routine is doing the routine, whichever button it was logged through. A custom one counts for nothing. It still has no `routineID`, so it never moves `lastCompletedDayKey` and is never itself flexible.
+
+### Replacing a routine
+
+A routine on today's page — due today, overdue, or a flexible session still open this week — can be swapped from its own swipe action for a routine from the library or a task written on the spot (decided with the user). **Free, but only for something worth at least as much** as the version currently asked for (`effectiveBasePoints`): anything lighter would be a cancel without the 200.
+
+- The old occurrence is closed (`skipped`, with `replacedByID` naming the new one): never charged again, no longer gating the clear, and not in the backlog — it was swapped, not given up. Deductions already charged stay.
+- The new one gates the clear exactly when the old one did.
+- **A fixed routine's ladder carries on**: the replacement keeps the old due day, so an overdue routine swapped on day 2 is paid as a late make-up and charged the next rung — swapping doesn't buy a fresh round.
+- **A flexible session had no ladder**: the replacement is due today, on the fixed ladder like any ad-hoc task, and the swapped session drops out of the week's target on Sunday.
 
 ### Adding a routine on top of the day
 
 The + on the today page adds a routine (from the library or written on the spot, same two tabs) **without replacing anything** (decided with the user). It is extra work, so it is never a liability: it doesn't gate the hidden quest and is never charged when left undone — its round still ends, and it is skipped on day 4. Done, it pays like any routine. Like a replacement, it carries no `routineID`, so the library's schedule never sees it.
+
+### When a day ends
+
+**05:00 local, not midnight** (decided with the user): until then it is still the previous evening. Opening the app at 01:00 neither judges the day that is still going nor generates the next one; a workout or meditation at 01:30 counts for the day before. Everything keyed by `dayKey` / `weekKey` moves with it — the overdue ladder, Sunday's flexible settlement (Monday 05:00), where a completion is booked. The one exception is data dated by calendar day rather than by moment: a HealthKit `menstrualFlow` sample (`Date.calendarDayKey`).
 
 ### Cooldown
 
@@ -270,8 +286,10 @@ Pricing must be noticeably higher than the payout from completing the underlying
 | Cancel an M | 250 |
 | Cancel an H | 450 |
 | Cancel a routine | 200 |
-| Extend epic by a week | 400 |
+| Extend epic by a week | 50 |
 | Streak freeze | 300 |
+
+The epic extension is the exception to "priced above the payout" (decided with the user): extending doesn't get you out of any work — the epic still has to be done — it only buys time. At 400 against a 60–150 payout, letting it lapse and taking next week's fresh epic was always the better deal, so nobody would ever extend. At 50 it costs something without being pointless.
 
 Cancel, reroll and the epic extension are swipe actions on the row they act on; the Rewards page holds the rewards you enter yourself and the streak freeze. A cancelled quest or routine no longer blocks the hidden quest but earns nothing and gives no streak day. Only fixed routines can be cancelled, since flexible ones already move within the week. T, hidden and the epic can't be cancelled. A streak freeze is bought after the break, to cover one missed day right behind the current streak; it keeps the run from breaking without adding a day to it.
 

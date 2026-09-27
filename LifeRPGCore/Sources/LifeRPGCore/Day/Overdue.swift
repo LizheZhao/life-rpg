@@ -57,19 +57,52 @@ public enum Overdue {
         // Flexible routines: once, on Sunday.
         guard DayKey.weekday(of: dayKey, in: timeZone) == .sunday,
               let week = DayKey.weekKey(of: dayKey, in: timeZone) else { return }
+        let settlement = weekly(routines, occurrences: occurrences, weekKey: week)
+        for c in settlement.charges { charge(c.occurrence, c.points, c.note) }
+        settlement.closing.forEach(skip)
+    }
+
+    /// What Sunday's flexible settlement will do to `weekKey`, computed from rows only — so the
+    /// today page can show the bill before it lands, with the same rule that charges it.
+    public struct Weekly {
+        public struct Charge {
+            public let occurrence: RoutineOccurrence
+            public let points: Int
+            public let note: String
+        }
+        /// One per session short of the target, charged against an open occurrence.
+        public let charges: [Charge]
+        /// Every open occurrence of the week, skipped once it is settled.
+        public let closing: [RoutineOccurrence]
+
+        /// What the charges come to — only the ones that are actually charged
+        /// (`countsForClear = false` routines never are).
+        public var total: Int { charges.filter(\.occurrence.countsForClear).map(\.points).reduce(0, +) }
+    }
+
+    /// The target is `weeklyTarget`, capped by how many sessions actually came due that week; done
+    /// sessions include ad-hoc ones picked from the routine (`Schedule.doneThisWeek`). A session
+    /// swapped for something else (`isReplaced`) is no longer asked of you and drops out of both
+    /// sides.
+    public static func weekly(_ routines: [RoutineTask], occurrences: [RoutineOccurrence],
+                              weekKey: String) -> Weekly {
+        var charges: [Weekly.Charge] = []
+        var closing: [RoutineOccurrence] = []
         for routine in routines where routine.flexibleWithinWeek {
             let thisWeek = occurrences
-                .filter { $0.routineID == routine.id && $0.weekKey == week }
+                .filter { $0.routineID == routine.id && $0.weekKey == weekKey && !$0.isReplaced }
                 .sorted { $0.dueDayKey < $1.dueDayKey }
             guard !thisWeek.isEmpty else { continue }
-            let done = thisWeek.filter { $0.completedDayKey != nil }.count
+            let done = Schedule.doneThisWeek(occurrences, routineID: routine.id, weekKey: weekKey)
             let shortfall = max(0, min(routine.weeklyTarget, thisWeek.count) - done)
             let open = thisWeek.filter(Schedule.isOpen)
             for o in open.prefix(shortfall) {
-                charge(o, Scoring.flexibleShortfallPenalty(basePoints: o.effectiveBasePoints),
-                       "\(done)/\(routine.weeklyTarget) this week")
+                charges.append(.init(occurrence: o,
+                                     points: Scoring.flexibleShortfallPenalty(basePoints: o.effectiveBasePoints),
+                                     note: "\(done)/\(routine.weeklyTarget) this week"))
             }
-            open.forEach(skip)
+            closing += open
         }
+        return Weekly(charges: charges, closing: closing)
     }
 }

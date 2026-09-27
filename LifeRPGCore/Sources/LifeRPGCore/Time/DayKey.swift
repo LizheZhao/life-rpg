@@ -21,17 +21,46 @@ public enum LifeCalendar {
     }
 }
 
+extension LifeCalendar {
+    /// The app's day ends at 05:00 local, not at midnight (decided with the user): 01:30 is still
+    /// the evening of the day before, so a late night is neither judged early nor split across
+    /// two days. Everything keyed by `dayKey` / `weekKey` moves with it — generation, the overdue
+    /// ladder, Sunday settlement (Monday 05:00), what a completion or a workout counts for.
+    public static let dayStartHour = 5
+}
+
 extension Date {
-    /// `"2026-09-17"` — the local calendar day.
+    /// `"2026-09-17"` — the app's day, which runs from 05:00 to 05:00 local
+    /// (`LifeCalendar.dayStartHour`). The hour is read off the wall clock, so a DST change
+    /// overnight doesn't move the boundary.
     public func dayKey(in timeZone: TimeZone = .current) -> String {
+        let c = LifeCalendar.gregorian(timeZone).dateComponents([.year, .month, .day],
+                                                                from: dayStart(in: timeZone))
+        return String(format: "%04d-%02d-%02d", c.year!, c.month!, c.day!)
+    }
+
+    /// `"2026-W38"` — the ISO week of the app's day. Note the year is the ISO week-year, so
+    /// 2027-01-01 is `2026-W53`.
+    public func weekKey(in timeZone: TimeZone = .current) -> String {
+        let c = LifeCalendar.iso8601(timeZone).dateComponents([.yearForWeekOfYear, .weekOfYear],
+                                                              from: dayStart(in: timeZone))
+        return String(format: "%04d-W%02d", c.yearForWeekOfYear!, c.weekOfYear!)
+    }
+
+    /// The plain calendar day, midnight to midnight. Only for data that is itself dated by
+    /// calendar day rather than by moment — a HealthKit `menstrualFlow` sample starts at 00:00 of
+    /// the day it describes, and shifting it would log the period a day early.
+    public func calendarDayKey(in timeZone: TimeZone = .current) -> String {
         let c = LifeCalendar.gregorian(timeZone).dateComponents([.year, .month, .day], from: self)
         return String(format: "%04d-%02d-%02d", c.year!, c.month!, c.day!)
     }
 
-    /// `"2026-W38"` — the ISO week. Note the year is the ISO week-year, so 2027-01-01 is `2026-W53`.
-    public func weekKey(in timeZone: TimeZone = .current) -> String {
-        let c = LifeCalendar.iso8601(timeZone).dateComponents([.yearForWeekOfYear, .weekOfYear], from: self)
-        return String(format: "%04d-W%02d", c.yearForWeekOfYear!, c.weekOfYear!)
+    /// Before 05:00 this instant still belongs to the previous day: the same wall-clock time a
+    /// calendar day earlier, which lands inside that day.
+    private func dayStart(in timeZone: TimeZone) -> Date {
+        let cal = LifeCalendar.gregorian(timeZone)
+        guard cal.component(.hour, from: self) < LifeCalendar.dayStartHour else { return self }
+        return cal.date(byAdding: .day, value: -1, to: self) ?? self
     }
 
     public var dayKey: String { dayKey(in: .current) }

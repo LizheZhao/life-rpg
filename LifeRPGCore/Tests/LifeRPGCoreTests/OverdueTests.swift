@@ -154,6 +154,37 @@ struct OverdueTests {
         #expect(try Economy.balance(ctx) == -30)
     }
 
+    /// The page's preview of Sunday night is the same rule that charges it.
+    @Test func weeklyPreviewMatchesWhatSundayCharges() throws {
+        let ctx = try Fixtures.context()
+        let r = routine(ctx, "Work on project", spec: "SAT,SUN", base: 35, target: 2, flexible: true)
+        let bills = routine(ctx, "Review bills", spec: "SAT", base: 20, flexible: true)
+        occurrence(ctx, r, due: sat); occurrence(ctx, r, due: sun); occurrence(ctx, bills, due: sat)
+        let preview = Overdue.weekly(try ctx.fetch(FetchDescriptor<RoutineTask>()),
+                                     occurrences: try ctx.fetch(FetchDescriptor<RoutineOccurrence>()),
+                                     weekKey: "2026-W38")
+        #expect(preview.total == 46)                       // 18 + 18 + 10
+        try settle(ctx, sun)
+        #expect(try Economy.balance(ctx) == -46)
+    }
+
+    /// An ad-hoc task picked from the routine in the library counts as a session: Friday's
+    /// replacement plus Saturday's session meet a target of two, so Sunday's is closed uncharged.
+    @Test func anAdHocSessionFromTheLibraryCountsOnSunday() throws {
+        let ctx = try Fixtures.context()
+        let r = routine(ctx, "Work on project", spec: "SAT,SUN", base: 30, target: 2, flexible: true)
+        let adHoc = RoutineOccurrence()
+        adHoc.dueDayKey = "2026-09-18"; adHoc.weekKey = "2026-W38"
+        adHoc.adHocSourceRoutineID = r.id; adHoc.completedDayKey = "2026-09-18"
+        ctx.insert(adHoc)
+        let a = occurrence(ctx, r, due: sat)
+        let b = occurrence(ctx, r, due: sun)
+        try Completion.completeRoutine(a, on: sat, tier: .normal, in: ctx, timeZone: tz)
+        try settle(ctx, sun)
+        #expect(try entries(ctx, "penalty").isEmpty)
+        #expect(b.skipped)
+    }
+
     /// Saturday's session moved to Sunday: the Saturday occurrence is completed on Sunday at full
     /// pay, and only the one still missing is charged.
     @Test func movedWithinTheWeekPaysInFullAndCounts() throws {
