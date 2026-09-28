@@ -2,12 +2,11 @@
 
 Stages follow `PLAN.md` §11; this file only tracks concrete checkable tasks, updated as development progresses. Design intent, formulas, and data model definitions stay authoritative in `PLAN.md` — not repeated here.
 
-Current status: Stage 3.5 code done (one difficulty axis, cycle days 1–3, foreground re-read; `SchemaV2`, 337 Core tests), device checks pending. Stage 4 code done (calendar, day detail, rating summary), device check pending. Stage 3 code done and running on the phone with HealthKit access; open until the device checks in the Stage 3 list pass. Stage 2 done — scheduling, occurrences, load → slots, routine completion, the overdue ladder, day-4 auto-skip, flexible Sunday settlement, the backlog, doing a flexible routine ahead, ad-hoc replacement and degraded_text, plus a two-week scenario test and simulator-only time travel (250 Core tests). Next: Stage 3. Stage 1 below as it stood: done, reviewed, and extended. `ensureToday`, catch-up, sampling, scoring,
-streak, the ledger, the today page, the payout reveal and the exports are in; 162 Core tests. Two inputs are still stubs, by
-design: `tier` is always `normal` until Stage 3 reads HealthKit, and `routineLoad` is always 0
-until Stage 2 schedules routines — both are `DayInputs` parameters, so wiring them is a one-line
-change at the call site. Next: Stage 2 (frequency scheduling, overdue penalty, flexible weekly
-settlement).
+Current status (2026-09-27): **code done through Stage 5**, and most of Stage 6. Stages 3, 3.5, 4 and 5 stay open only on their device checks, which need real daily use on the phone. Stage 5 landed with the epic (incl. extension and free replace), paid reroll, Rewards tab, Library tab and rating-driven `affinity`, followed by the review follow-ups (05:00 day end, routine replace, library ad-hoc counting toward the weekly target, Sunday bill on the today page). Stage 6: JSON export / restore with confirmation and `StoreAudit`, BOM stripping done (422 Core tests); **the web-prototype importer is next**, waiting on a sample save file.
+
+History, kept because later stages build on its contracts — Stage 1 as it stood when it closed: `ensureToday`, catch-up, sampling, scoring,
+streak, the ledger, the today page, the payout reveal and the exports were in; 162 Core tests. Two inputs were stubs then,
+since filled by Stages 2 and 3: `tier` was always `normal`, and `routineLoad` was always 0.
 
 The Stage 1 review turned up four things worth recording, because three of them set contracts
 Stage 2 builds on:
@@ -30,8 +29,7 @@ One review finding did **not** hold up: the confirmation alert reading `pending`
 the dismissal clears the state. It was rewritten to `alert(_:isPresented:presenting:)` anyway, as
 hardening against an ordering nothing documents, not as a bug fix.
 
-Two items below are marked **design call** — they're the remaining `PLAN.md` §12 open questions,
-each blocking a specific task rather than a whole stage. Everything around them can be built first.
+The `PLAN.md` §12 open questions that used to block tasks here (marked **design call**) have all been decided and folded into the stages below. What remains open in §12 — the exercise `weekly_target`, widening the H pool — needs real usage data, not code.
 
 ---
 
@@ -196,16 +194,17 @@ Code done: `Core/Rules/CalendarMarks.swift`, `Core/Time/MonthGrid.swift`, `Core/
 
 Done when: balance matches exactly
 
-- [ ] Upgrade the minimal export from Stage 1 to real `fileExporter` to iCloud Drive, dated filename, includes `schemaVersion`
-- [ ] JSON import + confirm before overwrite
-- [ ] One-time importer for the web prototype's save data
+- [x] Export through `fileExporter` (iCloud Drive is one of its destinations), dated filename, `schemaVersion` — already true of the Stage 1 export. It now also carries `library` (each template / routine's old id, text and cooldown / schedule stamps) and `rewards`, plus `launchURLSnapshot` and `degradedRoutineID` it had been missing. All optional in `Snapshot`, no `@Model` change, so `schemaVersion` stays 3
+- [x] JSON import + confirm before overwrite — `Core/Import/JSONImport.swift`, `JSONImportTests`. `plan` decodes, checks the version and maps ids without writing; the today page's export menu → **Restore from JSON…** shows its summary (days covered, row counts, the balance after) and asks. `apply` replaces every history table wholesale, restores the stamps, re-derives `affinity`. Decided with the user: a reinstall reseeds with new UUIDs, so old ids are re-pointed at the row with the **same text**; an id whose text the library no longer has stays as it was and is listed in the summary. Exports without `library` (written before import existed) are refused as too old. **Done-when test:** export → reinstall-like fresh store with its own grant and day → import, balance and total earned equal the source's
+- [ ] One-time importer for the web prototype's save data — waiting on a sample save file from the user; the format is only described in `PLAN.md` §10, not enough to write a parser against
 - [x] 100-coin opening grant, once ever, keyed on an existing `grant` entry so an import doesn't mint a second — `Economy.grantStartingBalanceIfNeeded`. Excluded from `totalEarned`: spendable, but it doesn't buy a level
 - [x] Rating asked right after the payout reveal, carrying `questID` so it points at the one completion that prompted it — `DailyQuest` stays the record of *what happened*, `QuestRating` of *how it felt*, and the summary page joins them. Optional and one tap; the card closes itself after 8s if untouched
 - [x] `QuestRating` / `QuestComment` tables + `Feedback` queries + CSV export of both logs — `Core/Rules/FeedbackLog.swift`, `Core/Export/CSVExport.swift`, share menu on the today page. Pulled forward for the same reason as the JSON export: ratings and comments exist nowhere else, so they must not start accumulating without a way off the device. Append-only and dated, so "what have I been rating highest lately" stays answerable
 - [x] JSON export carries the feedback logs (`schemaVersion` 2)
 - [x] `StoreAudit.issues` scans for unknown enum raw values, unparseable specs and malformed day/week keys (the `?? .easy` getters fall back silently); shown on the debug page
-- [ ] Call `StoreAudit.issues` after a JSON import and block/report before committing the import
-- [ ] Low priority — strip a UTF-8 BOM in `CSV.records`, only needed if a seed CSV ever comes out of Excel or Numbers. Today it fails loudly as `missingColumn("text")` on the debug page rather than corrupting anything (`stage0-dev-review.md`, "Deliberately not fixed")
+- [x] `StoreAudit.issues` runs after the import is staged and before `save`; any issue rolls the whole import back and is reported, the store untouched
+- [x] Strip a UTF-8 BOM in `CSV.records` (Excel / Numbers), `SeedParserTests.byteOrderMarkIsStripped`
+- [ ] Device check: export on the phone, restore it (ideally after a reinstall), balance unchanged; restore picker + confirmation look right
 
 ## Stage 7 — Optional
 

@@ -15,7 +15,7 @@ struct FeedbackCSVDocument: FileDocument {
 
     init(files: [CSVExport.File]) { self.files = files }
 
-    /// Export only — reading feedback back in is Stage 6's job, together with the JSON importer.
+    /// Export only — ratings and comments come back in with the JSON restore (`JSONImport`).
     init(configuration: ReadConfiguration) throws {
         throw CocoaError(.featureUnsupported)
     }

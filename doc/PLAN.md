@@ -618,7 +618,7 @@ No week view for now. A stats page can wait until there's been actual usage over
 
 Export the whole DB as JSON via `fileExporter` to iCloud Drive, filename dated; confirm before overwriting on import.
 
-What the JSON has to carry is exactly what the seed CSVs in `doc/` cannot rebuild: the history tables, and the `QuestRating` / `QuestComment` logs. Templates and routines are deliberately left out — they come back from the CSVs. There is a second, smaller export beside it that writes the two feedback logs out as CSV, because their destination is a spreadsheet or a diff against `doc/*.csv`, not an importer.
+What the JSON has to carry is exactly what the seed CSVs in `doc/` cannot rebuild: the history tables, and the `QuestRating` / `QuestComment` logs. Templates and routines are deliberately left out — they come back from the CSVs. What the CSVs can't give back rides along as `library`: each row's old id with its text, so restored history is re-pointed at the reseeded rows by text, and its cooldown / schedule stamps. The hand-entered rewards are exported whole. There is a second, smaller export beside it that writes the two feedback logs out as CSV, because their destination is a spreadsheet or a diff against `doc/*.csv`, not an importer.
 
 The JSON carries its own integer `schemaVersion`, incremented only on model changes, decoupled from the GitHub release tag (things like v0.1). Tags will jump ahead due to UI changes, so import only looks at schemaVersion.
 
@@ -632,11 +632,11 @@ The web prototype's save file is base64 JSON, with timestamps, quest text, point
 |---|---|---|---|
 | 0 | project, model, seed from the two CSVs | DB has data, app runs | **done** |
 | 1 | Today page, random slot generation, completion rolls, payout reveal, ledger, HUD | Ready for daily use | **done, reviewed** |
-| 2 | Routine layer: frequency scheduling, overdue, degrade, movable-within-week, ad-hoc replacement | Saturday no longer stacks up to ten tasks | parsing done, scheduling next |
+| 2 | Routine layer: frequency scheduling, overdue, degrade, movable-within-week, ad-hoc replacement | Saturday no longer stacks up to ten tasks | **done** |
 | 3 | HealthKit and Calendar: energy, readiness proxy, tier adjustment, auto-verification, cycle | Tier actually drops on a bad sleep night | code done, device checks pending; extended with cycle days 1–3 and the foreground re-read |
 | 4 | Monthly calendar page and day detail | Any day can be reviewed | code done, device check pending |
-| 5 | Epic, paid reroll, redemption page (including estimatedCost conversion), quest library management and affinity feedback | Coins have somewhere to go | reroll pricing done |
-| 6 | JSON export/import, web version migration | Balance matches exactly | export done, import pending |
+| 5 | Epic, paid reroll, redemption page (including estimatedCost conversion), quest library management and affinity feedback | Coins have somewhere to go | code done, device checks pending |
+| 6 | JSON export/import, web version migration | Balance matches exactly | export / restore done, web importer pending |
 | 7 | Optional: Oura API, DeviceActivity, notifications, widget, CloudKit (requires paying) | | |
 
 HealthKit is pulled ahead of the calendar page because it changes slot-generation logic and fields — doing it early saves rework.

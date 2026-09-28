@@ -32,7 +32,8 @@ struct RootView: View {
 
     var body: some View {
         TabView {
-            TodayView(today: today, generationError: generationError)
+            TodayView(today: today, generationError: generationError,
+                      onImported: { Task { await refresh() } })
                 .tabItem { Label("Today", systemImage: "checklist") }
             CalendarView(today: today)
                 .tabItem { Label("Calendar", systemImage: "calendar") }

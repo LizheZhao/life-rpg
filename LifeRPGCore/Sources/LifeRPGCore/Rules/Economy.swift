@@ -21,6 +21,11 @@ public enum Economy {
         entries.reduce(0) { $0 + $1.points }
     }
 
+    /// The same sum over an export's rows — what an import's confirmation says the balance will be.
+    public static func balance(_ entries: [JSONExport.Ledger]) -> Int {
+        entries.reduce(0) { $0 + $1.points }
+    }
+
     public static func balance(_ context: ModelContext) throws -> Int {
         balance(try context.fetch(FetchDescriptor<LedgerEntry>()))
     }

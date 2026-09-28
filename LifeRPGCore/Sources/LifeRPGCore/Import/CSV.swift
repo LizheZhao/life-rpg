@@ -41,7 +41,8 @@ enum CSV {
 
     /// Rows keyed by header name. Short rows are padded with empty strings.
     static func records(_ text: String) -> (header: [String], rows: [[String: String]]) {
-        var all = parse(text)
+        // A UTF-8 BOM (Excel, Numbers) would otherwise stick to the first header name.
+        var all = parse(text.hasPrefix("\u{FEFF}") ? String(text.dropFirst()) : text)
         guard !all.isEmpty else { return ([], []) }
         let header = all.removeFirst().map { $0.trimmingCharacters(in: .whitespaces) }
         let rows = all.map { cells in

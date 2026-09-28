@@ -11,6 +11,9 @@ import UniformTypeIdentifiers
 struct TodayView: View {
     let today: String
     let generationError: String?
+    /// Re-runs the day after an import, so a backup that ends before today catches up at once
+    /// instead of on the next foreground.
+    var onImported: () -> Void = {}
 
     @Environment(\.modelContext) private var context
 
@@ -43,6 +46,9 @@ struct TodayView: View {
     /// the same kind of thing to the save dialog, so they don't need a presentation each.
     @State private var pendingExport: ExportDocument?
     @State private var exporting = false
+    @State private var importing = false
+    /// A decoded backup waiting for the overwrite to be confirmed. Nothing is written until then.
+    @State private var importPlan: JSONImport.Plan?
     /// A purchase waiting for its confirmation. Spending is as final as completing, so it asks too.
     @State private var spending: Spend?
     /// A reroll that was refused only once it tried to draw (nothing else in the pool).
@@ -408,6 +414,11 @@ struct TodayView: View {
     var body: some View {
         NavigationStack {
             questList
+            // On the list, not beside the `fileExporter` below: two file presenters on one view
+            // and only the last one ever shows.
+            .fileImporter(isPresented: $importing, allowedContentTypes: [.json]) { result in
+                prepareImport(result)
+            }
             .navigationTitle("Today")
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
@@ -422,10 +433,14 @@ struct TodayView: View {
                         Button { prepareCSVExport() } label: {
                             Label("Ratings & comments (CSV)", systemImage: "star.bubble")
                         }
+                        Divider()
+                        Button { importing = true } label: {
+                            Label("Restore from JSON…", systemImage: "square.and.arrow.down")
+                        }
                     } label: {
                         Image(systemName: "square.and.arrow.up")
                     }
-                    .accessibilityLabel("Export")
+                    .accessibilityLabel("Export or restore")
                 }
             }
             // An alert rather than a sheet or an inline toggle: completion is irreversible, so it
@@ -498,6 +513,14 @@ struct TodayView: View {
                           defaultFilename: pendingExport?.filename) { result in
                 if case .failure(let error) = result { actionError = "Export failed: \(error)" }
                 pendingExport = nil
+            }
+            .alert("Replace all history?", isPresented: Binding(
+                get: { importPlan != nil }, set: { if !$0 { importPlan = nil } }
+            ), presenting: importPlan) { plan in
+                Button("Replace", role: .destructive) { performImport(plan) }
+                Button("Cancel", role: .cancel) {}
+            } message: { plan in
+                Text(importMessage(plan.summary))
             }
         }
     }
@@ -907,6 +930,46 @@ struct TodayView: View {
         export { .folder(try CSVExport.files(context), name: CSVExport.folderName()) }
     }
 
+    /// Reads and maps the file; writes nothing — the alert asks first.
+    private func prepareImport(_ result: Result<URL, Error>) {
+        do {
+            let url = try result.get()
+            let scoped = url.startAccessingSecurityScopedResource()
+            defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+            importPlan = try JSONImport.plan(try Data(contentsOf: url), against: context)
+            actionError = nil
+        } catch {
+            actionError = "Import failed: \(error)"
+        }
+    }
+
+    private func performImport(_ plan: JSONImport.Plan) {
+        do {
+            try JSONImport.apply(plan, to: context)
+            actionError = nil
+            onImported()
+        } catch {
+            actionError = "Import failed: \(error)"
+        }
+    }
+
+    private func importMessage(_ s: JSONImport.Summary) -> String {
+        let days = [s.firstDayKey, s.lastDayKey].compactMap { $0 }
+        var lines = [
+            "Backup exported \(s.exportedAt.formatted(date: .abbreviated, time: .shortened))"
+                + (days.isEmpty ? "" : ", covering \(days.joined(separator: " – "))") + ".",
+            "\(s.dailyQuests) quests, \(s.routineOccurrences) routines, \(s.ledgerEntries) ledger entries, "
+                + "\(s.ratings) ratings, \(s.comments) comments, \(s.rewards) rewards.",
+            "Balance after restoring: \(s.balance).",
+            "Everything in this app's history is replaced by the backup.",
+        ]
+        if !s.unmatchedLibrary.isEmpty {
+            lines.append("\(s.unmatchedLibrary.count) quest(s) or routine(s) in the backup aren't in this library; "
+                         + "their history is kept but won't link back.")
+        }
+        return lines.joined(separator: "\n\n")
+    }
+
     /// Builds the document, then opens the system save dialog. The dialog is a separate process
     /// and can take a second or two to come up the first time — it is not instant.
     private func export(_ build: () throws -> ExportDocument) {
@@ -921,7 +984,7 @@ struct TodayView: View {
 
 /// Anything the page exports: the JSON history dump, or the feedback logs as a folder of CSVs.
 /// One document type, because one `fileExporter` has to be able to present either.
-/// Export only — import lands in Stage 6.
+/// Export only — the JSON comes back in through `fileImporter` and `JSONImport`, not this type.
 struct ExportDocument: FileDocument {
     static var readableContentTypes: [UTType] { [.json, .folder] }
 

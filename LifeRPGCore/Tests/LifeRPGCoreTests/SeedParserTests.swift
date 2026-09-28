@@ -94,6 +94,13 @@ struct SeedParserTests {
         }
     }
 
+    /// Excel and Numbers write CSVs with a UTF-8 BOM, which would otherwise glue onto the first
+    /// header and read as a missing `text` column.
+    @Test func byteOrderMarkIsStripped() throws {
+        let csv = "\u{FEFF}text,difficulty,hidden_eligible,weekend_only\nFoo,E,FALSE,FALSE\n"
+        #expect(try SeedParser.sideQuests(csv: csv).map(\.text) == ["Foo"])
+    }
+
     // MARK: real seed files in doc/
 
     @Test func realSideQuestsParse() throws {

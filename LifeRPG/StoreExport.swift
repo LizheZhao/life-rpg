@@ -56,7 +56,7 @@ struct StoreArchiveDocument: FileDocument {
 
     init(files: [URL]) { self.files = files }
 
-    /// Export only — importing a store back is Stage 6's JSON path, not a file copy.
+    /// Export only — restoring goes through the JSON path (`JSONImport`), not a file copy.
     init(configuration: ReadConfiguration) throws {
         throw CocoaError(.featureUnsupported)
     }
