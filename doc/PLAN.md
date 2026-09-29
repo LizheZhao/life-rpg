@@ -67,7 +67,7 @@ Unlocks once all `counts_for_clear` routines and all random slots for the day ar
 
 ### Epic
 
-Generated every Monday, valid through Sunday, visible from the start, doesn't count toward full-clear, and isn't penalized if skipped. Can be extended a week by spending coins (max twice), rerolled, or replaced by hand.
+Generated every Monday, valid through Sunday, visible from the start, doesn't count toward full-clear, and isn't penalized if skipped. Can be extended a week by spending coins (max twice; three times from Lv 5, see §6 "Level"), rerolled, or replaced by hand.
 
 **Replacing it by hand** (decided with the user) is free: pick another epic from the library (cooldown doesn't apply — choosing is the point) or write one on the spot. A hand-written epic has no template, so it pays an ordinary epic roll (60–150) and starts no cooldown. The new epic keeps the old one's deadline; the old row stays as history, marked `replaced(.swapped)`. Same limits as a reroll: not once it is done, and not once it has been extended. It is free because an epic left undone already costs nothing — the paid reroll stays as the "surprise me" option.
 
@@ -118,6 +118,8 @@ Big things that only fit on a weekend (video call with parents, meeting friends,
 ### Streak
 
 Streak = number of consecutive days with **at least one random quest completed** (regular slots, the T group, and hidden all count; routines and epic don't). A streak freeze covers one missed day without breaking it.
+
+The condition stays this lenient on purpose — the slot count already bends to protect a heavy day, and a streak that breaks on a bad day is how the app gets abandoned. What the streak is *for* is the milestones in §6: a run pays at 7, 14, 30, 60 and 100 days and every 30 after, which is what makes a long run worth protecting and a freeze worth buying.
 
 ### Completion is final
 
@@ -179,11 +181,11 @@ Overdue routines don't disappear — they stay pinned at the top of the today pa
 
 Worst case total = 225% of base (−113 in the example).
 
-**Making up late**: completing on day 2 or 3 awards **half of base** (× the low-tier multiplier, rounded), and that day's deduction is not applied — deductions from earlier days stay. A made-up routine does **not** count toward that day's full-clear. Completing on the due day is just a normal completion.
+**Making up late**: completing on day 2 or 3 awards **half of base** (60% from Lv 8, see §6 "Level"; × the low-tier multiplier, rounded), and that day's deduction is not applied — deductions from earlier days stay. A made-up routine does **not** count toward that day's full-clear. Completing on the due day is just a normal completion.
 
 ```
 overduePenalty(day) = round(basePoints × [0.5, 0.75, 1.0][day - 1])   // day 1...3
-lateCompletion      = round(basePoints × 0.5 × m)                       // m = low-tier multiplier (§5)
+lateCompletion      = round(basePoints × r × m)     // r = 0.5, 0.6 from Lv 8; m = low-tier multiplier (§5)
 ```
 
 There is no daily penalty cap.
@@ -259,6 +261,8 @@ Reading has no app that writes to HealthKit, so it can only go through FamilyCon
 
 Median E is 10, M is 21, H is 37, the T group is 12, hidden is around 30, routines are 10–80 depending on that day's load. Full daily clear averages 120–160, epic averages about 15/day spread out. An ideal week is around 1000; at a realistic 75% completion rate, it settles around 750–800/week.
 
+Streak milestones (below) add about 100/week over a first 100-day run (1400 in total) and about 70/week after it (300 every 30 days) — roughly +10%. Level perks deliberately add almost nothing: they are about convenience and choice, not income (see "Level").
+
 ### Reward pricing auto-converted from estimated spend
 
 `Reward` stores `estimatedCost` (real currency); coins are computed from a formula to avoid manual entries getting inconsistent:
@@ -289,7 +293,7 @@ Pricing must be noticeably higher than the payout from completing the underlying
 | Cancel an H | 450 |
 | Cancel a routine | 200 |
 | Extend epic by a week | 50 |
-| Streak freeze | 300 |
+| Streak freeze | 300 (150 from Lv 20; one free a month from Lv 10) |
 
 The epic extension is the exception to "priced above the payout" (decided with the user): extending doesn't get you out of any work — the epic still has to be done — it only buys time. At 400 against a 60–150 payout, letting it lapse and taking next week's fresh epic was always the better deal, so nobody would ever extend. At 50 it costs something without being pointless.
 
@@ -297,7 +301,9 @@ Cancel, reroll and the epic extension are swipe actions on the row they act on; 
 
 ### Reroll
 
-Escalates by 1.5x, rounded up, resets daily. Base is E 10, M 20, H 30 — so E goes 10 / 15 / 23 / 34, H goes 30 / 45 / 68 / 102. Epic reroll is a flat 80 each time, with no limit until the epic is extended; an extended epic can't be rerolled.
+Escalates by 1.5x, rounded up, resets daily. Base is E 10, M 20, H 30 — so E goes 10 / 15 / 23 / 34, H goes 30 / 45 / 68 / 102. Epic reroll is a flat 80 each time (40 from Lv 12), with no limit until the epic is extended; an extended epic can't be rerolled.
+
+**Free rerolls from Lv 3.** The day's first reroll of a regular slot (T group included, epic not) costs 0 from Lv 3; the first two from Lv 15. A free reroll is still a reroll in every other way: it writes a `reroll` ledger entry of 0 points — which is also how the day's free ones are counted (0-point `reroll` entries on that `dayKey`; an epic reroll never costs 0) — and it still advances the slot's `rerollCount`, so the next reroll of that slot is priced as the second. Free is not exempt from the debt rule: `Purchase.blocked` refuses any purchase while in debt, cost 0 included.
 
 **A reroll records what it swapped away.** Escalation has to accumulate on the day's slot, which is tempting to implement by overwriting the `DailyQuest` row in place — but that row *is* the history the calendar and the summary read, so overwriting it erases what was rerolled away. Instead the old row is kept and marked `replaced` with reason `rerolled`, and the replacement carries `rerollCount + 1`. Being a `replaced` row, it is skipped by full-clear, streak and the calendar like any other. Nothing the day already served is drawn again, and when nothing else is left the reroll is refused without charging. The hidden quest is never rerolled. The epic reroll keeps the old epic's deadline. Escalation still resets daily, because a new day means new rows starting at zero.
 
@@ -315,7 +321,59 @@ If routine penalties push the balance below zero, let it stay negative and displ
 
 Balance always equals the sum of the ledger, never stored separately; `level = floor(sqrt(total / 60)) + 1`.
 
-Cumulative points sum the positive entries **except the opening grant**. Spending must not drop the level, and a gift must not buy one: a level is a record of what has been done, so it counts what was earned, not what was held. A new store therefore opens at 100 coins and still reads level 1.
+Cumulative points sum the positive entries **except the opening grant**. Spending must not drop the level, and a gift must not buy one: a level is a record of what has been done, so it counts what was earned, not what was held. A new store therefore opens at 100 coins and still reads level 1. Streak milestone bonuses are earned, so they count.
+
+**What a level buys** — a fixed track, not perks you pick (picking would need its own append-only model for the choices; revisit if the fixed track feels flat). Each rung unlocks a perk for good — the level never drops, so neither does a perk. Perks change prices and limits, not quest payouts: a perk that changed a quest's roll or bonus would make `Scoring.breakdown` depend on the level *at the time of the award*, which the reveal and day detail have no way to know. The one income perk, the late make-up, pays routines, which have no breakdown.
+
+| Lv | Earned needed | Weeks at 800/week | Perk |
+|---|---|---|---|
+| 3 | 240 | < 1 | The day's first regular-slot reroll is free |
+| 5 | 960 | ≈ 1 | The epic can be extended three times instead of two |
+| 8 | 2940 | ≈ 4 | A late make-up pays 60% of base instead of 50% (§4) |
+| 10 | 4860 | ≈ 6 | One free streak freeze per calendar month |
+| 12 | 7260 | ≈ 9 | Epic reroll 80 → 40 |
+| 15 | 11760 | ≈ 15 | The day's first **two** regular-slot rerolls are free |
+| 20 | 21660 | ≈ 27 | Streak freeze 300 → 150 |
+
+"Earned needed" is `60 × (Lv − 1)²`, the formula above, asserted as literals. The perk in force is the one for the level at the moment of the action; everything that prices a reroll, an extension, a freeze or a late make-up takes the level as a parameter (`Perks`, in Core), so the rule stays in one place and the view never checks a level itself.
+
+The free freeze: a freeze costs 0 when no 0-point `freeze` entry exists yet for a day in the same calendar month as the day it would cover (the `dayKey` of a freeze entry is the covered day). Like a free reroll it still obeys `Purchase.blocked`.
+
+**The level-up moment.** Reaching a level shows a card on the today page — "Lv 8 · a late make-up now pays 60%", or just the level on a rung without a perk. Tapping the level in the HUD lists the whole track, unlocked and still ahead. Which level was last announced is a UI convenience (`@AppStorage`), not data: losing it shows the card once more, nothing else.
+
+### Streak milestones
+
+A streak run pays a one-off bonus when it reaches:
+
+| Run length | Coins |
+|---|---|
+| 7 | 50 |
+| 14 | 100 |
+| 30 | 250 |
+| 60 | 400 |
+| 100 | 600 |
+| every 30 after 100 (130, 160, …) | 300 |
+
+Coins, not a multiplier (decided with the user). A multiplier on every payout would be a second income axis stacked on the low-tier 1.3, and would make a break cost a share of every day after it — the kind of loss that ends in quitting, not in trying again.
+
+- **Booked as its own ledger kind, `streak`**, positive, dated the day it is paid (the day the run reached the threshold, or the day a freeze joined two runs past it), `note` naming the threshold ("Streak 30"). Counts toward the level.
+- **Each threshold pays once per run.** A run is identified by its first day (`Streak` walks back to it); a threshold counts as paid when a `streak` entry for it is dated on or after that day. A new run after a real break earns 7 and 14 again — that took 14 real days — but the big ones are what a break actually costs.
+- **A freeze can join two runs.** Everything already paid on either side stays paid, and the joined run can already be past a threshold neither side reached: that one pays at once.
+- **When it is checked:** after anything that can lengthen the run — a random quest completed by hand or by auto-verify, and a freeze. One Core function settles it (pay every threshold reached and not yet paid in this run), so whichever path completed the quest, the bonus is the same.
+- **Shown** on the today page as its own moment, the same way as a level-up ("30 days in a row · +250").
+
+With these at stake the freeze has a real price-to-value: breaking at day 27 postpones the 30 (250) and everything after it by nearly a month; breaking at day 55 costs the 60 (400) the same way.
+
+### Savings goal
+
+One active reward can be pinned as **the goal** (`Reward.isGoal`); pinning another unpins the first, and redeeming or archiving the goal unpins it. The HUD shows it under the balance: name, `balance / price` as a bar (a negative balance reads as 0), and roughly how long is left.
+
+```
+pace      = net ledger change over the last 28 days ÷ 4        // grant excluded; spending and penalties included
+weeksLeft = ceil((price − balance) / pace)                       // not shown when pace ≤ 0
+```
+
+Net, not earned: a week spent rerolling or paying penalties really does push the goal back, and the estimate should say so. Once the balance reaches the price the line reads "ready to redeem" instead.
 
 ---
 
@@ -432,13 +490,14 @@ enum RecurrenceKind: String, Codable {
     var virtualKind: String?               // "cancel_hard" / "extend_epic" / "streak_freeze"
     var fixedCoins: Int?                   // virtual items are priced directly
     var isActive: Bool = true
+    var isGoal: Bool = false               // the pinned savings goal, at most one (§6)
 }
 
 @Model final class LedgerEntry {
     var id: UUID = UUID()
     var timestamp: Date = Date()
     var dayKey: String = ""
-    var kind: String = "quest"   // quest / routine / redeem / reroll / penalty / skip / adjust
+    var kind: String = "quest"   // quest / routine / redeem / reroll / penalty / skip / adjust / grant / freeze / streak
     var points: Int = 0          // spending and penalties are negative
     var refID: UUID?
     var note: String = ""
@@ -636,6 +695,7 @@ The web prototype's save file is base64 JSON, with timestamps, quest text, point
 | 3 | HealthKit and Calendar: energy, readiness proxy, tier adjustment, auto-verification, cycle | Tier actually drops on a bad sleep night | code done, device checks pending; extended with cycle days 1–3 and the foreground re-read |
 | 4 | Monthly calendar page and day detail | Any day can be reviewed | code done, device check pending |
 | 5 | Epic, paid reroll, redemption page (including estimatedCost conversion), quest library management and affinity feedback | Coins have somewhere to go | code done, device checks pending |
+| 5.5 | Streak milestones, level perks and the level-up moment, savings goal | Streak and level change what you do | code done, device check pending |
 | 6 | JSON export/import, web version migration | Balance matches exactly | export / restore done, web importer pending |
 | 7 | Optional: Oura API, DeviceActivity, notifications, widget, CloudKit (requires paying) | | |
 

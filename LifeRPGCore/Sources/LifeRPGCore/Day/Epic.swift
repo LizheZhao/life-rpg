@@ -14,7 +14,8 @@ import SwiftData
 /// The row keeps the `dayKey` / `weekKey` of the day it was drawn. Which week it *counts for* on
 /// the calendar is the week it was completed in (`CalendarMarks.epicWeeks`), not its `weekKey`.
 public enum Epic {
-    public static let maxExtensions = 2
+    /// Twice, three times from Lv 5 — `Perks.epicMaxExtensions`.
+    public static func maxExtensions(level: Int) -> Int { Perks.epicMaxExtensions(level: level) }
     /// `PLAN.md` §6 "Virtual rewards": extend epic by a week. Deliberately **below** what an epic
     /// pays (60–150): extending doesn't get you out of any work — you still have to do it — it only
     /// buys time, so pricing it above the payout made letting it lapse always the better deal.
@@ -37,7 +38,7 @@ public enum Epic {
             case .notAnEpic: "not an epic"
             case .alreadyCompleted: "already completed"
             case .expired(let last): "ran out on \(last)"
-            case .maxExtensions: "already extended \(Epic.maxExtensions) times"
+            case .maxExtensions: "already extended as many times as allowed"
             case .blocked(let b): b.description
             case .extended: "an extended epic can't be swapped"
             case .sameEpic: "that one is already this week's epic"
@@ -116,12 +117,12 @@ public enum Epic {
 
     /// Why `epic` can't be extended on `dayKey`, or nil when it can. Same balance rule as a reroll:
     /// a purchase may spend down to exactly zero, never below, and never while already in debt.
-    public static func blocked(_ epic: DailyQuest, on dayKey: String, balance: Int,
+    public static func blocked(_ epic: DailyQuest, on dayKey: String, balance: Int, level: Int = 1,
                                in timeZone: TimeZone = .current) -> Failure? {
         guard epic.slot == .epic, !epic.replaced else { return .notAnEpic }
         if epic.completedAt != nil { return .alreadyCompleted }
         if let last = lastDayKey(of: epic, in: timeZone), dayKey > last { return .expired(lastDayKey: last) }
-        if epic.extensionCount >= maxExtensions { return .maxExtensions }
+        if epic.extensionCount >= maxExtensions(level: level) { return .maxExtensions }
         if let b = Purchase.blocked(cost: extensionCost, balance: balance) {
             return .blocked(b)
         }
@@ -132,7 +133,8 @@ public enum Epic {
     /// the coins were spent.
     public static func extend(_ epic: DailyQuest, on dayKey: String, in context: ModelContext,
                               timeZone: TimeZone = .current, now: Date = Date()) throws {
-        if let failure = blocked(epic, on: dayKey, balance: try Economy.balance(context), in: timeZone) {
+        if let failure = blocked(epic, on: dayKey, balance: try Economy.balance(context),
+                                 level: try Economy.level(context), in: timeZone) {
             throw failure
         }
         epic.extensionCount += 1

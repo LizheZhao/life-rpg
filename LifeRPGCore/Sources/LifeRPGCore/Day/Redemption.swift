@@ -12,6 +12,7 @@ public enum Redemption {
     // MARK: prices — `PLAN.md` §6 "Virtual rewards", noticeably above what the quest itself pays
 
     public static let cancelRoutineCost = 200
+    /// The level-1 price. What a freeze actually costs is `freezeCost(covering:level:ledger:)`.
     public static let streakFreezeCost = 300
 
     /// E 120, M 250, H 450. Nil for anything else: T, hidden and epic can't be cancelled.
@@ -91,12 +92,25 @@ public enum Redemption {
 
     /// Why a freeze can't be bought today, or nil. Bought after the break (decided with the user),
     /// so there has to be a missed day to cover — `Streak.repairableDay`.
+    /// `cost` is `freezeCost` for the day it would cover; the default is the level-1 price.
     public static func blockedFreeze(days: Set<String>, frozen: Set<String>, today: String,
-                                     balance: Int, in timeZone: TimeZone = .current) -> Purchase.Blocked? {
+                                     balance: Int, cost: Int = streakFreezeCost,
+                                     in timeZone: TimeZone = .current) -> Purchase.Blocked? {
         guard Streak.repairableDay(days: days, frozen: frozen, today: today, in: timeZone) != nil else {
             return .nothingToRepair
         }
-        return Purchase.blocked(cost: streakFreezeCost, balance: balance)
+        return Purchase.blocked(cost: cost, balance: balance)
+    }
+
+    /// What covering `gap` costs: 0 when the level has a monthly free freeze and no free one has
+    /// yet covered a day in `gap`'s calendar month, otherwise `Perks.freezeCost` (300, 150 from
+    /// Lv 20). A free freeze is a 0-point `freeze` entry, and its `dayKey` is the day it covered.
+    public static func freezeCost(covering gap: String, level: Int, ledger: [LedgerEntry]) -> Int {
+        let month = gap.prefix(7)                                     // "2026-09"
+        let freeUsed = ledger.filter {
+            $0.kind == Economy.Kind.freeze.rawValue && $0.points == 0 && $0.dayKey.prefix(7) == month
+        }.count
+        return freeUsed < Perks.monthlyFreeFreezes(level: level) ? 0 : Perks.freezeCost(level: level)
     }
 
     /// Covers the missed day and returns it. The entry is booked **to that day**, which is how the
@@ -106,17 +120,25 @@ public enum Redemption {
                               timeZone: TimeZone = .current, now: Date = Date()) throws -> String {
         let days = try Streak.completedDayKeys(context)
         let frozen = try Streak.frozenDayKeys(context)
+        let ledger = try context.fetch(FetchDescriptor<LedgerEntry>())
+        guard let gap = Streak.repairableDay(days: days, frozen: frozen, today: today, in: timeZone) else {
+            throw Purchase.Blocked.nothingToRepair
+        }
+        let cost = freezeCost(covering: gap, level: Economy.level(ledger), ledger: ledger)
         if let b = blockedFreeze(days: days, frozen: frozen, today: today,
-                                 balance: try Economy.balance(context), in: timeZone) { throw b }
-        let gap = Streak.repairableDay(days: days, frozen: frozen, today: today, in: timeZone)!
-        let entry = Economy.record(context, kind: .freeze, points: -streakFreezeCost, dayKey: gap,
-                                   note: "Streak freeze", now: now)
+                                 balance: Economy.balance(ledger), cost: cost, in: timeZone) { throw b }
+        let entry = Economy.record(context, kind: .freeze, points: -cost, dayKey: gap,
+                                   note: cost == 0 ? "Streak freeze (free this month)" : "Streak freeze",
+                                   now: now)
         do {
             try context.save()
         } catch {
             context.delete(entry)
             throw error
         }
+        // Joining two runs can put the whole past a milestone neither side reached. Like after a
+        // completion, a failure here leaves it due for the next settle rather than undoing the freeze.
+        _ = try? StreakMilestone.settle(context, today: today, in: timeZone, now: now)
         return gap
     }
 
@@ -134,10 +156,28 @@ public enum Redemption {
         if let b = blocked(redeeming: reward, balance: try Economy.balance(context)) { throw b }
         let entry = Economy.record(context, kind: .redeem, points: -RewardPricing.coins(for: reward),
                                    dayKey: dayKey, refID: reward.id, note: reward.name, now: now)
+        let wasGoal = reward.isGoal
+        reward.isGoal = false                     // reached — the goal line has nothing left to show
         do {
             try context.save()
         } catch {
+            reward.isGoal = wasGoal
             context.delete(entry)
+            throw error
+        }
+    }
+
+    /// Archived rather than deleted — it may already have been redeemed. An archived reward can't
+    /// stay the savings goal.
+    public static func archive(_ reward: Reward, in context: ModelContext) throws {
+        let (active, goal) = (reward.isActive, reward.isGoal)
+        reward.isActive = false
+        reward.isGoal = false
+        do {
+            try context.save()
+        } catch {
+            reward.isActive = active
+            reward.isGoal = goal
             throw error
         }
     }

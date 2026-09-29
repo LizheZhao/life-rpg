@@ -192,6 +192,7 @@ public enum JSONImport {
             let row = Reward()
             row.id = r.id; row.name = r.name; row.estimatedCost = r.estimatedCost
             row.virtualKind = r.virtualKind; row.fixedCoins = r.fixedCoins; row.isActive = r.isActive
+            row.isGoal = r.isGoal ?? false
             context.insert(row)
         }
 

@@ -25,6 +25,8 @@ struct AdHocView: View {
 
     @Query private var occurrences: [RoutineOccurrence]
     @Query private var routines: [RoutineTask]
+    /// Only for the level, which prices a late make-up (`Perks`).
+    @Query private var ledger: [LedgerEntry]
 
     private enum Tab: Hashable { case library, custom }
     @State private var tab: Tab = .library
@@ -220,7 +222,8 @@ struct AdHocView: View {
 
     /// One routine already on the page: where it is, and — when adding — a way to mark it done.
     private func onPageRow(_ r: RoutineTask, _ o: RoutineOccurrence) -> some View {
-        let pays = Completion.routinePayout(o, flexible: r.flexibleWithinWeek, on: today, tier: tier)
+        let pays = Completion.routinePayout(o, flexible: r.flexibleWithinWeek, on: today, tier: tier,
+                                            level: Economy.level(ledger))
         return HStack(alignment: .firstTextBaseline) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(o.displayText)

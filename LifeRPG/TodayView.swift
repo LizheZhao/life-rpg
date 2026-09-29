@@ -24,6 +24,7 @@ struct TodayView: View {
     @Query private var contexts: [DailyContext]
     @Query private var occurrences: [RoutineOccurrence]
     @Query private var routines: [RoutineTask]
+    @Query private var rewards: [Reward]
 
     @State private var pending: PendingAction?
     /// Collapsed by default on weekdays: it lists every flexible routine still short this week,
@@ -53,6 +54,22 @@ struct TodayView: View {
     @State private var spending: Spend?
     /// A reroll that was refused only once it tried to draw (nothing else in the pool).
     @State private var rerollRefusal: String?
+    /// A level-up or streak milestone waiting to be shown, once the payout reveal is out of the way.
+    @State private var moment: Moment?
+    @State private var showingTrack = false
+    /// What has already been announced. A UI convenience, not data: losing it only shows a card
+    /// once more. 0 = never announced, which on the first launch after an update lists the perks
+    /// already unlocked.
+    @AppStorage("announcedLevel") private var announcedLevel = 0
+    @AppStorage("announcedStreakBonusAt") private var announcedStreakBonusAt: Double = 0
+
+    private struct Moment: Identifiable {
+        let id = UUID()
+        var title: String
+        var message: String
+        var level: Int
+        var streakBonusAt: Double
+    }
 
     /// A payout that has already happened and is already in the ledger, waiting to be shown.
     private struct Roll: Identifiable {
@@ -83,15 +100,21 @@ struct TodayView: View {
             case .cancelQuest, .cancelRoutine: "Cancel it?"
             }
         }
+    }
 
-        var cost: Int {
-            switch self {
-            case .reroll(let q): Reroll.cost(for: q)
-            case .extend: Epic.extensionCost
-            case .cancelQuest(let q): Redemption.cancelCost(for: q.slot) ?? 0
-            case .cancelRoutine: Redemption.cancelRoutineCost
-            }
+    /// Priced with the level in force (`Perks`); a free reroll reads 0.
+    private func cost(of spend: Spend) -> Int {
+        switch spend {
+        case .reroll(let q): Reroll.cost(for: q, level: level, freeUsedToday: freeRerollsUsed)
+        case .extend: Epic.extensionCost
+        case .cancelQuest(let q): Redemption.cancelCost(for: q.slot) ?? 0
+        case .cancelRoutine: Redemption.cancelRoutineCost
         }
+    }
+
+    private func price(_ spend: Spend) -> String {
+        let c = cost(of: spend)
+        return c == 0 ? "free" : "\(c) coins"
     }
 
     private enum PendingAction {
@@ -154,7 +177,7 @@ struct TodayView: View {
                 }
             } header: {
                 Text("Epic · until \(Epic.lastDayKey(of: epic) ?? "Sunday")"
-                     + (epic.extensionCount > 0 ? " · extended \(epic.extensionCount)/\(Epic.maxExtensions)" : ""))
+                     + (epic.extensionCount > 0 ? " · extended \(epic.extensionCount)/\(Epic.maxExtensions(level: level))" : ""))
             }
         }
     }
@@ -371,6 +394,11 @@ struct TodayView: View {
     // Both rules live in Core; this only hands over the rows the query already has.
     private var balance: Int { Economy.balance(ledger) }
     private var totalEarned: Int { Economy.totalEarned(ledger) }
+    private var level: Int { Economy.level(totalEarned: totalEarned) }
+    private var freeRerollsUsed: Int { Reroll.freeRerollsUsed(ledger, on: today) }
+    private var goal: SavingsGoal.Progress? {
+        SavingsGoal.progress(rewards: rewards, ledger: ledger, today: today)
+    }
     /// The rule itself lives in Core; this only hands it the rows the query already has.
     private var streak: Int {
         Streak.current(days: Streak.completedDayKeys(allQuests),
@@ -411,9 +439,29 @@ struct TodayView: View {
     }
     }
 
+    /// The page plus the level-up / milestone card and the level track — split off `body`, whose
+    /// modifier chain is already past what the type checker handles in one expression.
+    private var page: some View {
+        questList
+            .alert(moment?.title ?? "",
+                   isPresented: Binding(get: { moment != nil }, set: { if !$0 { moment = nil } }),
+                   presenting: moment) { m in
+                Button("Nice") {
+                    announcedLevel = m.level
+                    announcedStreakBonusAt = m.streakBonusAt
+                }
+            } message: { m in
+                Text(m.message)
+            }
+            .sheet(isPresented: $showingTrack) { trackSheet }
+            .onAppear { checkMoments() }
+            .onChange(of: ledger.count) { checkMoments() }
+            .onChange(of: roll == nil) { checkMoments() }
+    }
+
     var body: some View {
         NavigationStack {
-            questList
+            page
             // On the list, not beside the `fileExporter` below: two file presenters on one view
             // and only the last one ever shows.
             .fileImporter(isPresented: $importing, allowedContentTypes: [.json]) { result in
@@ -472,7 +520,7 @@ struct TodayView: View {
                    isPresented: Binding(get: { spending != nil },
                                         set: { if !$0 { spending = nil } }),
                    presenting: spending) { spend in
-                Button("Spend \(spend.cost)") { buy(spend) }
+                Button(cost(of: spend) == 0 ? "Use free reroll" : "Spend \(cost(of: spend))") { buy(spend) }
                 Button("Keep it", role: .cancel) {}
             } message: { spend in
                 Text(message(for: spend))
@@ -536,8 +584,13 @@ struct TodayView: View {
                     .foregroundStyle(balance < 0 ? .red : .primary)
                 Text("coins").font(.caption).foregroundStyle(.secondary)
                 Spacer()
-                Text("Lv \(Economy.level(totalEarned: totalEarned))").font(.headline)
+                Button { showingTrack = true } label: {
+                    Text("Lv \(level)").font(.headline)
+                }
+                .buttonStyle(.borderless)
+                .accessibilityHint("Shows what each level unlocks")
             }
+            if let goal { goalLine(goal) }
             HStack(spacing: 16) {
                 stat("Streak", "\(streak)d")
                 stat("Next level", "\(Economy.pointsToNextLevel(totalEarned: totalEarned))")
@@ -548,6 +601,98 @@ struct TodayView: View {
             .foregroundStyle(.secondary)
         }
         .padding(.vertical, 4)
+    }
+
+    /// The pinned reward: how far the balance is toward it and roughly how long is left, both
+    /// from `SavingsGoal`.
+    private func goalLine(_ goal: SavingsGoal.Progress) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(goal.name).font(.subheadline)
+                Spacer()
+                Group {
+                    if goal.ready {
+                        Text("ready to redeem").foregroundStyle(.green)
+                    } else if let weeks = goal.weeksLeft {
+                        Text("\(max(0, goal.balance)) / \(goal.price) · ~\(weeks) wk")
+                    } else {
+                        Text("\(max(0, goal.balance)) / \(goal.price)")
+                    }
+                }
+                .font(.caption.monospacedDigit())
+                .foregroundStyle(.secondary)
+            }
+            ProgressView(value: goal.fraction)
+                .tint(goal.ready ? .green : .accentColor)
+        }
+    }
+
+    /// The whole level track, unlocked and still ahead (`Perks.track`).
+    private var trackSheet: some View {
+        NavigationStack {
+            List {
+                Section {
+                    Text("Lv \(level) · \(totalEarned) earned · \(Economy.pointsToNextLevel(totalEarned: totalEarned)) to the next level")
+                        .font(.subheadline)
+                }
+                Section("Perks") {
+                    ForEach(Perks.track, id: \.self) { perk in
+                        let open = Perks.has(perk, at: level)
+                        HStack(alignment: .firstTextBaseline) {
+                            Image(systemName: open ? "checkmark.circle.fill" : "lock")
+                                .foregroundStyle(open ? .green : .secondary)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(perk.summary)
+                                Text("Lv \(perk.level) · \(Economy.earnedNeeded(forLevel: perk.level)) earned")
+                                    .font(.caption).foregroundStyle(.secondary)
+                            }
+                        }
+                        .foregroundStyle(open ? .primary : .secondary)
+                    }
+                }
+            }
+            .navigationTitle("Levels")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) { Button("Done") { showingTrack = false } }
+            }
+        }
+    }
+
+    // MARK: level-ups and streak milestones
+
+    /// Whatever hasn't been announced yet, as one card: a level reached since the last one shown
+    /// and streak bonuses booked since then. Held back while the payout reveal is up, so the two
+    /// don't stack — the reveal's dismissal calls this again.
+    private func checkMoments() {
+        guard roll == nil, moment == nil else { return }
+        let from = max(1, announcedLevel)
+        let bonuses = ledger
+            .filter { $0.kind == Economy.Kind.streak.rawValue
+                      && $0.timestamp.timeIntervalSince1970 > announcedStreakBonusAt }
+            .sorted { $0.timestamp < $1.timestamp }
+        let levelUp = level > from
+        guard levelUp || !bonuses.isEmpty else {
+            if announcedLevel == 0 { announcedLevel = level }         // nothing to say yet
+            return
+        }
+        var titles: [String] = []
+        var lines: [String] = []
+        for b in bonuses {
+            let days = StreakMilestone.threshold(of: b).map { "\($0) days in a row" } ?? "Streak bonus"
+            titles.append(days)
+            lines.append("\(days) · +\(b.points)")
+        }
+        if levelUp {
+            titles.append("Level \(level)")
+            let perks = Perks.newlyUnlocked(from: from, to: level)
+            lines.append(perks.isEmpty ? "Reached level \(level)."
+                                       : "Unlocked:\n" + perks.map { "· \($0.summary)" }.joined(separator: "\n"))
+        }
+        moment = Moment(title: titles.joined(separator: " · "),
+                        message: lines.joined(separator: "\n\n"),
+                        level: level,
+                        streakBonusAt: bonuses.last.map { $0.timestamp.timeIntervalSince1970 } ?? announcedStreakBonusAt)
     }
 
     private func stat(_ name: String, _ value: String) -> some View {
@@ -590,7 +735,7 @@ struct TodayView: View {
     /// same number `Completion.completeRoutine` will pay today (half for an overdue one).
     private func routineRow(_ occurrence: RoutineOccurrence, note: RoutineNote? = nil) -> some View {
         let flexible = isFlexible(occurrence)
-        let pays = Completion.routinePayout(occurrence, flexible: flexible, on: today, tier: tier)
+        let pays = Completion.routinePayout(occurrence, flexible: flexible, on: today, tier: tier, level: level)
         return HStack(alignment: .firstTextBaseline) {
             badge("R", range: pays.map { $0...$0 })
             VStack(alignment: .leading, spacing: 2) {
@@ -803,14 +948,15 @@ struct TodayView: View {
     @ViewBuilder private func rerollButton(_ quest: DailyQuest) -> some View {
         if quest.completedAt == nil {
             spendButton(.reroll(quest), "Reroll", "dice", .orange,
-                        open: Reroll.blocked(for: quest, on: today, balance: balance) == nil)
+                        open: Reroll.blocked(for: quest, on: today, balance: balance, level: level,
+                                             freeUsedToday: freeRerollsUsed) == nil)
         }
     }
 
     @ViewBuilder private func extendButton(_ epic: DailyQuest) -> some View {
         if epic.completedAt == nil {
             spendButton(.extend(epic), "Extend", "calendar.badge.plus", .blue,
-                        open: Epic.blocked(epic, on: today, balance: balance) == nil)
+                        open: Epic.blocked(epic, on: today, balance: balance, level: level) == nil)
         }
     }
 
@@ -864,7 +1010,8 @@ struct TodayView: View {
     private func spendButton(_ spend: Spend, _ name: String, _ icon: String, _ color: Color,
                              open: Bool) -> some View {
         Button { spending = spend } label: {
-            Label(open ? "\(name) · \(spend.cost)" : name, systemImage: icon)
+            Label(open ? "\(name) · \(cost(of: spend) == 0 ? "free" : "\(cost(of: spend))")" : name,
+                  systemImage: icon)
         }
         .tint(open ? color : .gray)
         .disabled(!open)
@@ -874,14 +1021,14 @@ struct TodayView: View {
         switch spend {
         case .reroll(let q):
             "\(slotText(q))\n\n" + (q.slot == .epic
-                ? "Swap it for a different epic for \(spend.cost) coins. It keeps the same deadline. Once extended, an epic can't be rerolled."
-                : "Swap it for a different \(q.slot.code) for \(spend.cost) coins. The next reroll of this slot today costs more.")
+                ? "Swap it for a different epic for \(price(spend)). It keeps the same deadline. Once extended, an epic can't be rerolled."
+                : "Swap it for a different \(q.slot.code) for \(price(spend)). The next reroll of this slot today costs more.")
         case .extend(let q):
-            "\(q.textSnapshot)\n\nOne more week, for \(spend.cost) coins. The week it runs into gets no new epic, and it can't be rerolled or replaced any more."
+            "\(q.textSnapshot)\n\nOne more week, for \(price(spend)). The week it runs into gets no new epic, and it can't be rerolled or replaced any more."
         case .cancelQuest(let q):
-            "\(slotText(q))\n\nDrop it for \(spend.cost) coins. It no longer blocks the hidden quest, but it earns nothing and doesn't count toward the streak."
+            "\(slotText(q))\n\nDrop it for \(price(spend)). It no longer blocks the hidden quest, but it earns nothing and doesn't count toward the streak."
         case .cancelRoutine(let o):
-            "\(o.displayText)\n\nDrop it for \(spend.cost) coins. No more overdue deductions, and it no longer blocks the hidden quest. Deductions already charged stay."
+            "\(o.displayText)\n\nDrop it for \(price(spend)). No more overdue deductions, and it no longer blocks the hidden quest. Deductions already charged stay."
         }
     }
 

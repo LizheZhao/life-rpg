@@ -8,8 +8,10 @@ public enum Economy {
     ///
     /// `freeze` is the one entry booked to a day other than the one it happened on: its `dayKey`
     /// is the missed day it covers (`Streak.frozenDayKeys`), and `timestamp` is when it was bought.
+    ///
+    /// `streak` is a milestone bonus (`StreakMilestone`); its `note` names the threshold it paid.
     public enum Kind: String, CaseIterable, Sendable {
-        case quest, routine, redeem, reroll, penalty, skip, adjust, grant, freeze
+        case quest, routine, redeem, reroll, penalty, skip, adjust, grant, freeze, streak
     }
 
     /// Current balance; may be negative, which is displayed in red rather than clamped.
@@ -47,6 +49,21 @@ public enum Economy {
     /// `level = floor(sqrt(total / 60)) + 1` (`PLAN.md` §6).
     public static func level(totalEarned: Int) -> Int {
         Int((Double(max(0, totalEarned)) / 60.0).squareRoot().rounded(.down)) + 1
+    }
+
+    /// The earned total at which `level` starts: `60 × (level − 1)²`.
+    public static func earnedNeeded(forLevel level: Int) -> Int {
+        let n = max(0, level - 1)
+        return 60 * n * n
+    }
+
+    /// The level in force right now — what every perk (`Perks`) is priced against.
+    public static func level(_ entries: [LedgerEntry]) -> Int {
+        level(totalEarned: totalEarned(entries))
+    }
+
+    public static func level(_ context: ModelContext) throws -> Int {
+        level(totalEarned: try totalEarned(context))
     }
 
     /// Points still needed for the next level, for the HUD's progress line.

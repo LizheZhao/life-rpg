@@ -27,7 +27,8 @@ struct EpicTests {
     }
 
     private func fund(_ ctx: ModelContext, _ amount: Int) throws {
-        Economy.record(ctx, kind: .adjust, points: amount, dayKey: monday)
+        // A grant is spendable but earns no level, so these run at level-1 prices (`Perks`).
+        Economy.record(ctx, kind: .grant, points: amount, dayKey: monday)
         try ctx.save()
     }
 

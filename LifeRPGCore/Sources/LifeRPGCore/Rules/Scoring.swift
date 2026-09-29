@@ -31,10 +31,10 @@ public enum Scoring {
     }
 
     /// A routine pays its fixed `basePoints`, nothing rolled: `round(base × m)` on the due day,
-    /// `round(base × 0.5 × m)` as a late make-up on day 2–3 (`PLAN.md` §4). `m` is the tier of
-    /// the day it is actually done.
-    public static func routinePoints(basePoints: Int, tier: Tier, late: Bool) -> Int {
-        rounded(Double(basePoints) * (late ? 0.5 : 1.0) * effortMultiplier(tier))
+    /// `round(base × r × m)` as a late make-up on day 2–3 (`PLAN.md` §4), `r` being 0.5, or 0.6
+    /// from Lv 8 (`Perks.lateMakeUpRate`). `m` is the tier of the day it is actually done.
+    public static func routinePoints(basePoints: Int, tier: Tier, late: Bool, level: Int = 1) -> Int {
+        rounded(Double(basePoints) * (late ? Perks.lateMakeUpRate(level: level) : 1.0) * effortMultiplier(tier))
     }
 
     /// What an overdue routine costs at the end of round day 1 / 2 / 3: 50% / 75% / 100% of base

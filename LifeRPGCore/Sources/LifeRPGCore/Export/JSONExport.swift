@@ -14,7 +14,8 @@ import SwiftData
 /// id, so history can be re-pointed at the new rows by text, and its cooldown / schedule stamps.
 public enum JSONExport {
     /// Bumped only when the model changes shape, independently of the GitHub tag. Import reads
-    /// this and nothing else, so it has to move in step with `SchemaV1` → `SchemaV2`.
+    /// this and nothing else. A field added as an optional (`RewardRow.isGoal`, `SchemaV3`) doesn't
+    /// move it; a shape an older export can't be read into does.
     public static let schemaVersion = 3
 
     public struct Snapshot: Codable, Equatable, Sendable {
@@ -57,6 +58,9 @@ public enum JSONExport {
         public var virtualKind: String?
         public var fixedCoins: Int?
         public var isActive: Bool
+        /// The pinned savings goal. Optional so an export written before it existed still reads
+        /// (as not a goal) without bumping `schemaVersion`, which import requires to match.
+        public var isGoal: Bool?
     }
 
     public struct Ledger: Codable, Equatable, Sendable {
@@ -213,7 +217,8 @@ public enum JSONExport {
                 }),
             rewards: try context.fetch(FetchDescriptor<Reward>()).sorted { $0.name < $1.name }.map {
                 RewardRow(id: $0.id, name: $0.name, estimatedCost: $0.estimatedCost,
-                          virtualKind: $0.virtualKind, fixedCoins: $0.fixedCoins, isActive: $0.isActive)
+                          virtualKind: $0.virtualKind, fixedCoins: $0.fixedCoins, isActive: $0.isActive,
+                          isGoal: $0.isGoal)
             })
     }
 

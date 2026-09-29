@@ -16,7 +16,8 @@ struct RerollPerformTests {
         for i in 0..<epics { Fixtures.quest(ctx, "epic #\(i)", .epic) }
         var rng = SeededRNG(seed: 1)
         try DayService.ensureToday(ctx, now: Fixtures.date(dayKey), in: tz, rng: &rng)
-        Economy.record(ctx, kind: .adjust, points: fund, dayKey: dayKey)
+        // A grant is spendable but earns no level, so these run at level-1 prices (`Perks`).
+        Economy.record(ctx, kind: .grant, points: fund, dayKey: dayKey)
         try ctx.save()
     }
 

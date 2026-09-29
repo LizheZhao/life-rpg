@@ -19,10 +19,25 @@ public enum Reroll {
         Int((Double(base) * pow(1.5, Double(max(0, rerollCount)))).rounded(.up))
     }
 
-    /// The epic is a flat 80 every time (`PLAN.md` §6) — it doesn't escalate.
-    public static func cost(for quest: DailyQuest) -> Int {
-        quest.slot == .epic ? quest.slot.rerollBase
-                            : cost(base: quest.slot.rerollBase, rerollCount: quest.rerollCount)
+    /// The epic is a flat 80 every time (`PLAN.md` §6) — it doesn't escalate — and 40 from Lv 12.
+    /// A regular slot costs 0 while the day's free rerolls (`Perks.freeRerollsPerDay`) aren't used
+    /// up; `freeUsedToday` is `freeRerollsUsed` for the day. The defaults are a level-1 player.
+    public static func cost(for quest: DailyQuest, level: Int = 1, freeUsedToday: Int = 0) -> Int {
+        if quest.slot == .epic { return Perks.epicRerollCost(level: level) }
+        if freeUsedToday < Perks.freeRerollsPerDay(level: level) { return 0 }
+        return cost(base: quest.slot.rerollBase, rerollCount: quest.rerollCount)
+    }
+
+    /// Free rerolls already taken on `dayKey`: its 0-point `reroll` entries. An epic reroll never
+    /// costs 0, so these are all regular-slot ones.
+    public static func freeRerollsUsed(_ ledger: [LedgerEntry], on dayKey: String) -> Int {
+        ledger.filter { $0.kind == Economy.Kind.reroll.rawValue && $0.dayKey == dayKey && $0.points == 0 }.count
+    }
+
+    public static func freeRerollsUsed(_ context: ModelContext, on dayKey: String) throws -> Int {
+        let kind = Economy.Kind.reroll.rawValue
+        return freeRerollsUsed(try context.fetch(FetchDescriptor<LedgerEntry>(
+            predicate: #Predicate { $0.kind == kind && $0.dayKey == dayKey })), on: dayKey)
     }
 
     /// The balance rule: a reroll can never take you below zero, and you can't reroll while already
@@ -40,6 +55,7 @@ public enum Reroll {
     /// until it is extended.
     /// The hidden quest is the reward for a cleared day, not a slot, and is never rerolled.
     public static func blocked(for quest: DailyQuest, on dayKey: String, balance: Int,
+                               level: Int = 1, freeUsedToday: Int = 0,
                                in timeZone: TimeZone = .current) -> Purchase.Blocked? {
         if quest.completedAt != nil { return .alreadyCompleted }
         if quest.slot == .epic {
@@ -48,7 +64,8 @@ public enum Reroll {
         } else {
             guard quest.dayKey == dayKey, !quest.isHiddenSlot, !quest.replaced else { return .notAvailable }
         }
-        return blocked(cost: cost(for: quest), balance: balance, completed: false)
+        return blocked(cost: cost(for: quest, level: level, freeUsedToday: freeUsedToday),
+                       balance: balance, completed: false)
     }
 
     /// Swaps `quest` for a fresh draw of the same slot and charges for it. Returns the new row.
@@ -61,10 +78,13 @@ public enum Reroll {
     public static func perform(_ quest: DailyQuest, on dayKey: String, in context: ModelContext,
                                timeZone: TimeZone = .current, now: Date = Date(),
                                rng: inout some RandomNumberGenerator) throws -> DailyQuest {
-        if let b = blocked(for: quest, on: dayKey, balance: try Economy.balance(context), in: timeZone) {
+        let level = try Economy.level(context)
+        let freeUsed = try freeRerollsUsed(context, on: dayKey)
+        if let b = blocked(for: quest, on: dayKey, balance: try Economy.balance(context),
+                           level: level, freeUsedToday: freeUsed, in: timeZone) {
             throw b
         }
-        let price = cost(for: quest)
+        let price = cost(for: quest, level: level, freeUsedToday: freeUsed)
 
         let fresh: DailyQuest?
         if quest.slot == .epic {

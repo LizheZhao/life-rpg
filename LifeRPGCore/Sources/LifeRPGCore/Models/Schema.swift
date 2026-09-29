@@ -13,9 +13,11 @@ import SwiftData
 /// first. Either way the exported JSON's `schemaVersion` gets bumped with it.
 ///
 /// V2 dropped `intensity` from both libraries and `RoutineTask.degradedText`, and added
-/// `downgradeIDs`, the occurrence's downgrade snapshot and `DailyContext.cycleDay`.
-public enum SchemaV2: VersionedSchema {
-    public static var versionIdentifier = Schema.Version(2, 0, 0)
+/// `downgradeIDs`, the occurrence's downgrade snapshot and `DailyContext.cycleDay`. V3 added
+/// `Reward.isGoal`. That one didn't bump the export's `schemaVersion`: the field travels as an
+/// optional, and import refuses any version but its own, so a bump would orphan every v3 backup.
+public enum SchemaV3: VersionedSchema {
+    public static var versionIdentifier = Schema.Version(3, 0, 0)
 
     public static var models: [any PersistentModel.Type] = [
         QuestTemplate.self,
@@ -31,13 +33,13 @@ public enum SchemaV2: VersionedSchema {
 }
 
 public enum LifeRPGMigrationPlan: SchemaMigrationPlan {
-    public static var schemas: [any VersionedSchema.Type] = [SchemaV2.self]
+    public static var schemas: [any VersionedSchema.Type] = [SchemaV3.self]
     public static var stages: [MigrationStage] = []
 }
 
 public enum LifeRPGSchema {
-    public static let current = Schema(versionedSchema: SchemaV2.self)
+    public static let current = Schema(versionedSchema: SchemaV3.self)
 
     /// For `#Preview` and tests that just need the model list.
-    public static let models = SchemaV2.models
+    public static let models = SchemaV3.models
 }

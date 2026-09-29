@@ -51,6 +51,18 @@ public enum Streak {
         walk(days: days, frozen: frozen, today: today, in: timeZone).count
     }
 
+    /// The first day of the run `current` counts, or nil when there is no run. A run joined by a
+    /// freeze is one run, starting where the older side started — which is what makes a milestone
+    /// paid on either side count as paid for the whole (`StreakMilestone`).
+    public static func runStart(days: Set<String>, frozen: Set<String> = [], today: String,
+                                in timeZone: TimeZone = .current) -> String? {
+        let run = walk(days: days, frozen: frozen, today: today, in: timeZone)
+        guard run.count > 0, let gap = run.stoppedAt else { return nil }
+        // A freeze only ever covers a day with a done day right behind it, so the day after the
+        // gap is a done day, not a frozen one.
+        return DayKey.adding(1, to: gap, in: timeZone)
+    }
+
     /// The missed day a freeze would cover right now, or nil.
     ///
     /// Decided with the user: a freeze is bought **after** the streak breaks, to patch it. It can

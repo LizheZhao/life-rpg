@@ -83,6 +83,11 @@ public enum Completion {
             context.delete(entry)
             throw error
         }
+        // The completion stands whatever happens here. A milestone that fails to book is still due,
+        // and the next completion or freeze pays it — `settle` pays everything reached and unpaid.
+        if quest.slot != .epic {
+            _ = try? StreakMilestone.settle(context, today: doneOn, in: timeZone, now: now)
+        }
         return points
     }
 
@@ -118,7 +123,7 @@ public enum Completion {
     /// day 4. A flexible one: full on any day from its due day to the end of that week — moving it
     /// inside the week is the point, not lateness (`PLAN.md` §4).
     public static func routinePayout(_ occurrence: RoutineOccurrence, flexible: Bool,
-                                     on dayKey: String, tier: Tier,
+                                     on dayKey: String, tier: Tier, level: Int = 1,
                                      in timeZone: TimeZone = .current) -> Int? {
         if flexible {
             guard occurrence.dueDayKey <= dayKey,
@@ -128,7 +133,8 @@ public enum Completion {
         guard let roundDay = Schedule.roundDay(due: occurrence.dueDayKey, on: dayKey, in: timeZone) else {
             return nil
         }
-        return Scoring.routinePoints(basePoints: occurrence.effectiveBasePoints, tier: tier, late: roundDay > 1)
+        return Scoring.routinePoints(basePoints: occurrence.effectiveBasePoints, tier: tier,
+                                     late: roundDay > 1, level: level)
     }
 
     /// Completes a routine occurrence on `dayKey`, paying `routinePayout`. Returns the points.
@@ -148,7 +154,8 @@ public enum Completion {
         guard !occurrence.skipped else { throw Failure.skipped }
         let routine = try routine(of: occurrence, in: context)
         guard let points = routinePayout(occurrence, flexible: routine?.flexibleWithinWeek ?? false,
-                                         on: dayKey, tier: tier, in: timeZone) else {
+                                         on: dayKey, tier: tier, level: try Economy.level(context),
+                                         in: timeZone) else {
             throw Failure.outsideRound(dueDayKey: occurrence.dueDayKey, dayKey: dayKey)
         }
         let lastCompletedBefore = routine?.lastCompletedDayKey

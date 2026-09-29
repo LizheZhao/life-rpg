@@ -99,14 +99,15 @@ struct RewardsView: View {
             .alert(title(for: confirming),
                    isPresented: Binding(get: { confirming != nil }, set: { if !$0 { confirming = nil } }),
                    presenting: confirming) { c in
-                Button("Spend \(cost(of: c))") { buy(c) }
+                Button(cost(of: c) == 0 ? "Use this month's free one" : "Spend \(cost(of: c))") { buy(c) }
                 Button("Keep coins", role: .cancel) {}
             } message: { c in
                 switch c {
                 case .redeem(let r):
                     Text("\(r.name)\n\n\(cost(of: c)) coins. This is final.")
                 case .freeze(let day):
-                    Text("Cover \(day) so the streak doesn't break there. \(cost(of: c)) coins.")
+                    Text("Cover \(day) so the streak doesn't break there. "
+                         + (cost(of: c) == 0 ? "Free — this month's free freeze." : "\(cost(of: c)) coins."))
                 }
             }
         }
@@ -115,8 +116,9 @@ struct RewardsView: View {
     // MARK: rows
 
     private func freezeSection(_ day: String) -> some View {
+        let cost = freezeCost(day)
         let blocked = Redemption.blockedFreeze(days: completedDays, frozen: frozenDays,
-                                               today: today, balance: balance)
+                                               today: today, balance: balance, cost: cost)
         return Section("Streak") {
             HStack(alignment: .firstTextBaseline) {
                 VStack(alignment: .leading, spacing: 2) {
@@ -125,7 +127,7 @@ struct RewardsView: View {
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 Spacer()
-                Button("Freeze · \(Redemption.streakFreezeCost)") { confirming = .freeze(day) }
+                Button("Freeze · \(cost == 0 ? "free" : "\(cost)")") { confirming = .freeze(day) }
                     .buttonStyle(.bordered)
                     .disabled(blocked != nil)
             }
@@ -137,7 +139,10 @@ struct RewardsView: View {
         let open = Redemption.blocked(redeeming: r, balance: balance) == nil
         return HStack(alignment: .firstTextBaseline) {
             VStack(alignment: .leading, spacing: 2) {
-                Text(r.name)
+                HStack(spacing: 4) {
+                    if r.isGoal { Image(systemName: "flag.fill").foregroundStyle(.orange).font(.caption) }
+                    Text(r.name)
+                }
                 Text("≈ \(r.estimatedCost.formatted()) · \(coins) coins")
                     .font(.caption).foregroundStyle(.secondary)
                 // How far off it is, so the list doubles as a savings tracker.
@@ -149,6 +154,13 @@ struct RewardsView: View {
             Button("Redeem") { confirming = .redeem(r) }
                 .buttonStyle(.bordered)
                 .disabled(!open)
+        }
+        .swipeActions(edge: .leading) {
+            // The one reward the today page's HUD tracks (`SavingsGoal`).
+            Button { toggleGoal(r) } label: {
+                Label(r.isGoal ? "Unpin goal" : "Set as goal", systemImage: r.isGoal ? "flag.slash" : "flag")
+            }
+            .tint(.orange)
         }
         .swipeActions(edge: .trailing) {
             // Archived, never deleted: past redemptions still point at it.
@@ -172,8 +184,13 @@ struct RewardsView: View {
     private func cost(of c: Confirm) -> Int {
         switch c {
         case .redeem(let r): RewardPricing.coins(for: r)
-        case .freeze: Redemption.streakFreezeCost
+        case .freeze(let day): freezeCost(day)
         }
+    }
+
+    /// Priced by level, with the monthly free one (`Perks`, `Redemption.freezeCost`).
+    private func freezeCost(_ day: String) -> Int {
+        Redemption.freezeCost(covering: day, level: Economy.level(ledger), ledger: ledger)
     }
 
     private func buy(_ c: Confirm) {
@@ -190,8 +207,15 @@ struct RewardsView: View {
     }
 
     private func archive(_ r: Reward) {
-        r.isActive = false
-        do { try context.save() } catch { actionError = "\(error)" }
+        do { try Redemption.archive(r, in: context) } catch { actionError = "\(error)" }
+    }
+
+    private func toggleGoal(_ r: Reward) {
+        do {
+            if r.isGoal { try SavingsGoal.unpin(r, in: context) } else { try SavingsGoal.pin(r, in: context) }
+        } catch {
+            actionError = "\(error)"
+        }
     }
 }
 

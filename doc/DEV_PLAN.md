@@ -2,7 +2,7 @@
 
 Stages follow `PLAN.md` §11; this file only tracks concrete checkable tasks, updated as development progresses. Design intent, formulas, and data model definitions stay authoritative in `PLAN.md` — not repeated here.
 
-Current status (2026-09-27): **code done through Stage 5**, and most of Stage 6. Stages 3, 3.5, 4 and 5 stay open only on their device checks, which need real daily use on the phone. Stage 5 landed with the epic (incl. extension and free replace), paid reroll, Rewards tab, Library tab and rating-driven `affinity`, followed by the review follow-ups (05:00 day end, routine replace, library ad-hoc counting toward the weekly target, Sunday bill on the today page). Stage 6: JSON export / restore with confirmation and `StoreAudit`, BOM stripping done (422 Core tests); **the web-prototype importer is next**, waiting on a sample save file.
+Current status (2026-09-27): **code done through Stage 5**, and most of Stage 6. Stages 3, 3.5, 4 and 5 stay open only on their device checks, which need real daily use on the phone. Stage 5 landed with the epic (incl. extension and free replace), paid reroll, Rewards tab, Library tab and rating-driven `affinity`, followed by the review follow-ups (05:00 day end, routine replace, library ad-hoc counting toward the weekly target, Sunday bill on the today page). Stage 6: JSON export / restore with confirmation and `StoreAudit`, BOM stripping done; **the web-prototype importer is next**, waiting on a sample save file. Stage 5.5 (streak milestones, level perks, savings goal) code done, 451 Core tests.
 
 History, kept because later stages build on its contracts — Stage 1 as it stood when it closed: `ensureToday`, catch-up, sampling, scoring,
 streak, the ledger, the today page, the payout reveal and the exports were in; 162 Core tests. Two inputs were stubs then,
@@ -189,6 +189,21 @@ Code done: `Core/Rules/CalendarMarks.swift`, `Core/Time/MonthGrid.swift`, `Core/
   - Today page: "Ahead this week" open by default on Sat/Sun, header shows Sunday night's bill from `Overdue.weekly` (same rule as the settlement); skipped/cancelled routine rows no longer offer "Done"
   - Ad-hoc sheet no longer hides routines already on the page: they are listed with where they are and a Done button (`AdHoc.onPageOccurrence`); a custom task shows similar library routines as it is typed (`AdHoc.similarRoutines`, word / prefix / CJK-character overlap)
 - [ ] Device check: open the app 00:00–05:00 and confirm nothing is settled; replace an overdue routine and an epic; watch the Sunday bill drop as flexible sessions are done
+
+## Stage 5.5 — Streak milestones, level perks, savings goal
+
+Done when: streak and level change what you do, not just what the HUD says. Design in `PLAN.md` §6 ("Level", "Streak milestones", "Savings goal"), decided with the user 2026-09-27/28: milestones pay coins; a fixed perk track; A + B + D of the economy review first, the prize box and crits later if at all.
+
+Code done: `Core/Rules/Perks.swift`, `Core/Rules/StreakMilestone.swift`, `Core/Rules/SavingsGoal.swift` (`PerksTests`, `StreakMilestoneTests`, `SavingsGoalTests`, 451 Core tests). Checked on the simulator: the level track sheet, pinning a goal and its HUD bar, the level-up card on crossing Lv 2, the V2 → V3 store migration on existing data.
+
+- [x] `Economy.Kind.streak` + `StreakMilestone` — table asserted as literals (7→50, 14→100, 30→250, 60→400, 100→600, 130/160/…→300); `Streak.runStart`; `settle` pays every reached-and-unpaid threshold of the current run, idempotent. The threshold is read back from the entry's `note` ("Streak 30")
+- [x] `settle` runs after `Completion.complete` (not for the epic) — which auto-verify goes through too — and after a freeze. A failure there doesn't undo the completion; the bonus stays due for the next settle
+- [x] `Perks` — the fixed track (`Perks.track`, `newlyUnlocked`) and one function per number it changes. `Economy.earnedNeeded(forLevel:)`, `Economy.level(_:)` for the level in force
+- [x] Perks wired in: `Reroll.cost` / `blocked` (free = 0-point `reroll` entry, `Reroll.freeRerollsUsed`, still advances `rerollCount`, still refused in debt), `Epic.maxExtensions(level:)`, `Scoring.routinePoints(…, level:)` / `Completion.routinePayout(…, level:)` (base 50 late → 25, 30 from Lv 8), `Redemption.freezeCost(covering:level:ledger:)` (monthly free one keyed on the covered day's month). Every level parameter defaults to 1; the actions read the level from the store themselves. Existing reroll / epic tests now fund with a `grant`, which doesn't buy a level, so they keep testing level-1 prices
+- [x] `Reward.isGoal` (**`@Model` change**, `Bool = false`, lightweight; `SchemaV2` → `SchemaV3`). Export / import carry it as an optional `RewardRow.isGoal` — the export's `schemaVersion` stays 3, because import refuses any other version and a bump would orphan every existing backup. `SavingsGoal`: pin (unpins the rest), unpin on redeem and on `Redemption.archive` (new; the Rewards page used to flip `isActive` itself), `pace` = net of the last 28 days ÷ 4 without the grant, `weeksLeft`
+- [x] Today page: goal bar under the balance, tap the level for the track, one alert for a level-up and / or new streak bonuses — held back while the payout reveal is up; what was last announced lives in `@AppStorage`. The level header on the epic shows the level's max extensions; the reroll swipe reads "free" when it is
+- [x] Rewards page: swipe right to set / unpin the goal (flag on the row); the freeze button shows its real price (free / 150 / 300)
+- [ ] Device check: a 7-day milestone card on the phone; a free reroll at Lv 3 writes a 0-point entry; the goal's weeks-left moves after a reroll-heavy day
 
 ## Stage 6 — Backup and migration
 

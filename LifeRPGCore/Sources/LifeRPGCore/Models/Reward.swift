@@ -8,6 +8,8 @@ import SwiftData
     public var virtualKind: String?               // "cancel_hard" / "extend_epic" / "streak_freeze"
     public var fixedCoins: Int?                   // virtual items are priced directly
     public var isActive: Bool = true
+    /// The pinned savings goal (`SavingsGoal`). At most one; added in `SchemaV3`.
+    public var isGoal: Bool = false
 
     public init() {}
 }
