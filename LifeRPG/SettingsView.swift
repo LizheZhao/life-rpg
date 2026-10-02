@@ -8,7 +8,8 @@ struct SettingsView: View {
     let seedStatus: String
     let today: String
     let sensorReport: String
-    let refresh: () -> Void
+    let check: WorkoutCheck?
+    let refresh: () async -> Void
     /// Re-runs the day after a restore, so a backup that ends before today catches up at once
     /// instead of on the next foreground.
     let onImported: () -> Void
@@ -44,7 +45,7 @@ struct SettingsView: View {
 
                 Section {
                     Button { transfer.prepareJSONExport(context) } label: {
-                        row("History (JSON)", systemImage: "clock.arrow.circlepath", tint: .hidden)
+                        row("Output records to JSON", systemImage: "clock.arrow.circlepath", tint: .hidden)
                     }
                     Button { transfer.prepareCSVExport(context) } label: {
                         row("Ratings & comments (CSV)", systemImage: "star.bubble", tint: .hidden)
@@ -87,7 +88,7 @@ struct SettingsView: View {
                 case .library:
                     LibraryView(today: today)
                 case .workoutDetection:
-                    WorkoutDetectionView(refresh: refresh)
+                    WorkoutDetectionView(check: check, refresh: refresh)
                 case .design:
                     DesignGalleryView()
                         .navigationTitle("Design")
@@ -137,6 +138,6 @@ struct SettingsView: View {
 
 #Preview {
     SettingsView(seedStatus: "Preview", today: Date().dayKey, sensorReport: "",
-                 refresh: {}, onImported: {})
+                 check: nil, refresh: {}, onImported: {})
         .modelContainer(for: LifeRPGSchema.models, inMemory: true)
 }
