@@ -2,32 +2,52 @@ import EventKit
 import Foundation
 import LifeRPGCore
 
-/// Reads the calendar the workout Shortcut writes to (`PLAN.md` §5). Which events count is
+/// Reads the calendars the workout detection watches (`PLAN.md` §5). Which events count is
 /// `WorkoutFilter` in Core; this only fetches them. iOS 17+ needs Full Access to read events.
 final class CalendarService {
+    struct Info: Identifiable {
+        let id: String
+        let title: String
+        /// The account the calendar lives in (iCloud, Gmail, ...), to tell same-named ones apart.
+        let source: String
+    }
+
     private let store = EKEventStore()
 
-    static var hasAccess: Bool { EKEventStore.authorizationStatus(for: .event) == .fullAccess }
+    static var authorization: EKAuthorizationStatus { EKEventStore.authorizationStatus(for: .event) }
+    static var hasAccess: Bool { authorization == .fullAccess }
 
     @discardableResult
     func requestAccess() async throws -> Bool {
         try await store.requestFullAccessToEvents()
     }
 
-    /// Event calendars as (identifier, title), for the picker on the debug page.
-    func calendars() -> [(id: String, title: String)] {
+    /// Event calendars, for the picker on the workout detection page.
+    func calendars() -> [Info] {
         guard Self.hasAccess else { return [] }
         return store.calendars(for: .event)
-            .map { ($0.calendarIdentifier, $0.title) }
-            .sorted { $0.title < $1.title }
+            .map { Info(id: $0.calendarIdentifier, title: $0.title, source: $0.source?.title ?? "") }
+            .sorted { ($0.source, $0.title) < ($1.source, $1.title) }
     }
 
-    /// Events in the chosen calendar between `from` and `to`. Empty without access or without a
-    /// chosen calendar — never every calendar, so a meeting can't pass for a workout.
-    func events(calendarID: String, from: Date, to: Date) -> [CalendarEvent] {
-        guard Self.hasAccess, !calendarID.isEmpty,
-              let calendar = store.calendar(withIdentifier: calendarID) else { return [] }
-        let predicate = store.predicateForEvents(withStart: from, end: to, calendars: [calendar])
+    /// Events in the selected calendars between `from` and `to`. Empty without access or with
+    /// nothing selected. Reading every calendar is safe because `WorkoutFilter` still requires a
+    /// keyword in the title.
+    func events(selection: CalendarSelection, from: Date, to: Date) -> [CalendarEvent] {
+        guard Self.hasAccess else { return [] }
+        let scope: [EKCalendar]?
+        switch selection {
+        case .none:
+            return []
+        case .all:
+            scope = nil
+        case .some(let ids):
+            // A calendar that was deleted since it was picked is skipped, not an error.
+            let found = ids.compactMap { store.calendar(withIdentifier: $0) }
+            guard !found.isEmpty else { return [] }
+            scope = found
+        }
+        let predicate = store.predicateForEvents(withStart: from, end: to, calendars: scope)
         return store.events(matching: predicate).map {
             CalendarEvent(calendarID: $0.calendar.calendarIdentifier, title: $0.title ?? "",
                           start: $0.startDate, end: $0.endDate, isAllDay: $0.isAllDay)

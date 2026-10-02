@@ -31,6 +31,17 @@ struct SettingsView: View {
                 .listRowBackground(LR.Color.surface)
 
                 Section {
+                    NavigationLink {
+                        WorkoutDetectionView(refresh: refresh)
+                    } label: {
+                        row("Workout detection", systemImage: "figure.run")
+                    }
+                } header: {
+                    header("Auto-verify")
+                }
+                .listRowBackground(LR.Color.surface)
+
+                Section {
                     Button { transfer.prepareJSONExport(context) } label: {
                         row("History (JSON)", systemImage: "clock.arrow.circlepath")
                     }
