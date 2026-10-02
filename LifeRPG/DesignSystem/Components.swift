@@ -70,12 +70,15 @@ private struct CardBackground: ViewModifier {
         return (shadow.tintedByCard ? fill.color : .black).opacity(shadow.tint)
     }
 
+    /// A neutral card's shadow is tighter (radius 12, y 4) than a tinted row's (16, 6).
+    private var shadowGeometry: (radius: CGFloat, y: CGFloat) { fill.tint == nil ? (12, 4) : (16, 6) }
+
     func body(content: Content) -> some View {
         content.background {
             let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
             shape.fill(fill.color)
                 .overlay { if fill.tint == nil { shape.strokeBorder(LR.Color.hairline, lineWidth: 1) } }
-                .shadow(color: shadowColor, radius: 16, x: 0, y: 6)
+                .shadow(color: shadowColor, radius: shadowGeometry.radius, x: 0, y: shadowGeometry.y)
         }
     }
 }

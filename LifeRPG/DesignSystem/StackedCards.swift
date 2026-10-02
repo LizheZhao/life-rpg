@@ -102,7 +102,7 @@ struct StackedCards<Item: Identifiable, Row: View>: View {
     private var chevron: some View {
         Image(systemName: "chevron.right")
             .font(.system(size: 12, weight: .bold))
-            .foregroundStyle(LR.Color.inkSecondary)
+            .foregroundStyle(LR.Color.iconNeutral)
             .rotationEffect(.degrees(expanded ? 90 : 0))
     }
 

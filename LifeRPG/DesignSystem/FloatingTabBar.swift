@@ -25,8 +25,8 @@ enum RootTab: CaseIterable, Identifiable {
     }
 }
 
-/// The app's tab bar: a white capsule floating above the bottom edge, four round buttons, the
-/// selected one filled. The only shadow in the app (`doc/UI_DESIGN.md`).
+/// The app's tab bar: a surface capsule with a hairline and a soft shadow floating above the bottom
+/// edge, four round buttons, the selected one on a `tabPill` circle (`doc/UI_DESIGN.md`).
 ///
 /// Meant as the bottom overlay of a `TabView` whose system bar is hidden. Seen on the simulator:
 /// a safe-area inset or safe-area padding outside a page's `NavigationStack` never reaches the
@@ -53,8 +53,11 @@ struct FloatingTabBar: View {
             }
         }
         .padding(6)
-        .background(RoundedRectangle(cornerRadius: LR.Radius.tabBar, style: .continuous)
-            .fill(LR.Color.surface))
+        .background {
+            let shape = RoundedRectangle(cornerRadius: LR.Radius.tabBar, style: .continuous)
+            shape.fill(LR.Color.surface)
+                .overlay { shape.strokeBorder(LR.Color.hairline, lineWidth: 1) }
+        }
         // SwiftUI's radius is half of a design tool's blur, so blur 30 is radius 15.
         .shadow(color: .black.opacity(0.10), radius: 15, y: 10)
         .frame(maxWidth: .infinity)
@@ -77,7 +80,7 @@ struct FloatingTabBar: View {
         } label: {
             Image(systemName: tab.symbol)
                 .font(.system(size: 22, weight: .semibold))
-                .foregroundStyle(selected ? LR.Color.onFill : LR.Color.inkSecondary)
+                .foregroundStyle(selected ? LR.Color.ink : LR.Color.iconNeutral)
                 .frame(width: Self.buttonSize, height: Self.buttonSize)
                 .background { indicatorCircle(selected: selected) }
                 .contentShape(Circle())
@@ -92,9 +95,9 @@ struct FloatingTabBar: View {
     @ViewBuilder
     private func indicatorCircle(selected: Bool) -> some View {
         if reduceMotion {
-            Circle().fill(LR.Color.fill).opacity(selected ? 1 : 0)
+            Circle().fill(LR.Color.tabPill).opacity(selected ? 1 : 0)
         } else if selected {
-            Circle().fill(LR.Color.fill).matchedGeometryEffect(id: "selection", in: indicator)
+            Circle().fill(LR.Color.tabPill).matchedGeometryEffect(id: "selection", in: indicator)
         }
     }
 

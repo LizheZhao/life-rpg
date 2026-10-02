@@ -8,7 +8,7 @@ Refined from `LifeRPG UI 设计规范与 UIKit Implementation Plan.md` (the orig
 |---|---|
 | Framework | SwiftUI over the existing SwiftData + `LifeRPGCore`. No UIKit rewrite, no Core Data, no Combine, no Coordinator, no `XPEngine`. |
 | Concept mapping | Home = Today. Coins / level / streak / savings goal live in the level card. Weekly **epic** = a routine-style row with a flag in its disc (it has no phases: its segments are the 7 days of the week). No attributes (STR/INT…) and no XP: colour follows **difficulty**. |
-| Epic weight | The epic is a **routine-style card**: same white surface, radius and layout as a routine row, never a dark or separate hero card. Its title shows in full and a tap on the card expands the detail. Routines and today's quests are the focus of the page. |
+| Epic weight | The epic is a **routine-style card**: same neutral surface, radius and layout as a routine row, never a dark or separate hero card. Its title shows in full and a tap on the card expands the detail. Routines and today's quests are the focus of the page. |
 | Appearance | Follows the system (light / dark automatically). Every colour token has a light and a dark value. |
 | Tabs | Floating tab bar, four tabs: **Today, Calendar, Rewards, Settings**. Debug becomes a section of Settings (simulator/dev tools); Library becomes a page inside Settings; the export / restore menu moves from Today's toolbar into Settings. |
 | Completion | Completion is final (`PLAN.md` §3): no Undo, no reverse animation, no Undo toast. The existing confirm alert stays. |
@@ -19,16 +19,19 @@ Refined from `LifeRPG UI 设计规范与 UIKit Implementation Plan.md` (the orig
 
 ## Tokens
 
-All colours are semantic names with a light and a dark value, defined once in Core (`Palette`, hex ints) and wrapped in SwiftUI `Color` by the app. Views never contain a hex literal. The values are the user's palette sheet (`diary_palette.xlsx`, chosen 2026-10-02 after comparing four candidates on the real pages); light uses the sheet's original hexes, dark its softened ones. Required contrast (WCAG 4.5:1 for text) is asserted in Core tests for every foreground/background pair, in both appearances, with one documented exception (below).
+All colours are semantic names with a light and a dark value, defined once in Core (`Palette`, hex ints) and wrapped in SwiftUI `Color` by the app. Views never contain a hex literal. The values are the user's palette sheet (`diary_palette.xlsx`, chosen 2026-10-02 after comparing four candidates on the real pages); light uses the sheet's original hexes, dark its softened ones. The neutrals (`surface`, `hairline`, `divider`, `ink`, `iconNeutral`, `sectionTitle`, `tabPill`) were then set from `neutral_surface_fix.xlsx` (2026-10-02); `canvas` stays as above. Required contrast (WCAG 4.5:1 for text) is asserted in Core tests for every foreground/background pair, in both appearances, with one documented exception (below).
 
 | Token | Light | Dark | Use |
 |---|---|---|---|
 | `canvas` | #FBFBF8 | #14141A | screen background (the sheet's page) |
-| `surface` | #FFFFFF | #1D1C25 | neutral cards, rows, tab bar (the sheet's writing card) |
-| `hairline` | #EEEFE9 | #272631 | 1 pt edge of a neutral card (the card border). In dark the card is only about 1.09:1 above the page, so this edge is what separates them |
-| `divider` | #E9EBE5 | #2B2A35 | ruled lines: Settings row separators, the slabs behind a stack |
-| `ink` | #25232F | #E6E4EC | primary text, doodles, the filled complete button (`fill`) |
-| `inkSecondary` | #6A6877 | #B1AFBD | secondary text on the canvas and surface (derived) |
+| `surface` | #FFFFFF | #23222C | neutral cards, Settings rows, tab bar. One step off the page in both appearances (1.04:1 in light, 1.17:1 in dark) |
+| `hairline` | #ECECE6 | #2F2E3A | 1 pt edge of a neutral card and of the tab bar |
+| `divider` | #ECECE6 | #34323F | ruled lines: Settings row separators, the slabs behind a stack |
+| `ink` | #25232F | #E8E6EE | primary text, doodles, the filled complete button (`fill`), the selected tab icon |
+| `inkSecondary` | #6A6877 | #B1AFBD | secondary text on the canvas and surface: captions, footers, placeholders, Workout detection headers (derived) |
+| `iconNeutral` | #6E6C7A | #8A8896 | chevrons and decorative icons, including the Settings section icons and the unselected tab icons. Non-text, held to 3:1: 5.14 / 4.52 on the surface, 4.20 / 3.29 on `tabPill` |
+| `sectionTitle` | #7A7886 | #9C9AA8 | Settings section headers only (17 pt Bold, so large text, 3:1 bar). Dark is 5.69 on the surface and 6.64 on the page; light is 4.32 and 4.17, below 4.5, kept as the user's sheet has it |
+| `tabPill` | #E9E7F2 | #3A3848 | the circle behind the selected tab icon |
 | `accent` | #4682B4 | #8FB0CC | the Caveat hand labels and the ring of an open complete button on a neutral card (the sheet's "Dear diary" / checkbox accent). Large text: 3.96 on the light canvas, 8.08 on the dark one |
 | `onFill` | #FFFFFF | #14141A | the check on a filled button |
 | `dotEmpty` / `dotFill` | #DDDED9 / #9CAF88 | #34333F / #86987A | level dot grid, empty week segments (derived) |
@@ -44,11 +47,17 @@ All colours are semantic names with a light and a dark value, defined once in Co
 | `clay` / `clayBg` | #9C472A / #F3DDD2 | #E8A183 / #4A2E22 | overdue and negative balance, never alarm red (derived) |
 | `avatarPink` | #F7C6D4 | #6B3F4C | avatar disc |
 
-Two light pairs of the sheet fall under 4.5:1 for 15 pt text, and are kept as the user chose them: white on steel blue #4682B4 (4.11) and white on dusk violet #8A7BB3 (3.77). `PaletteTests.knownBelowAA` names exactly these and holds them to the 3:1 large-text floor; no other pair may slip. Optional one-line fixes, not applied: steel blue #4179A7 (white 4.6) and violet #9386B9 (dark ink 4.7). Sheet roles with no view yet: the inner panels of the diary cards and their ruled lines.
+Neutral cards sit one step off it in both modes and let text and the tinted rows carry the contrast, so there is one `ink`, `inkSecondary`, `accent`, `pillFill` and `divider` for the page and for every card on it; there are no card-side variants of those tokens.
 
-**Shadows.** Neutral and tinted cards carry a soft shadow (radius 16, y 6) from the shared card background (`Palette.shadow`): in light a faint black one under a neutral card (7 %) and one in the row's own colour under a tinted row (22 %), in dark plain black (40 %). This is the one exception to "only the tab bar has a shadow".
+Two groups of pairs sit under 4.5:1 on purpose, each named in `PaletteTests` with its measured ratio. First, two light pairs of the sheet fall under 4.5:1 for 15 pt text, and are kept as the user chose them: white on steel blue #4682B4 (4.11) and white on dusk violet #8A7BB3 (3.77). `PaletteTests.knownBelowAA` names exactly these and holds them to the 3:1 large-text floor; no other pair may slip. Optional one-line fixes, not applied: steel blue #4179A7 (white 4.6) and violet #9386B9 (dark ink 4.7). Second, the light `sectionTitle` (4.32 on a card, 4.17 on the page) is held to the 3:1 large-text floor because Settings headers are 17 pt Bold; the smallest nudge that would reach 4.5 on both grounds is #747281, not applied. Every other secondary text is `inkSecondary` at 4.5. Icons and chevrons (`iconNeutral`) are non-text and tested at 3:1 on the surface, on `tabPill` and on each section circle. Sheet roles with no view yet: the inner panels of the diary cards and their ruled lines.
 
-Type styles (Jakarta unless noted; each wraps `UIFontMetrics`): `displayGreeting` 32 Light with an ExtraBold emphasis word, `displayLevel` 52 Light, `titleCard` 22 Bold, `heading` 17 Bold, `bodyStrong` 15 SemiBold, `caption` 13 Regular, `pill` 12 SemiBold, `hand` Caveat 22 Medium. Radii: card 28, tile 26, row 24, pill 12, tab bar 34; all `.continuous`. Insets 22, section gap 14, grid gap 10. Shadows: see the exception above; the floating tab bar keeps its own.
+**Section icon tints.** Each Settings section icon sits in a 32 pt circle filled with the section's tint at 18 % (`Palette.sectionCircleOpacity`); the glyph stays `iconNeutral`, so Settings gains colour without losing calm. Library is sage (`tintTrivial`), Auto-verify steel blue (`tintEasy`), Data dusk violet (`tintHidden`, the same circle on each of its three rows), Design amber (`tintMedium`), Developer crimson (`tintHard`). Rows are buttons with their own `iconNeutral` chevron, because the system disclosure indicator cannot be coloured.
+
+**Tab bar.** A `surface` capsule with a 1 pt `hairline` and a soft black shadow (10 %, radius 15, y 10), so it still reads as a floating bar over a white card in light. The selected tab shows a `tabPill` circle (it slides with `matchedGeometryEffect`) and an `ink` icon; the others are `iconNeutral`.
+
+**Shadows.** The shared card background (`Palette.shadow`) gives a neutral card a 1 pt `hairline` and, in light only, a soft black shadow (radius 12, y 4, 5.5 %); in dark the hairline alone is the edge. A tinted row has no hairline and a shadow of radius 16, y 6: its own colour at 22 % in light, plain black at 40 % in dark. The level card and the epic card are ordinary neutral cards.
+
+Type styles (Jakarta unless noted; each wraps `UIFontMetrics`): `displayGreeting` 32 Light with an ExtraBold emphasis word, `displayLevel` 52 Light, `titleCard` 22 Bold, `heading` 17 Bold, `bodyStrong` 15 SemiBold, `caption` 13 Regular, `pill` 12 SemiBold, `hand` Caveat 22 Medium. Radii: card 28, tile 26, row 24, pill 12, tab bar 34; all `.continuous`. Insets 22, section gap 14, grid gap 10. Shadows: see above.
 
 ## Today page
 

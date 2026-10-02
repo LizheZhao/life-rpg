@@ -13,6 +13,12 @@ enum LR {
         static let divider = color(Palette.divider)
         static let ink = color(Palette.ink)
         static let inkSecondary = color(Palette.inkSecondary)
+        /// Chevrons and decorative icons.
+        static let iconNeutral = color(Palette.iconNeutral)
+        /// Settings section headers only.
+        static let sectionTitle = color(Palette.sectionTitle)
+        /// The filled circle behind the selected tab icon.
+        static let tabPill = color(Palette.tabPill)
         /// The Caveat hand labels and the ring of an open complete button.
         static let accent = color(Palette.accent)
         static let fill = color(Palette.fill)
@@ -24,6 +30,10 @@ enum LR {
         static let tintMedium = color(Palette.tintMedium)
         static let tintHard = color(Palette.tintHard)
         static let tintHidden = color(Palette.tintHidden)
+        /// A tint at the opacity of the circle behind a Settings section icon.
+        static func sectionCircle(_ tint: QuestTint) -> SwiftUI.Color {
+            color(Palette.tint(tint)).opacity(Palette.sectionCircleOpacity)
+        }
         static let clay = color(Palette.clay)
         static let clayBg = color(Palette.clayBg)
         static let avatarPink = color(Palette.avatarPink)

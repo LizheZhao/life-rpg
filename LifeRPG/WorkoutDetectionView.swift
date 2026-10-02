@@ -34,6 +34,7 @@ struct WorkoutDetectionView: View {
             }
             .listRowBackground(LR.Color.surface)
         }
+        .listRowSeparatorTint(LR.Color.divider)
         .scrollContentBackground(.hidden)
         .background(LR.Color.canvas)
         .navigationTitle("Workout detection")
@@ -108,7 +109,8 @@ struct WorkoutDetectionView: View {
 
     private var keywordsSection: some View {
         Section {
-            TextField("Title keywords, comma separated", text: $keywords)
+            TextField("Title keywords, comma separated", text: $keywords,
+                      prompt: Text("Title keywords, comma separated").foregroundStyle(LR.Color.inkSecondary))
                 .lr(.bodyStrong)
                 .foregroundStyle(LR.Color.ink)
                 .textInputAutocapitalization(.never)
