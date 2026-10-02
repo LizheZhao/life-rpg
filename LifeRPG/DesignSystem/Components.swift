@@ -19,13 +19,12 @@ enum Haptics {
 
 /// What a card is filled with: the neutral surface, or a pastel tile.
 enum CardFill {
-    case surface, tint(Color), epic
+    case surface, tint(Color)
 
     var color: Color {
         switch self {
         case .surface: LR.Color.surface
         case .tint(let color): color
-        case .epic: LR.Color.epic
         }
     }
 }
@@ -39,7 +38,7 @@ extension View {
 struct PillLabel: View {
     /// `plain` sits on a white card or the canvas, `onTint` on a pastel tile; each has its own
     /// fill so the pill keeps a visible shape on both (`Palette.pillFill`, `Palette.pillVeil`).
-    enum Style { case plain, onTint, clay, onEpic }
+    enum Style { case plain, onTint, clay }
 
     let text: String
     var style: Style = .plain
@@ -59,7 +58,6 @@ struct PillLabel: View {
         switch style {
         case .plain, .onTint: LR.Color.ink
         case .clay: LR.Color.clay
-        case .onEpic: LR.Color.onEpic
         }
     }
 
@@ -68,7 +66,6 @@ struct PillLabel: View {
         case .plain: LR.Color.pillFill
         case .onTint: LR.Color.pillVeil
         case .clay: LR.Color.clayBg
-        case .onEpic: LR.Color.epicTrack
         }
     }
 }
@@ -90,8 +87,8 @@ struct PressableCardStyle: ButtonStyle {
 struct SegmentedProgress: View {
     let filled: Int
     let total: Int
-    var fill: Color = LR.Color.onEpic
-    var track: Color = LR.Color.epicTrack
+    var fill: Color = LR.Color.fill
+    var track: Color = LR.Color.dotEmpty
 
     var body: some View {
         HStack(spacing: 3) {

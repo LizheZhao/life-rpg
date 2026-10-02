@@ -15,14 +15,15 @@ struct TodayCardsGallery: View {
                 LevelCardView(state: level(balance: -35, streak: 0, tier: .low, goal: nil)) {}
                 LevelCardView(state: level(balance: 950, streak: 3, goal: Self.goalReady)) {}
             }
-            group("Epic: open, extended, done") {
+            group("Epic: open, extended, done, long title (tap a card to expand)") {
                 EpicCardView(state: epic(), actions: epicMenu) {}
                 EpicCardView(state: epic(extensions: 1, today: "2026-10-06"), actions: epicMenu) {}
                 EpicCardView(state: epic(points: 112)) {}
-                EpicCardView(state: epic(title: "Get a side project to demo-able state", extensions: 1,
-                                         today: "2026-10-06"), actions: epicMenu) {}
+                EpicCardView(state: epic(title: "Get a side project to demo-able state and show it to three people",
+                                         extensions: 1, today: "2026-10-06", url: "https://example.com/e"),
+                             actions: epicMenu) {}
             }
-            group("Routines: open, auto-verified, overdue, light version, done, skipped") {
+            group("Routines: open, with strikes, overdue, light version, done, skipped") {
                 RoutineRowView(state: routine("Take out the trash", base: 5), actions: routineMenu) {}
                 RoutineRowView(state: routine("Incline walk 30 min", routine: fixedRoutine),
                                actions: routineMenu) {}
@@ -107,13 +108,14 @@ struct TodayCardsGallery: View {
     }
 
     private func epic(title: String = "Ship the MCP eval set v1", extensions: Int = 0,
-                      today: String = friday, points: Int? = nil) -> EpicCardState {
+                      today: String = friday, points: Int? = nil, url: String? = nil) -> EpicCardState {
         let e = DailyQuest()
         e.slot = .epic
         e.dayKey = "2026-09-28"
         e.textSnapshot = title
         e.extensionCount = extensions
         e.points = points
+        e.launchURLSnapshot = url
         return EpicCardState(e, today: today, tier: .normal, level: 8)
     }
 

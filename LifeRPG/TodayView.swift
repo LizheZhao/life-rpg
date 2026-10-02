@@ -295,6 +295,7 @@ struct TodayView: View {
     /// looked up by `Epic.current` rather than by today's `dayKey`. Done, it stays until Sunday.
     @ViewBuilder private var epicBlock: some View {
         if let epic = currentEpic {
+            SectionTitle(title: "Epic", count: "this week")
             EpicCardView(state: EpicCardState(epic, today: today, tier: tier, level: level),
                          actions: [rerollAction(epic), extendAction(epic), replaceEpicAction(epic)].compactMap { $0 },
                          onComplete: { pending = .quest(epic) })
@@ -357,8 +358,10 @@ struct TodayView: View {
                                })
         }
         if let hiddenQuest {
+            SectionTitle(title: "Hidden")
             QuestTileView(state: questState(hiddenQuest), onComplete: { pending = .quest(hiddenQuest) })
         } else if !randomQuests.isEmpty {
+            SectionTitle(title: "Hidden")
             HiddenGateTile(unlocked: hiddenUnlocked, onReveal: revealHidden)
         }
         ForEach(randomQuests.filter(\.replaced)) { ReplacedRowView(state: ReplacedRowState($0)) }

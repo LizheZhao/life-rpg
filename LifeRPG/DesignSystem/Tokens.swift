@@ -27,11 +27,6 @@ enum LR {
         static let pillFill = color(Palette.pillFill)
         /// Laid over a pastel tile; the opacity is part of the token, so the contrast test covers it.
         static let pillVeil = color(Palette.pillVeil).opacity(Palette.pillVeilAlpha)
-        static let epic = color(Palette.epic)
-        static let epicTrack = color(Palette.epicTrack)
-        static let onEpic = color(Palette.onEpic)
-        static let epicSecondary = color(Palette.epicSecondary)
-        static let epicLabel = color(Palette.epicLabel)
 
         /// A colour that re-resolves when the appearance changes, including inside a view that
         /// overrides it with `.environment(\.colorScheme, ...)`.

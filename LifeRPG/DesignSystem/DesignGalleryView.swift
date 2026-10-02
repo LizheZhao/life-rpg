@@ -14,6 +14,7 @@ struct DesignGalleryView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 28) {
                 header
+                section("Completed stack (sample)") { CompletedStackSample() }
                 section("Colours (light | dark)") { swatches }
                 section("Type") { typeStyles }
                 section("Text on tiles") { tileText }
@@ -161,7 +162,6 @@ struct DesignGalleryView: View {
                         .lrCard(.tint(LR.Color.color(tint.token)), radius: 14)
                 }
             }
-            FlowRow { PillLabel(text: "5–15", style: .onEpic).padding(6).lrCard(.epic, radius: 14) }
         }
     }
 
@@ -198,22 +198,19 @@ struct DesignGalleryView: View {
             SegmentedProgress(filled: 0, total: 7)
         }
         .padding(16)
-        .lrCard(.epic)
+        .lrCard(.surface)
     }
 
     private var cards: some View {
         VStack(alignment: .leading, spacing: LR.Spacing.gridGap) {
             Button { pressed += 1 } label: {
                 HStack(spacing: 12) {
-                    DoodleView(key: .flag, size: 40, tint: LR.Color.onEpic)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Ship the side project").lr(.heading).foregroundStyle(LR.Color.onEpic)
-                        Text("day 3 of 7 · pressed \(pressed)").lr(.caption).foregroundStyle(LR.Color.epicSecondary)
-                    }
+                    DoodleView(key: .flag, size: 40)
+                    Text("Pressed \(pressed) times").lr(.bodyStrong).foregroundStyle(LR.Color.ink)
                     Spacer(minLength: 0)
                 }
                 .padding(16)
-                .lrCard(.epic)
+                .lrCard(.surface)
             }
             .buttonStyle(PressableCardStyle())
             HStack(spacing: 12) {

@@ -12,7 +12,6 @@ extension QuestTint {
         case .medium: LR.Color.tintMedium
         case .hard: LR.Color.tintHard
         case .hidden: LR.Color.tintHidden
-        case .epic: LR.Color.epic
         }
     }
 }
@@ -43,13 +42,22 @@ struct SectionTitle: View {
     let title: String
     var count: String?
 
+    private var heading: some View {
+        Text(title).lr(.heading).foregroundStyle(LR.Color.ink)
+            .accessibilityAddTraits(.isHeader)
+    }
+
     var body: some View {
-        HStack(alignment: .firstTextBaseline) {
-            Text(title).lr(.heading).foregroundStyle(LR.Color.ink)
-                .accessibilityAddTraits(.isHeader)
-            Spacer(minLength: 8)
-            if let count {
-                Text(count).lr(.hand).foregroundStyle(LR.Color.inkHand)
+        ViewThatFits(in: .horizontal) {
+            HStack(alignment: .firstTextBaseline) {
+                heading
+                Spacer(minLength: 8)
+                if let count { Text(count).lr(.hand).foregroundStyle(LR.Color.inkHand) }
+            }
+            // At accessibility sizes the count drops under the title instead of squeezing it.
+            VStack(alignment: .leading, spacing: 2) {
+                heading
+                if let count { Text(count).lr(.hand).foregroundStyle(LR.Color.inkHand) }
             }
         }
         .padding(.top, 6)
@@ -153,107 +161,21 @@ struct LevelCardView: View {
     }
 }
 
-// MARK: - epic
+// MARK: - routine-style row (routines and the epic)
 
-struct EpicCardView: View {
-    let state: EpicCardState
-    var actions: [CardAction] = []
-    let onComplete: () -> Void
-
-    @Environment(\.openURL) private var openURL
-    @Environment(\.dynamicTypeSize) private var typeSize
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            if typeSize.isAccessibilitySize {
-                VStack(alignment: .leading, spacing: 8) { wrappedTitleBlock; controls }
-            } else {
-                HStack(alignment: .center, spacing: 10) {
-                    DoodleView(key: .flag, size: 24, tint: LR.Color.onEpic)
-                    compactTitleBlock
-                    controls
-                }
-            }
-            SegmentedProgress(filled: state.segmentsFilled, total: state.segmentsTotal)
-        }
-        .padding(.horizontal, 16)
-        .padding(.top, 10)
-        .padding(.bottom, 10)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .lrCard(.epic, radius: LR.Radius.card)
-        .cardElement(label: state.accessibilityLabel, value: state.accessibilityValue,
-                     complete: state.isDone ? nil : onComplete,
-                     actions: menuActions,
-                     extra: [])
-    }
-
-    /// The link rides in the menu: a compact card has no room for a button of its own.
-    private var menuActions: [CardAction] {
-        guard let url = state.launchURL else { return actions }
-        return actions + [CardAction(title: "Open link", systemImage: "link") { openURL(url) }]
-    }
-
-    /// One line of title, then the reward and the notes on one thin second line. The title can be
-    /// cut at the default size, so the menu repeats it in full.
-    private var compactTitleBlock: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            DoneTitle(text: state.title, isDone: state.isDone, style: .heading, color: LR.Color.onEpic,
-                      lineLimit: 1)
-            ViewThatFits(in: .horizontal) {
-                secondLine(state.detailText)
-                secondLine(state.shortDetailText)
-                secondLine(nil)
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    private func secondLine(_ detail: String?) -> some View {
-        HStack(spacing: 6) {
-            PillLabel(text: state.rewardRangeText, style: .onEpic, dense: true)
-                .gainFloat(state.rewardRangeText, when: state.isDone)
-            if let detail {
-                Text(detail).lr(.caption).foregroundStyle(LR.Color.epicSecondary).lineLimit(1)
-            }
-        }
-    }
-
-    private var wrappedTitleBlock: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            DoneTitle(text: state.title, isDone: state.isDone, style: .heading, color: LR.Color.onEpic)
-            Text(state.detailText).lr(.caption).foregroundStyle(LR.Color.epicSecondary)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    private var controls: some View {
-        HStack(spacing: 0) {
-            if typeSize.isAccessibilitySize {
-                PillLabel(text: state.rewardRangeText, style: .onEpic)
-                    .gainFloat(state.rewardRangeText, when: state.isDone)
-                    .padding(.trailing, 4)
-            }
-            CardMenuButton(actions: menuActions, onDark: true, compact: !typeSize.isAccessibilitySize,
-                           heading: state.title)
-            CompleteButton(isDone: state.isDone, onDark: true,
-                           visibleSize: typeSize.isAccessibilitySize ? 44 : 32, action: onComplete)
-                .padding(typeSize.isAccessibilitySize ? 0 : -6)
-        }
-    }
-}
-
-// MARK: - routine row
-
-struct RoutineRowView: View {
-    let state: RoutineRowState
-    var actions: [CardAction] = []
-    let onComplete: () -> Void
-    var onSwitchVersion: () -> Void = {}
+/// The frame routines and the epic share: a doodle disc, the details, the controls, and an
+/// optional footer along the bottom of the card. At accessibility sizes the controls drop under
+/// the text.
+private struct RowLayout<Details: View, Controls: View, Footer: View>: View {
+    let doodle: DoodleKey
+    @ViewBuilder let details: Details
+    @ViewBuilder let controls: Controls
+    @ViewBuilder let footer: Footer
 
     @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
-        Group {
+        VStack(alignment: .leading, spacing: 8) {
             if typeSize.isAccessibilitySize {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack(alignment: .top, spacing: 12) { disc; details }
@@ -266,10 +188,118 @@ struct RoutineRowView: View {
                     controls
                 }
             }
+            footer
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
         .lrCard(.surface, radius: LR.Radius.row)
+    }
+
+    private var disc: some View {
+        Circle().fill(LR.Color.pillFill)
+            .frame(width: 52, height: 52)
+            .overlay { DoodleView(key: doodle, size: 28) }
+    }
+}
+
+// MARK: - epic
+
+/// The week's epic: a routine row with a flag in the disc, an "Epic" pill, the week as seven thin
+/// segments along the bottom, and a tap on the card body that opens the detail. The complete
+/// button and the `⋯` menu are buttons of their own, so a body tap never completes anything.
+struct EpicCardView: View {
+    let state: EpicCardState
+    var actions: [CardAction] = []
+    let onComplete: () -> Void
+
+    @State private var expanded = false
+    @Environment(\.openURL) private var openURL
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        RowLayout(doodle: .flag) {
+            details
+        } controls: {
+            HStack(spacing: 0) {
+                CardMenuButton(actions: menuActions)
+                CompleteButton(isDone: state.isDone, action: onComplete)
+            }
+        } footer: {
+            SegmentedProgress(filled: state.segmentsFilled, total: state.segmentsTotal)
+        }
+        .contentShape(Rectangle())
+        .onTapGesture(perform: toggle)
+        .cardElement(label: state.accessibilityLabel, value: state.accessibilityValue,
+                     complete: state.isDone ? nil : onComplete,
+                     actions: menuActions,
+                     extra: [(title: expanded ? "Collapse details" : "Expand details", run: toggle)],
+                     hint: expanded ? "Collapses the details" : "Expands the details")
+    }
+
+    private func toggle() {
+        withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) { expanded.toggle() }
+    }
+
+    /// The link rides in the menu as well as in the detail, like the other cards' menus.
+    private var menuActions: [CardAction] {
+        guard let url = state.launchURL else { return actions }
+        return actions + [CardAction(title: "Open link", systemImage: "link") { openURL(url) }]
+    }
+
+    private var details: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                DoneTitle(text: state.title, isDone: state.isDone)
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(LR.Color.inkSecondary)
+                    .rotationEffect(.degrees(expanded ? 90 : 0))
+                    .accessibilityHidden(true)
+            }
+            PillRow(pills: state.pills)
+                .gainFloat(state.awardedPoints.map { "+\($0)" } ?? "", when: state.isDone)
+            if expanded {
+                VStack(alignment: .leading, spacing: 2) {
+                    ForEach(state.detailLines, id: \.self) { line in
+                        Text(line).lr(.caption).foregroundStyle(LR.Color.inkSecondary)
+                    }
+                    if let url = state.launchURL {
+                        Link("Open", destination: url)
+                            .lr(.caption).foregroundStyle(LR.Color.ink).underline()
+                            .padding(.vertical, 12)
+                            .contentShape(Rectangle())
+                            .padding(.vertical, -12)
+                    }
+                }
+                .transition(.opacity)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+// MARK: - routine row
+
+struct RoutineRowView: View {
+    let state: RoutineRowState
+    var actions: [CardAction] = []
+    let onComplete: () -> Void
+    var onSwitchVersion: () -> Void = {}
+
+    var body: some View {
+        RowLayout(doodle: state.doodle) {
+            details
+        } controls: {
+            HStack(spacing: 0) {
+                CardMenuButton(actions: actions)
+                if !state.isSkipped {
+                    CompleteButton(isDone: state.isDone, action: onComplete)
+                }
+            }
+        } footer: {
+            EmptyView()
+        }
         .cardElement(label: state.accessibilityLabel, value: state.accessibilityValue,
                      complete: state.isDone || state.isSkipped ? nil : onComplete,
                      actions: actions,
@@ -278,12 +308,6 @@ struct RoutineRowView: View {
 
     private var versionAction: [(title: String, run: () -> Void)] {
         state.version?.switchLabel.map { [(title: $0, run: onSwitchVersion)] } ?? []
-    }
-
-    private var disc: some View {
-        Circle().fill(LR.Color.pillFill)
-            .frame(width: 52, height: 52)
-            .overlay { DoodleView(key: state.doodle, size: 28) }
     }
 
     private var details: some View {
@@ -307,15 +331,6 @@ struct RoutineRowView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    @ViewBuilder private var controls: some View {
-        HStack(spacing: 0) {
-            CardMenuButton(actions: actions)
-            if !state.isSkipped {
-                CompleteButton(isDone: state.isDone, action: onComplete)
-            }
-        }
     }
 }
 

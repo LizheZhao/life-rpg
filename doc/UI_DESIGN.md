@@ -7,8 +7,8 @@ Refined from `LifeRPG UI 设计规范与 UIKit Implementation Plan.md` (the orig
 | Topic | Decision |
 |---|---|
 | Framework | SwiftUI over the existing SwiftData + `LifeRPGCore`. No UIKit rewrite, no Core Data, no Combine, no Coordinator, no `XPEngine`. |
-| Concept mapping | Home = Today. Coins / level / streak / savings goal live in the level card. Weekly **epic** = the dark card (it has no phases: its segments are the 7 days of the week). No attributes (STR/INT…) and no XP: colour follows **difficulty**. |
-| Epic weight | The epic card is **compact** — one short card, not a hero. Routines and today's quests are the focus of the page. |
+| Concept mapping | Home = Today. Coins / level / streak / savings goal live in the level card. Weekly **epic** = a routine-style row with a flag in its disc (it has no phases: its segments are the 7 days of the week). No attributes (STR/INT…) and no XP: colour follows **difficulty**. |
+| Epic weight | The epic is a **routine-style card**: same white surface, radius and layout as a routine row, never a dark or separate hero card. Its title shows in full and a tap on the card expands the detail. Routines and today's quests are the focus of the page. |
 | Appearance | Follows the system (light / dark automatically). Every colour token has a light and a dark value. |
 | Tabs | Floating tab bar, four tabs: **Today, Calendar, Rewards, Settings**. Debug becomes a section of Settings (simulator/dev tools); Library becomes a page inside Settings; the export / restore menu moves from Today's toolbar into Settings. |
 | Completion | Completion is final (`PLAN.md` §3): no Undo, no reverse animation, no Undo toast. The existing confirm alert stays. |
@@ -29,8 +29,8 @@ All colours are semantic names with a light and a dark value, defined once in Co
 | `inkSecondary` | #6B6B73 | #A5A5AD | secondary text on canvas / surface |
 | `inkOnTint` | #3F3F46 | #D8D5D1 | secondary text on a pastel tile (`#6B6B73` fails on the sky tile) |
 | `inkHand` | #55555D | #B8B8C0 | Caveat labels |
-| `fill` / `onFill` | #18181B / #FFFFFF | #F4F1EE / #151517 | selected state, done complete-button, epic card |
-| `dotEmpty` / `dotFill` | #DAD5D0 / #8ED1B4 | #3A3A40 / #7CC4A6 | level dot grid |
+| `fill` / `onFill` | #18181B / #FFFFFF | #F4F1EE / #151517 | selected state, done complete-button, filled week segments |
+| `dotEmpty` / `dotFill` | #DAD5D0 / #8ED1B4 | #3A3A40 / #7CC4A6 | level dot grid, empty week segments |
 | `tintTrivial` | #BFE8D6 | #2F4A3F | trivial tile (mint) |
 | `tintEasy` | #B9E3F4 | #2C4655 | easy tile (sky) |
 | `tintMedium` | #F4E29A | #55482A | medium tile (butter) |
@@ -43,12 +43,12 @@ Type styles (Jakarta unless noted; each wraps `UIFontMetrics`): `displayGreeting
 
 ## Today page
 
-Order: header (avatar, add, no export menu) → greeting (Caveat "day N · M day streak", Jakarta line with squiggle under the emphasis word) → level card → **compact epic** → Routines → Today's quests.
+Order: header (avatar, add, no export menu) → greeting (Caveat "day N · M day streak", Jakarta line with squiggle under the emphasis word) → level card → **epic** → Routines → Today's quests.
 
 - **Level card.** Level number, coins, "N to Lv X", 20-dot grid = progress to the next level (each dot 5 %), tier / slot pills, savings-goal bar. The fraction is a Core function, not computed in the view.
-- **Compact epic.** One card of about 88 pt: small flag doodle, one-line title, 7 thin segments (days of the week elapsed), reward range, a `⋯` menu (reroll / extend / replace). Dark-filled card in both appearances.
-- **Routines.** Full-width rows: doodle disc, title, pills (`+points`, frequency, auto-verified, lighter version), complete button. Overdue shows a clay pill ("overdue · day 2", the halved payout). Done rows get strikethrough and the filled check.
-- **Today's quests.** Two-column grid of tinted tiles, tint = difficulty. The pill shows the **range only** (`5–15`), not the word. Hidden quest and the trivial group are full-width tiles. At accessibility text sizes the grid becomes one column.
+- **Epic.** Under its own section header (`Epic`, hand label `this week`), a routine-style row on the surface card: flag doodle in the disc, the title in full (it wraps like a routine title), pills for the reward range, `N days left` (`last day` on the final day, counted by `DayKey` from `Epic.lastDayKey`) and `extended 1/2`, a `⋯` menu (reroll / extend / replace / open link) and the 44 pt complete button. The 7 thin segments (days of the week elapsed, `dotEmpty` empty, `fill` filled) run along the bottom of the card. A tap on the card body expands the detail (`Day 5 of 7 · due Sun Oct 4`, extensions used of the maximum, the drawn value, the link) with a chevron that rotates; nothing is persisted and the body tap never completes.
+- **Routines.** Full-width rows: doodle disc, title, pills (`+points`, `N strikes this week` from `Schedule.doneThisWeek`, overdue, lighter version), `⋯` menu, complete button. Auto-verified routines say so only to VoiceOver. Overdue shows a clay pill ("overdue · day 2", the halved payout). Done rows get strikethrough and the filled check.
+- **Today's quests.** Two-column grid of tinted tiles, tint = difficulty. The pill shows the **range only** (`5–15`), not the word. The hidden quest (its gate or the revealed tile) sits under its own `Hidden` section header, and the trivial group is a full-width tile. At accessibility text sizes the grid becomes one column.
 - Backlog, "do ahead" and the Sunday bill keep their current content, restyled as rows.
 
 ## Motion and haptics
@@ -69,7 +69,7 @@ Each slice is built by one owner, verified on the simulator (light, dark, larges
 |---|---|---|
 | 1 | **Design system.** Core `Palette` (light/dark hex + contrast tests) and `DoodleKey`; app `DesignSystem/` (tokens, fonts, doodles, primitive components, gallery). | `2770976`, `9add522` |
 | 2 | **Floating tab bar and Settings.** Four tabs (Today, Calendar, Rewards, Settings); Library, Debug, design gallery and export / restore live in Settings. | `e4212c8` |
-| 3 | **Today reskin.** Core presentation values (`TodayPresentation`); level card, compact epic, routine rows, tinted quest tiles, `⋯` menus replacing swipe actions, one-VoiceOver-element cards. Level card about 120 pt and epic about 74 pt so Routines and Today's quests start on the first screen. | `00e1713`, `9158b79` |
+| 3 | **Today reskin.** Core presentation values (`TodayPresentation`); level card, epic, routine rows, tinted quest tiles, `⋯` menus replacing swipe actions, one-VoiceOver-element cards. Level card about 120 pt so Routines and Today's quests start on the first screen; the epic was first a compact dark card and is now a routine-style card (this change). | `00e1713`, `9158b79` |
 
 Built differently from the first draft of this document: the tab bar is an overlay on the `TabView` (a bottom safe-area inset did not reach scroll views inside navigation stacks), each scroll view reserves its own bottom margin through `reservingTabBarSpace()`, and the bar fades out while the keyboard is up.
 

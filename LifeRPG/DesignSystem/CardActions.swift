@@ -16,27 +16,17 @@ struct CardAction: Identifiable {
 /// The trailing `⋯`, with a 44 pt hit target.
 struct CardMenuButton: View {
     let actions: [CardAction]
-    var onDark = false
-    /// Takes 32 pt of layout while keeping a 44 pt target, for a tight row.
-    var compact = false
-    /// The full text of a card whose title is cut short, shown at the top of the menu.
-    var heading: String?
 
     var body: some View {
         if !actions.isEmpty {
             Menu {
-                if let heading {
-                    Section(heading) { CardActionButtons(actions: actions) }
-                } else {
-                    CardActionButtons(actions: actions)
-                }
+                CardActionButtons(actions: actions)
             } label: {
                 Image(systemName: "ellipsis")
                     .font(.system(size: 17, weight: .bold))
-                    .foregroundStyle(onDark ? LR.Color.epicSecondary : LR.Color.inkSecondary)
+                    .foregroundStyle(LR.Color.inkSecondary)
                     .frame(width: 44, height: 44)
                     .contentShape(Rectangle())
-                    .padding(compact ? -6 : 0)
             }
             .accessibilityLabel("More actions")
         }
@@ -60,6 +50,7 @@ private struct OneElementModifier: ViewModifier {
     let complete: (() -> Void)?
     let actions: [CardAction]
     let extra: [(title: String, run: () -> Void)]
+    let hint: String?
 
     func body(content: Content) -> some View {
         content
@@ -69,6 +60,7 @@ private struct OneElementModifier: ViewModifier {
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(label)
             .accessibilityValue(value)
+            .accessibilityHint(hint ?? "")
             .accessibilityActions {
                 if let complete { Button("Complete", action: complete) }
                 ForEach(actions.filter(\.isEnabled)) { action in
@@ -88,9 +80,10 @@ extension View {
     func cardElement(label: String, value: String,
                      complete: (() -> Void)?,
                      actions: [CardAction] = [],
-                     extra: [(title: String, run: () -> Void)] = []) -> some View {
+                     extra: [(title: String, run: () -> Void)] = [],
+                     hint: String? = nil) -> some View {
         modifier(OneElementModifier(label: label, value: value, complete: complete,
-                                    actions: actions, extra: extra))
+                                    actions: actions, extra: extra, hint: hint))
     }
 }
 
