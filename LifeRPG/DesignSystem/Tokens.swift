@@ -7,18 +7,38 @@ import UIKit
 enum LR {
     enum Color {
         static let canvas = color(Palette.canvas)
+        /// Ruled lines on the canvas.
+        static let divider = color(Palette.divider)
+        /// Text and doodles drawn on the canvas.
+        static let ink = color(Palette.ink)
+        static let inkSecondary = color(Palette.inkSecondary)
+        /// The Caveat hand labels on the canvas.
+        static let accent = color(Palette.accent)
+        /// The filled check on a tinted row and the check drawn on it.
+        static let fill = color(Palette.fill)
+        static let onFill = color(Palette.onFill)
+        /// A pill on the canvas.
+        static let pillFill = color(Palette.pillFill)
+
+        /// A neutral card, opposite in polarity to the canvas; what is drawn on it uses `card…`.
         static let surface = color(Palette.surface)
         /// The 1 pt edge of a neutral card.
         static let hairline = color(Palette.hairline)
-        static let divider = color(Palette.divider)
-        static let ink = color(Palette.ink)
-        static let inkSecondary = color(Palette.inkSecondary)
-        /// The Caveat hand labels and the ring of an open complete button.
-        static let accent = color(Palette.accent)
-        static let fill = color(Palette.fill)
-        static let onFill = color(Palette.onFill)
+        static let cardInk = color(Palette.cardInk)
+        static let cardInkSecondary = color(Palette.cardInkSecondary)
+        /// The ring of an open complete button and a card's chevrons.
+        static let cardAccent = color(Palette.cardAccent)
+        /// The filled check on a neutral card, the selected tab circle, and what is drawn on it.
+        static let cardFill = color(Palette.cardFill)
+        static let cardOnFill = color(Palette.cardOnFill)
+        /// A pill and the doodle disc on a neutral card.
+        static let cardPill = color(Palette.cardPill)
+        static let cardDivider = color(Palette.cardDivider)
+        static let cardClay = color(Palette.cardClay)
+        /// Level dots, the epic's week and the goal bar, all on a neutral card.
         static let dotEmpty = color(Palette.dotEmpty)
         static let dotFill = color(Palette.dotFill)
+
         static let tintTrivial = color(Palette.tintTrivial)
         static let tintEasy = color(Palette.tintEasy)
         static let tintMedium = color(Palette.tintMedium)
@@ -29,7 +49,6 @@ enum LR {
         static let avatarPink = color(Palette.avatarPink)
         /// A pill on a tinted row: a solid chip.
         static let chip = color(Palette.chip)
-        static let pillFill = color(Palette.pillFill)
 
         /// What is drawn on a tint (title, caption, doodle, `⋯`, open ring): per tint.
         static func ink(on tint: QuestTint) -> SwiftUI.Color { color(Palette.ink(on: tint)) }

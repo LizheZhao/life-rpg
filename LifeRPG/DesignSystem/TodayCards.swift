@@ -32,7 +32,7 @@ private struct PillRow: View {
     private func style(_ kind: PillState.Kind) -> PillLabel.Style {
         switch kind {
         case .clay: .clay
-        case .payout, .plain: onTint ? .onTint : .plain
+        case .payout, .plain: onTint ? .onTint : .onCard
         }
     }
 }
@@ -88,9 +88,9 @@ struct LevelCardView: View {
                 LevelDotGrid(filled: state.filledDots, total: state.dotCount,
                              columns: typeSize.isAccessibilitySize ? 10 : state.dotCount)
                 FlowRow(spacing: 6) {
-                    PillLabel(text: state.tierText, dense: true)
-                    PillLabel(text: state.slotsText, dense: true)
-                    if let streak = state.streakText { PillLabel(text: streak, dense: true) }
+                    PillLabel(text: state.tierText, style: .onCard, dense: true)
+                    PillLabel(text: state.slotsText, style: .onCard, dense: true)
+                    if let streak = state.streakText { PillLabel(text: streak, style: .onCard, dense: true) }
                 }
                 if let goal = state.goal { goalBlock(goal) }
             }
@@ -108,38 +108,38 @@ struct LevelCardView: View {
     }
 
     private var levelText: some View {
-        Text("Lv \(state.level)").lr(.levelInline).foregroundStyle(LR.Color.ink)
+        Text("Lv \(state.level)").lr(.levelInline).foregroundStyle(LR.Color.cardInk)
     }
 
     private var coinsText: some View {
         HStack(alignment: .firstTextBaseline, spacing: 4) {
             Text("\(state.balance)").lr(.titleCard).monospacedDigit()
-                .foregroundStyle(state.isNegative ? LR.Color.clay : LR.Color.ink)
-            Text("coins").lr(.caption).foregroundStyle(LR.Color.inkSecondary)
+                .foregroundStyle(state.isNegative ? LR.Color.cardClay : LR.Color.cardInk)
+            Text("coins").lr(.caption).foregroundStyle(LR.Color.cardInkSecondary)
         }
     }
 
     private var toNextText: some View {
-        Text("\(state.pointsToNext) to Lv \(state.level + 1)").lr(.caption).foregroundStyle(LR.Color.inkSecondary)
+        Text("\(state.pointsToNext) to Lv \(state.level + 1)").lr(.caption).foregroundStyle(LR.Color.cardInkSecondary)
     }
 
     private func goalBlock(_ goal: LevelCardState.Goal) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             ViewThatFits(in: .horizontal) {
                 HStack(alignment: .firstTextBaseline) {
-                    Text(goal.name).lr(.bodyStrong).foregroundStyle(LR.Color.ink)
+                    Text(goal.name).lr(.bodyStrong).foregroundStyle(LR.Color.cardInk)
                     Spacer(minLength: 8)
-                    Text(goal.text).lr(.caption).monospacedDigit().foregroundStyle(LR.Color.inkSecondary)
+                    Text(goal.text).lr(.caption).monospacedDigit().foregroundStyle(LR.Color.cardInkSecondary)
                 }
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(goal.name).lr(.bodyStrong).foregroundStyle(LR.Color.ink)
-                    Text(goal.text).lr(.caption).monospacedDigit().foregroundStyle(LR.Color.inkSecondary)
+                    Text(goal.name).lr(.bodyStrong).foregroundStyle(LR.Color.cardInk)
+                    Text(goal.text).lr(.caption).monospacedDigit().foregroundStyle(LR.Color.cardInkSecondary)
                 }
             }
             GeometryReader { proxy in
                 ZStack(alignment: .leading) {
                     Capsule().fill(LR.Color.dotEmpty)
-                    Capsule().fill(LR.Color.fill).frame(width: proxy.size.width * goal.fraction)
+                    Capsule().fill(LR.Color.cardFill).frame(width: proxy.size.width * goal.fraction)
                 }
             }
             .frame(height: 6)
@@ -186,7 +186,7 @@ private struct RowLayout<Details: View, Controls: View, Footer: View>: View {
     private var disc: some View {
         Circle().fill(fill.disc)
             .frame(width: 52, height: 52)
-            .overlay { DoodleView(key: doodle, size: 28) }
+            .overlay { DoodleView(key: doodle, size: 28, tint: fill.doodleInk) }
     }
 }
 
@@ -241,7 +241,7 @@ struct EpicCardView: View {
                 Spacer(minLength: 0)
                 Image(systemName: "chevron.right")
                     .font(.system(size: 12, weight: .bold))
-                    .foregroundStyle(LR.Color.inkSecondary)
+                    .foregroundStyle(LR.Color.cardInkSecondary)
                     .rotationEffect(.degrees(expanded ? 90 : 0))
                     .accessibilityHidden(true)
             }
@@ -250,11 +250,11 @@ struct EpicCardView: View {
             if expanded {
                 VStack(alignment: .leading, spacing: 2) {
                     ForEach(state.detailLines, id: \.self) { line in
-                        Text(line).lr(.caption).foregroundStyle(LR.Color.inkSecondary)
+                        Text(line).lr(.caption).foregroundStyle(LR.Color.cardInkSecondary)
                     }
                     if let url = state.launchURL {
                         Link("Open", destination: url)
-                            .lr(.caption).foregroundStyle(LR.Color.ink).underline()
+                            .lr(.caption).foregroundStyle(LR.Color.cardInk).underline()
                             .padding(.vertical, 12)
                             .contentShape(Rectangle())
                             .padding(.vertical, -12)
@@ -304,10 +304,10 @@ struct RoutineRowView: View {
             PillRow(pills: state.pills)
                 .gainFloat(state.awardedPoints.map { "+\($0)" } ?? "", when: state.isDone)
             if let version = state.version {
-                Text(version.note).lr(.caption).foregroundStyle(LR.Color.inkSecondary)
+                Text(version.note).lr(.caption).foregroundStyle(LR.Color.cardInkSecondary)
                 if let label = version.switchLabel {
                     Button(label, action: onSwitchVersion)
-                        .lr(.caption).foregroundStyle(LR.Color.ink)
+                        .lr(.caption).foregroundStyle(LR.Color.cardInk)
                         .underline()
                         .padding(.vertical, 12)
                         .contentShape(Rectangle())
@@ -315,7 +315,7 @@ struct RoutineRowView: View {
                 }
             }
             if let line = state.noteLine {
-                Text(line).lr(.caption).foregroundStyle(LR.Color.inkSecondary)
+                Text(line).lr(.caption).foregroundStyle(LR.Color.cardInkSecondary)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -525,10 +525,10 @@ struct RecordRowView<Trailing: View>: View {
         HStack(alignment: .center, spacing: 12) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(title).lr(.bodyStrong)
-                    .foregroundStyle(secondary ? LR.Color.inkSecondary : LR.Color.ink)
+                    .foregroundStyle(secondary ? LR.Color.cardInkSecondary : LR.Color.cardInk)
                     .fixedSize(horizontal: false, vertical: true)
                 if let caption {
-                    Text(caption).lr(.caption).foregroundStyle(LR.Color.inkSecondary)
+                    Text(caption).lr(.caption).foregroundStyle(LR.Color.cardInkSecondary)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)

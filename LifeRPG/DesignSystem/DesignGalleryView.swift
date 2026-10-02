@@ -118,14 +118,14 @@ struct DesignGalleryView: View {
     private var doodles: some View {
         LazyVGrid(columns: [GridItem(.adaptive(minimum: doodleMinimum), spacing: LR.Spacing.gridGap)], spacing: LR.Spacing.gridGap) {
             ForEach(DoodleKey.allCases, id: \.self) { key in
-                specimen(key.rawValue) { DoodleView(key: key, size: 56) }
+                specimen(key.rawValue) { DoodleView(key: key, size: 56, tint: LR.Color.cardInk) }
             }
             specimen("check") {
-                HandCheck().stroke(LR.Color.ink, style: StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round))
+                HandCheck().stroke(LR.Color.cardInk, style: StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round))
                     .frame(width: 40, height: 40)
             }
             specimen("squiggle") {
-                Squiggle().stroke(LR.Color.ink, style: StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round))
+                Squiggle().stroke(LR.Color.cardInk, style: StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round))
                     .frame(width: 60, height: 9)
             }
         }
@@ -134,7 +134,7 @@ struct DesignGalleryView: View {
     private func specimen<Content: View>(_ name: String, @ViewBuilder _ content: () -> Content) -> some View {
         VStack(spacing: 6) {
             content().frame(height: 56)
-            Text(name).lr(.caption).foregroundStyle(LR.Color.inkSecondary)
+            Text(name).lr(.caption).foregroundStyle(LR.Color.cardInkSecondary)
         }
         .padding(10)
         .frame(maxWidth: .infinity)
@@ -144,8 +144,8 @@ struct DesignGalleryView: View {
     private var pills: some View {
         VStack(alignment: .leading, spacing: 10) {
             FlowRow {
-                PillLabel(text: "+15")
-                PillLabel(text: "Wed · Sat")
+                PillLabel(text: "+15", style: .onCard)
+                PillLabel(text: "Wed · Sat", style: .onCard)
                 PillLabel(text: "overdue · day 2", style: .clay)
             }
             .padding(12).lrCard(.surface, radius: 14)
@@ -169,9 +169,11 @@ struct DesignGalleryView: View {
             labelled("done") { CompleteButton(isDone: true) {} }
             labelled("tap") { CompleteButton(isDone: demoDone) { demoDone = true } }
             Button("Reset") { demoDone = false }
-                .lr(.bodyStrong).foregroundStyle(LR.Color.ink)
+                .lr(.bodyStrong).foregroundStyle(LR.Color.cardInk)
                 .frame(minHeight: 44)
         }
+        .padding(.horizontal, 16)
+        .lrCard(.surface, radius: LR.Radius.row)
     }
 
     private var dots: some View {
@@ -184,9 +186,12 @@ struct DesignGalleryView: View {
                 Button("+3") { demoDots = min(20, demoDots + 3) }
                 Button("Reset") { demoDots = 6 }
             }
-            .lr(.bodyStrong).foregroundStyle(LR.Color.ink)
+            .lr(.bodyStrong).foregroundStyle(LR.Color.cardInk)
             .frame(minHeight: 44)
         }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .lrCard(.surface)
     }
 
     private var segments: some View {
@@ -203,8 +208,8 @@ struct DesignGalleryView: View {
         VStack(alignment: .leading, spacing: LR.Spacing.gridGap) {
             Button { pressed += 1 } label: {
                 HStack(spacing: 12) {
-                    DoodleView(key: .flag, size: 40)
-                    Text("Pressed \(pressed) times").lr(.bodyStrong).foregroundStyle(LR.Color.ink)
+                    DoodleView(key: .flag, size: 40, tint: LR.Color.cardInk)
+                    Text("Pressed \(pressed) times").lr(.bodyStrong).foregroundStyle(LR.Color.cardInk)
                     Spacer(minLength: 0)
                 }
                 .padding(16)
@@ -212,8 +217,8 @@ struct DesignGalleryView: View {
             }
             .buttonStyle(PressableCardStyle())
             HStack(spacing: 12) {
-                DoodleView(key: .sneaker, size: 40)
-                Text("Incline walk, 30 minutes").lr(.bodyStrong).foregroundStyle(LR.Color.ink)
+                DoodleView(key: .sneaker, size: 40, tint: LR.Color.cardInk)
+                Text("Incline walk, 30 minutes").lr(.bodyStrong).foregroundStyle(LR.Color.cardInk)
                 Spacer(minLength: 0)
                 CompleteButton(isDone: false) {}
             }
@@ -232,7 +237,7 @@ struct DesignGalleryView: View {
     private func labelled<Content: View>(_ name: String, @ViewBuilder _ content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             content()
-            Text(name).lr(.caption).foregroundStyle(LR.Color.inkSecondary)
+            Text(name).lr(.caption).foregroundStyle(LR.Color.cardInkSecondary)
         }
     }
 }

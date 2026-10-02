@@ -13,17 +13,21 @@ struct SettingsView: View {
     /// instead of on the next foreground.
     let onImported: () -> Void
 
+    /// The pages the rows push. A row is a button with a chevron of its own: the system disclosure
+    /// indicator follows the system colour scheme, and on a card that is opposite to the page it
+    /// would be dark on dark.
+    private enum Page: Hashable { case library, workoutDetection, design, debug }
+
     @Environment(\.modelContext) private var context
     @State private var transfer = DataTransfer()
+    @State private var path: [Page] = []
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             List {
                 Section {
-                    NavigationLink {
-                        LibraryView(today: today)
-                    } label: {
-                        row("Library", systemImage: "books.vertical")
+                    Button { path.append(.library) } label: {
+                        row("Library", systemImage: "books.vertical", pushes: true)
                     }
                 } header: {
                     header("Library")
@@ -31,10 +35,8 @@ struct SettingsView: View {
                 .listRowBackground(LR.Color.surface)
 
                 Section {
-                    NavigationLink {
-                        WorkoutDetectionView(refresh: refresh)
-                    } label: {
-                        row("Workout detection", systemImage: "figure.run")
+                    Button { path.append(.workoutDetection) } label: {
+                        row("Workout detection", systemImage: "figure.run", pushes: true)
                     }
                 } header: {
                     header("Auto-verify")
@@ -52,7 +54,7 @@ struct SettingsView: View {
                         row("Restore from JSON…", systemImage: "square.and.arrow.down")
                     }
                     if let error = transfer.error {
-                        Text(error).foregroundStyle(LR.Color.clay)
+                        Text(error).foregroundStyle(LR.Color.cardClay)
                     }
                 } header: {
                     header("Data")
@@ -60,12 +62,8 @@ struct SettingsView: View {
                 .listRowBackground(LR.Color.surface)
 
                 Section {
-                    NavigationLink {
-                        DesignGalleryView()
-                            .navigationTitle("Design")
-                            .navigationBarTitleDisplayMode(.inline)
-                    } label: {
-                        row("Design gallery", systemImage: "paintpalette")
+                    Button { path.append(.design) } label: {
+                        row("Design gallery", systemImage: "paintpalette", pushes: true)
                     }
                 } header: {
                     header("Design")
@@ -73,30 +71,52 @@ struct SettingsView: View {
                 .listRowBackground(LR.Color.surface)
 
                 Section {
-                    NavigationLink {
-                        DebugView(seedStatus: seedStatus, today: today, sensorReport: sensorReport,
-                                  refresh: refresh)
-                    } label: {
-                        row("Debug", systemImage: "wrench.and.screwdriver")
+                    Button { path.append(.debug) } label: {
+                        row("Debug", systemImage: "wrench.and.screwdriver", pushes: true)
                     }
                 } header: {
                     header("Developer")
                 }
                 .listRowBackground(LR.Color.surface)
             }
-            .listRowSeparatorTint(LR.Color.divider)
+            .listRowSeparatorTint(LR.Color.cardDivider)
             .scrollContentBackground(.hidden)
             .background(LR.Color.canvas)
             .navigationTitle("Settings")
+            .navigationDestination(for: Page.self) { page in
+                switch page {
+                case .library:
+                    LibraryView(today: today)
+                case .workoutDetection:
+                    WorkoutDetectionView(refresh: refresh)
+                case .design:
+                    DesignGalleryView()
+                        .navigationTitle("Design")
+                        .navigationBarTitleDisplayMode(.inline)
+                case .debug:
+                    DebugView(seedStatus: seedStatus, today: today, sensorReport: sensorReport,
+                              refresh: refresh)
+                }
+            }
             .dataTransfer(transfer, onImported: onImported)
         }
         .reservingTabBarSpace()
     }
 
-    private func row(_ title: LocalizedStringKey, systemImage: String) -> some View {
-        Label(title, systemImage: systemImage)
-            .lr(.bodyStrong)
-            .foregroundStyle(LR.Color.ink)
+    private func row(_ title: LocalizedStringKey, systemImage: String, pushes: Bool = false) -> some View {
+        HStack {
+            Label(title, systemImage: systemImage)
+                .lr(.bodyStrong)
+                .foregroundStyle(LR.Color.cardInk)
+            if pushes {
+                Spacer(minLength: 8)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(LR.Color.cardInkSecondary)
+                    .accessibilityHidden(true)
+            }
+        }
+        .contentShape(Rectangle())
     }
 
     private func header(_ title: LocalizedStringKey) -> some View {

@@ -51,7 +51,7 @@ struct WorkoutDetectionView: View {
                 Spacer()
                 Text(accessText)
                     .lr(.caption)
-                    .foregroundStyle(LR.Color.inkSecondary)
+                    .foregroundStyle(LR.Color.cardInkSecondary)
             }
             .frame(minHeight: 44)
             if authorization != .fullAccess {
@@ -61,7 +61,7 @@ struct WorkoutDetectionView: View {
                 }
             }
             if let requestError {
-                Text(requestError).lr(.caption).foregroundStyle(LR.Color.clay)
+                Text(requestError).lr(.caption).foregroundStyle(LR.Color.cardClay)
             }
         } header: {
             header("Access")
@@ -80,14 +80,14 @@ struct WorkoutDetectionView: View {
                     Button { calendarSetting = selection.toggling(calendar.id).setting } label: {
                         HStack {
                             VStack(alignment: .leading, spacing: 2) {
-                                Text(calendar.title).lr(.bodyStrong).foregroundStyle(LR.Color.ink)
+                                Text(calendar.title).lr(.bodyStrong).foregroundStyle(LR.Color.cardInk)
                                 if !calendar.source.isEmpty {
-                                    Text(calendar.source).lr(.caption).foregroundStyle(LR.Color.inkSecondary)
+                                    Text(calendar.source).lr(.caption).foregroundStyle(LR.Color.cardInkSecondary)
                                 }
                             }
                             Spacer()
                             if selection.contains(calendar.id) {
-                                Image(systemName: "checkmark").foregroundStyle(LR.Color.ink)
+                                Image(systemName: "checkmark").foregroundStyle(LR.Color.cardInk)
                             }
                         }
                         .frame(minHeight: 44)
@@ -108,9 +108,10 @@ struct WorkoutDetectionView: View {
 
     private var keywordsSection: some View {
         Section {
-            TextField("Title keywords, comma separated", text: $keywords)
+            TextField("Title keywords, comma separated", text: $keywords,
+                      prompt: Text("Title keywords, comma separated").foregroundStyle(LR.Color.cardInkSecondary))
                 .lr(.bodyStrong)
-                .foregroundStyle(LR.Color.ink)
+                .foregroundStyle(LR.Color.cardInk)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
                 .frame(minHeight: 44)
@@ -156,7 +157,7 @@ struct WorkoutDetectionView: View {
     private func label(_ title: LocalizedStringKey, systemImage: String) -> some View {
         Label(title, systemImage: systemImage)
             .lr(.bodyStrong)
-            .foregroundStyle(LR.Color.ink)
+            .foregroundStyle(LR.Color.cardInk)
     }
 
     private func header(_ title: LocalizedStringKey) -> some View {

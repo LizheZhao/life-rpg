@@ -2,11 +2,11 @@ import LifeRPGCore
 import SwiftUI
 
 extension CompletedItem {
-    /// The colour of the card the item had while open: a quest keeps its tint when done.
-    var fill: Color {
+    /// The card the item had while open: a quest keeps its tint when done.
+    var fill: CardFill {
         switch self {
-        case .quest(let s): s.tint.color
-        case .routine, .epic: LR.Color.surface
+        case .quest(let s): .tint(s.tint)
+        case .routine, .epic: .surface
         }
     }
 }

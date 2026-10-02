@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// 44 x 44 open / done toggle. Completion is final (`PLAN.md` §3), so a done button does nothing:
+/// 44 x 44 open / done toggle, drawn for a neutral card, or for a tinted row when `lrTint` is set. Completion is final (`PLAN.md` §3), so a done button does nothing:
 /// there is no reverse animation to design. The tick draws on; with Reduce Motion it fades in.
 ///
 /// `isDone` is the data, and the only thing that draws the check: a tap just calls `action`, which
@@ -19,13 +19,13 @@ struct CompleteButton: View {
             action()
         } label: {
             ZStack {
-                Circle().strokeBorder(tint.map(LR.Color.ink(on:)) ?? LR.Color.accent, lineWidth: 1.5)
+                Circle().strokeBorder(tint.map(LR.Color.ink(on:)) ?? LR.Color.cardAccent, lineWidth: 1.5)
                     .opacity(isDone ? 0 : 1)
-                Circle().fill(LR.Color.fill)
+                Circle().fill(tint == nil ? LR.Color.cardFill : LR.Color.fill)
                     .opacity(isDone ? 1 : 0)
                 HandCheck()
                     .trim(from: 0, to: isDone || reduceMotion ? 1 : 0)
-                    .stroke(LR.Color.onFill, style: StrokeStyle(lineWidth: 2.4, lineCap: .round, lineJoin: .round))
+                    .stroke(tint == nil ? LR.Color.cardOnFill : LR.Color.onFill, style: StrokeStyle(lineWidth: 2.4, lineCap: .round, lineJoin: .round))
                     .frame(width: 20, height: 20)
                     .opacity(isDone ? 1 : 0)
             }
