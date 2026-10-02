@@ -18,6 +18,16 @@ struct StoreAuditTests {
         #expect(try StoreAudit.issues(ctx).isEmpty)
     }
 
+    /// A doodle key is decoration with a fallback (`DoodleKey.resolve`), not something a score or a
+    /// ladder reads, so an unknown one must not cancel a restore.
+    @Test func anUnknownDoodleKeyIsNotAnIssue() throws {
+        let ctx = try makeContext()
+        let o = RoutineOccurrence()
+        o.dueDayKey = "2026-09-18"; o.weekKey = "2026-W38"; o.iconKey = "telescope"
+        ctx.insert(o)
+        #expect(try StoreAudit.issues(ctx).isEmpty)
+    }
+
     @Test func unknownEnumRawIsCountedNotHidden() throws {
         let ctx = try makeContext()
         for _ in 0..<3 {

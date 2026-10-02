@@ -211,7 +211,7 @@ public struct RoutineRowState: Equatable, Identifiable, Sendable {
         let pays = Completion.routinePayout(o, flexible: flexible, on: today, tier: tier, level: level)
         id = o.id
         title = o.displayText
-        doodle = DoodleKey.forText(o.displayText)
+        doodle = o.doodle
         awardedPoints = o.awardedPoints
         isDone = o.awardedPoints != nil
         isSkipped = o.skipped

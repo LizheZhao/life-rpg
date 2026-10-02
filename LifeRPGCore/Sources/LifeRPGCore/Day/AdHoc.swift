@@ -15,7 +15,8 @@ import SwiftData
 public enum AdHoc {
     public enum Source {
         case routine(RoutineTask)
-        case custom(text: String, difficulty: Difficulty)
+        /// `iconKey` is the doodle picked for it; nil leaves the choice to the text.
+        case custom(text: String, difficulty: Difficulty, iconKey: DoodleKey? = nil)
     }
 
     public enum Failure: Error, Equatable, CustomStringConvertible {
@@ -260,12 +261,13 @@ public enum AdHoc {
             occurrence.textSnapshot = routine.text
             occurrence.basePoints = routine.basePoints
             occurrence.adHocSourceRoutineID = routine.id
-        case .custom(let text, let difficulty):
+        case .custom(let text, let difficulty, let iconKey):
             let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !text.isEmpty else { throw Failure.emptyText }
             guard let base = basePoints(for: difficulty) else { throw Failure.noBasePoints }
             occurrence.textSnapshot = text
             occurrence.basePoints = base
+            occurrence.iconKey = iconKey?.rawValue
         }
         occurrence.dueDayKey = dayKey
         occurrence.weekKey = DayKey.weekKey(of: dayKey, in: timeZone) ?? ""

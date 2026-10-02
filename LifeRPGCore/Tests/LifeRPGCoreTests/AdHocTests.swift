@@ -164,6 +164,43 @@ struct AdHocTests {
         #expect(try ctx.fetch(FetchDescriptor<LedgerEntry>()).contains { $0.kind == "skip" && $0.dayKey == mon })
     }
 
+    // MARK: the doodle a custom task wears
+
+    @Test func aCustomTaskStoresTheChosenDoodle() throws {
+        let (ctx, quests) = try generated()
+        let added = try AdHoc.add(.custom(text: "Fix the bike", difficulty: .hard, iconKey: .dumbbell),
+                                  on: fri, in: ctx, timeZone: tz)
+        #expect(added.iconKey == "dumbbell")
+        let swapped = try AdHoc.replace(quests[0], with: .custom(text: "Call", difficulty: .easy, iconKey: .paperPlane),
+                                        in: ctx, timeZone: tz)
+        #expect(swapped.iconKey == "paperPlane")
+        #expect(swapped.doodle == .paperPlane)
+    }
+
+    @Test func aCustomTaskWithoutOneStoresNothing() throws {
+        let (ctx, _) = try generated()
+        let o = try AdHoc.add(.custom(text: "Walk to the shop", difficulty: .easy), on: fri, in: ctx, timeZone: tz)
+        #expect(o.iconKey == nil)
+        #expect(o.doodle == .sneaker)                               // the text still decides
+    }
+
+    @Test func aRoutineFromTheLibraryStoresNoDoodle() throws {
+        let (ctx, _) = try generated()
+        let r = routine(ctx, "Deep clean")
+        let o = try AdHoc.add(.routine(r), on: fri, in: ctx, timeZone: tz)
+        #expect(o.iconKey == nil)
+    }
+
+    @Test func replacingARoutineCarriesTheChosenDoodleToo() throws {
+        let ctx = try Fixtures.context()
+        let r = routine(ctx, "Clean the apartment", spec: "FRI")
+        let o = scheduled(ctx, r, due: fri)
+        let fresh = try AdHoc.replaceRoutine(o, flexible: false,
+                                             with: .custom(text: "Deep-clean the oven", difficulty: .hard, iconKey: .sparkle),
+                                             on: fri, in: ctx, timeZone: tz)
+        #expect(fresh.iconKey == "sparkle")
+    }
+
     // MARK: adding on top (decided with the user)
 
     /// Extra work: nothing replaced, nothing gated, nothing charged if left undone.

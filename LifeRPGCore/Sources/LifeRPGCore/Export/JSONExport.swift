@@ -13,10 +13,13 @@ import SwiftData
 /// the rewards you typed in. `library` carries only what a reseed can't give back: each row's old
 /// id, so history can be re-pointed at the new rows by text, and its cooldown / schedule stamps.
 public enum JSONExport {
-    /// Bumped only when the model changes shape, independently of the GitHub tag. Import reads
-    /// this and nothing else. A field added as an optional (`RewardRow.isGoal`, `SchemaV3`) doesn't
-    /// move it; a shape an older export can't be read into does.
-    public static let schemaVersion = 3
+    /// Bumped when the model changes shape, independently of the GitHub tag. Import reads this
+    /// and nothing else. 4 added `Occurrence.iconKey`; an older file simply lacks it.
+    public static let schemaVersion = 4
+
+    /// The oldest export import still reads. Anything between this and `schemaVersion` decodes into
+    /// the current shape, the fields added since being optional.
+    public static let oldestReadableVersion = 3
 
     public struct Snapshot: Codable, Equatable, Sendable {
         public var schemaVersion: Int
@@ -59,7 +62,7 @@ public enum JSONExport {
         public var fixedCoins: Int?
         public var isActive: Bool
         /// The pinned savings goal. Optional so an export written before it existed still reads
-        /// (as not a goal) without bumping `schemaVersion`, which import requires to match.
+        /// (as not a goal).
         public var isGoal: Bool?
     }
 
@@ -117,6 +120,8 @@ public enum JSONExport {
         public var degradedRoutineID: UUID?
         public var degradedBasePoints: Int?
         public var sourceType: String
+        /// The doodle chosen for a custom ad-hoc routine; absent in a v3 export.
+        public var iconKey: String?
     }
 
     public struct Context: Codable, Equatable, Sendable {
@@ -188,7 +193,8 @@ public enum JSONExport {
                            replacedByID: $0.replacedByID,
                            degradedText: $0.degradedTextSnapshot,
                            degradedRoutineID: $0.degradedRoutineID,
-                           degradedBasePoints: $0.degradedBasePoints, sourceType: $0.sourceTypeRaw)
+                           degradedBasePoints: $0.degradedBasePoints, sourceType: $0.sourceTypeRaw,
+                           iconKey: $0.iconKey)
             },
             dailyContexts: try context.fetch(FetchDescriptor<DailyContext>()).sorted { $0.dayKey < $1.dayKey }.map {
                 Context(dayKey: $0.dayKey, hrv: $0.hrv, sleepHours: $0.sleepHours, restingHR: $0.restingHR,

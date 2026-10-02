@@ -13,7 +13,7 @@ Refined from `LifeRPG UI 设计规范与 UIKit Implementation Plan.md` (the orig
 | Tabs | Floating tab bar, four tabs: **Today, Calendar, Rewards, Settings**. Debug becomes a section of Settings (simulator/dev tools); Library becomes a page inside Settings; the export / restore menu moves from Today's toolbar into Settings. |
 | Completion | Completion is final (`PLAN.md` §3): no Undo, no reverse animation, no Undo toast. The existing confirm alert stays. |
 | Doodles | Drawn in code as SwiftUI `Path`s in a 100×100 box (stroke 3.5, round caps and joins), so static icons and the draw-on animation (`trim`) share one mechanism. No PDF pipeline. |
-| Per-quest icon | No `iconKey` in the model (that would be `SchemaV4`). Core owns a keyword → `DoodleKey` table with a generic default. |
+| Per-quest icon | Core owns a keyword → `DoodleKey` table with a generic default (`DoodleKey.forText`). Only a custom ad-hoc routine stores a chosen doodle: `RoutineOccurrence.iconKey` (`SchemaV4`, optional). `DoodleKey.resolve(iconKey:text:)` is the one rule that reads it: a known key wins, an unknown or missing one falls back to the text. Library rows and quest templates have no key yet. |
 | Fonts | Plus Jakarta Sans and Caveat (SIL OFL, in `LifeRPG/Fonts/`), registered at launch with `CTFontManagerRegisterFontsForURL` (no Info.plist or pbxproj edit). Both are variable fonts: weights are applied through the `wght` variation axis. All text scales with Dynamic Type. |
 | Swipe actions | Reroll / replace / extend / cancel are swipe actions in a `List` today. Swipe is gone: each card has a trailing `⋯` `Menu` (and a context menu) carrying the same actions, greyed out under the same Core rules (`Purchase.blocked`). |
 
@@ -73,6 +73,18 @@ Order: header (avatar, add, no export menu) → greeting (Caveat "day N · M day
 - **Ahead this week (stacked cards).** Under a section header like `Routines`, with the hand label `5 open` and, when Sunday's flexible settlement would charge something, a clay `−13 Sun night` beside it (`Overdue.weekly`, unchanged). The rows go through the same `StackedCards` as Completed: the first card on top, one or two peeking, `+N more`; a tap on the stack or the header fans it out into the list plus `Collapse`. The expand rules are unchanged (`aheadExpanded` / `aheadToggledOn`, open by default on Saturday and Sunday, a hand toggle wins for the day) and drive the stack through a binding. Rows: this week's open flexible routines and routines done ahead are ordinary routine rows (`Not done · due Wed Sep 30`, `Done ahead · counts for Sat Oct 3`), and each "Do now" candidate is a routine-style row with its payout range, `N strikes this week` (the routine pill's fact), `due today` / `due tomorrow` / `due in N days` (`PresentationText.dueIn`) and a light pill-shaped `Do now` button (44 pt target) that raises the usual confirm alert. Core: `AheadState`, `AheadCandidateState`. Which routines are ahead is still `Schedule`'s rule, and a routine done ahead stays here, not in Completed.
 - Backlog keeps its plain record rows.
 
+## Add and Replace sheets (slice 5)
+
+`AdHocView` (add, replace a slot, replace a routine) and `EpicReplaceView` are canvas pages, not grouped lists. Cards, pills and doodle discs are the Today row language; nothing here is a rule, `AdHoc` and `Epic` still decide what qualifies and what a custom task pays.
+
+- **Frame.** Inline title (`Add for today` / `Replace` / `Replace the epic`), `Cancel` in the toolbar, a scroll of cards, and one full-width `fill` capsule (`ConfirmBar`) pinned above the keyboard. It is dimmed until something is picked; the existing confirm alert still follows it.
+- **Replaces card.** What is being swapped: its doodle disc, `Replaces`, the title struck through in `inkSecondary`, a pill (`medium`, `micro-actions`, `worth 15`, `epic`) and the rule text as a caption inside the card.
+- **Source control.** `From library` / `Custom` is `PillSegmentedControl`, the capsule the ratings window uses (moved to `Components.swift` and shared).
+- **Library rows.** Selectable cards: the routine's own doodle in a `pillFill` disc (`DoodleKey.resolve(iconKey: nil, text:)`), the title, a `+N` pill (what it pays today, `Scoring.routinePoints`) and a `low day` pill on a low tier. Selected = a 2 pt `ink` ring round the card and a filled check in place of the open ring, so colour is never the only signal. Routines already on the page sit under their own header with where they are and, when adding, a `Done · N` button.
+- **Custom tab.** The text field lives in a card beside the doodle it will wear; difficulty is three pill choices tinted by tier (`Easy`, `Medium`, `Hard`, selected = tint plus an ink ring); `Pays N, the middle of the easy range.` underneath. The doodle picker is a card holding every `DoodleKey` as its drawing in a disc, the chosen one ringed; each button speaks `DoodleKey.title`. It follows `DoodleKey.forText(text)` while typing (hand label `suggested`) until one is tapped (`picked`). The key is passed as `AdHoc.Source.custom(text:difficulty:iconKey:)` and stored on the occurrence. `Similar in your library` stays a card with `Use this` / `Done · N` / `worth N` rows.
+- **Where the doodle shows.** `RoutineOccurrence.doodle` feeds `RoutineRowState` (Routines, Ahead, Completed) and the day detail rows, so a chosen doodle appears everywhere the routine does. `AheadCandidateState` is a library routine, not an occurrence, so it keeps the keyword doodle.
+- **Epic replace.** Same frame; library epics show their keyword doodle, a custom epic keeps the flag and has no picker.
+
 ## Calendar, day detail and ratings (slice 6)
 
 - **Month grid.** One `lrCard`; weekday names in `sectionTitle`; Caveat month title (`handTitle`, 34 pt) between two 44 pt round chevrons on `tabPill`; a `This month` pill under the title while another month is shown. A month change fades the grid (the new month also slides 18 pt from its side; Reduce Motion: fade only, 0.2 s) and fires `Haptics.selection()`. The future month is unreachable (right chevron dimmed and disabled).
@@ -105,6 +117,7 @@ Each slice is built by one owner, verified on the simulator (light, dark, larges
 | 3 | **Today reskin.** Core presentation values (`TodayPresentation`); level card, epic, routine rows, tinted quest tiles, `⋯` menus replacing swipe actions, one-VoiceOver-element cards. Level card about 120 pt so Routines and Today's quests start on the first screen; the epic was first a compact dark card and is now a routine-style card (this change). | `00e1713`, `9158b79` |
 | 3c | **Today round 2.** Ahead this week as a section header over the shared `StackedCards`; quests as full-width tinted rows (one row implementation for open and done); the palette sheet (`diary_palette.xlsx`) as the one palette, with per-tint text colours, an accent, solid chips, dividers and card shadows. | uncommitted |
 | 3b | **Completed stack on the real page.** The user compared a stacked-cards sample with a flat dimmed list in the gallery and chose the stack (2026-10-02). Done cards gather in the Completed section; open sections show only open items; `Settings → Design gallery → Completed stack` renders it collapsed, expanded, with one item and with only the epic. | uncommitted |
+| 5 | **Add and Replace sheets.** Canvas pages in the card language with doodle discs, shared `PillSegmentedControl`, a doodle picker for custom tasks (`RoutineOccurrence.iconKey`, `SchemaV4`, export `schemaVersion` 4; v3 files still import) and `DoodleKey.resolve`. | uncommitted |
 | 6 | **Calendar, day detail, ratings.** Core `DayMarks.randomTiers` (dots by tier); month grid in one card with an epic-week band, legend chips and a Ratings row; day detail as cards with Today's row frame (`HistoryRowView`); ratings with a pill window picker. | uncommitted |
 
 Built differently from the first draft of this document: the tab bar is an overlay on the `TabView` (a bottom safe-area inset did not reach scroll views inside navigation stacks), each scroll view reserves its own bottom margin through `reservingTabBarSpace()`, and the bar fades out while the keyboard is up.
@@ -118,14 +131,13 @@ Slices 1 to 3 were only checked on the simulator. Haptics, how the animations fe
 | # | Slice | Scope |
 |---|---|---|
 | 4 | **Payout reveal and moments.** Seen after every completion, so highest value. | Restyle `PointsRollView` (the roll and the rating card); turn the level-up and streak-milestone alerts into cards with a sparkle; restyle the Levels sheet. Tabular digits and a `CADisplayLink` number roll; `CAEmitterLayer`-style sparkle particles from the sparkle doodle (off with Reduce Motion, keep the number change and the haptic). |
-| 5 | **Add and Replace sheets.** | `AdHocView` (add, replace a slot, replace a routine) and the epic replace sheet, using the card and tile language and the doodle table. |
 | 7 | **Rewards.** | Reward cards with price, the savings-goal bar, blocked and negative-balance states in clay. |
 | 8 | **Settings and Library.** | Restyle rows; Library rows with doodle and tint; surface the workout-calendar and keyword settings now buried in Debug as a real Settings section. |
 | 9 | **Polish.** | Grow the keyword-to-doodle table so fewer quests fall back to the sparkle (and add more doodles if wanted); tune motion; VoiceOver, Reduce Motion and Bold Text passes on device; app icon and launch screen. |
 
 Later, not scheduled:
 
-- **Per-task doodle editing.** Optional `iconKey` on `QuestTemplate` and `RoutineTask` (`SchemaV4`, lightweight migration); the JSON export / import carries it; a doodle picker in the Library detail; cards look the icon up by `templateID` / `routineID` and fall back to the keyword table; grow the keyword table.
+- **Per-task doodle editing for the library.** `SchemaV4` only added `iconKey` to `RoutineOccurrence` (custom ad-hoc routines). Optional `iconKey` on `QuestTemplate` and `RoutineTask` (a further lightweight migration, carried by the export), a doodle picker in the Library detail, cards looking the icon up by `templateID` / `routineID` and falling back through `DoodleKey.resolve`; grow the keyword table.
 - **Workout detection settings:** done (multi-select calendars).
 
 Optional, only if wanted after use: a Hero-style page for the level track, perks, streak milestones and the savings goal. Today's level card already opens the Levels sheet.
@@ -135,4 +147,4 @@ Optional, only if wanted after use: a Hero-style page for the level track, perks
 - Not verified so far: haptics, Reduce Motion, Bold Text, VoiceOver, the long-press context menu, the "+N" float and the dot stagger on a real level-up.
 - The trivial-group tile (three micro-actions) only appears on low days, which the simulator cannot produce; it is checked in the gallery and unit tests only.
 - Most quests currently show the generic sparkle doodle.
-- The payout card, level-up alert, Levels sheet, Add / Replace sheets, Rewards, Library and Debug still use the old plain look.
+- The payout card, level-up alert, Levels sheet, Rewards, Library and Debug still use the old plain look.

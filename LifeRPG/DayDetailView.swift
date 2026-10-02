@@ -250,7 +250,7 @@ struct DayDetailView: View {
         spoken += line.ratings.map { "rated \($0.rating)" }
 
         return HistoryRowView(
-            doodle: DoodleKey.forText(o.displayText),
+            doodle: o.doodle,
             title: o.displayText,
             dropped: line.status == .replaced,
             status: status,

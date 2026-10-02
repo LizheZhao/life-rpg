@@ -1,7 +1,8 @@
 import Foundation
 
-/// Which hand-drawn icon a thing wears. Chosen from a quest's text, never stored: a stored key
-/// would be a schema change (`SchemaV4`) for something the text already says.
+/// Which hand-drawn icon a thing wears. Suggested by the text (`forText`); only a custom ad-hoc
+/// routine stores a chosen one (`RoutineOccurrence.iconKey`, `SchemaV4`), and `resolve` is the one
+/// place that reads it back.
 public enum DoodleKey: String, CaseIterable, Sendable {
     case avatar, sneaker, potion, braces, notebook, dumbbell, paperPlane, trendLine, flag, sparkle
 
@@ -23,6 +24,29 @@ public enum DoodleKey: String, CaseIterable, Sendable {
         (.sparkle, ["clean*", "tidy", "tidying", "declutter", "trash", "sort"]),
         (.potion, ["project", "experiment", "water", "drink", "tea", "cocktail", "cook*", "soak", "brew"]),
     ]
+
+    /// A short name for the picker's VoiceOver label.
+    public var title: String {
+        switch self {
+        case .avatar: "Person"
+        case .sneaker: "Sneaker"
+        case .potion: "Potion"
+        case .braces: "Braces"
+        case .notebook: "Notebook"
+        case .dumbbell: "Dumbbell"
+        case .paperPlane: "Paper plane"
+        case .trendLine: "Trend line"
+        case .flag: "Flag"
+        case .sparkle: "Sparkle"
+        }
+    }
+
+    /// The doodle for something that may carry a stored key: that key when this build knows it,
+    /// otherwise what the text suggests. An unknown key (written by a newer build, or damaged in a
+    /// backup) is never an error — the row simply reads as it did before the key existed.
+    public static func resolve(iconKey: String?, text: String) -> DoodleKey {
+        iconKey.flatMap(DoodleKey.init(rawValue:)) ?? forText(text)
+    }
 
     public static func forText(_ text: String) -> DoodleKey {
         let words = text.lowercased()

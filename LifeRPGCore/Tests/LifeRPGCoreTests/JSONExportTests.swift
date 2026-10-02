@@ -16,7 +16,7 @@ struct JSONExportTests {
         }
 
         let snapshot = try JSONExport.snapshot(ctx)
-        #expect(snapshot.schemaVersion == 3)
+        #expect(snapshot.schemaVersion == 4)
         #expect(snapshot.dailyContexts.count == 1)
         #expect(snapshot.dailyQuests.count == 3)
         #expect(snapshot.ledger.count == 3)
@@ -35,6 +35,20 @@ struct JSONExportTests {
         let decoded = try decoder.decode(JSONExport.Snapshot.self, from: data)
         #expect(decoded.ledger.map(\.points) == [-25])
         #expect(decoded.ledger[0].note == "trash")
+    }
+
+    @Test func anOccurrencesChosenDoodleTravels() throws {
+        let ctx = try Fixtures.context()
+        let chosen = RoutineOccurrence()
+        chosen.textSnapshot = "Fix the bike"; chosen.iconKey = "dumbbell"
+        let plain = RoutineOccurrence()
+        plain.textSnapshot = "Walk"
+        ctx.insert(chosen); ctx.insert(plain)
+        try ctx.save()
+
+        let decoded = try JSONExport.decode(try JSONExport.data(ctx))
+        #expect(decoded.routineOccurrences.first { $0.text == "Fix the bike" }?.iconKey == "dumbbell")
+        #expect(decoded.routineOccurrences.first { $0.text == "Walk" }?.iconKey == nil)
     }
 
     @Test func filenameIsDated() {
