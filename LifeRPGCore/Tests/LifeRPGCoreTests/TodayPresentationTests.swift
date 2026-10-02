@@ -152,7 +152,7 @@ struct TodayPresentationTests {
         let s = row(occurrence("Incline walk 30 min"))
         #expect(s.title == "Incline walk 30 min")
         #expect(s.doodle == .sneaker)
-        #expect(s.pills == [.init("+20", .payout), .init("0 strikes this week", .plain)])
+        #expect(s.pills == [.init("+20", .payout)])
         #expect(s.notes.isEmpty)
         #expect(!s.isDone && !s.isSkipped && s.overdueDay == nil)
         #expect(s.accessibilityLabel == "Incline walk 30 min, pays 20 coins")
@@ -163,7 +163,7 @@ struct TodayPresentationTests {
         let o = occurrence("Cat grooming", base: 20, due: "2026-10-01")
         let s = row(o, .overdue)
         #expect(s.overdueDay == 2)
-        #expect(s.pills == [.init("+10", .payout), .init("0 strikes this week", .plain), .init("overdue · day 2", .clay)])
+        #expect(s.pills == [.init("+10", .payout), .init("overdue · day 2", .clay)])
         #expect(s.accessibilityLabel == "Cat grooming, overdue day 2, pays 10 coins")
     }
 
@@ -179,7 +179,7 @@ struct TodayPresentationTests {
         let s = row(o)
         #expect(s.isDone)
         #expect(s.awardedPoints == 5)
-        #expect(s.pills == [.init("+5", .payout), .init("0 strikes this week", .plain)])
+        #expect(s.pills == [.init("+5", .payout)])
         #expect(s.accessibilityValue == "done, 5 coins earned")
     }
 
@@ -188,7 +188,7 @@ struct TodayPresentationTests {
         o.skipped = true
         let s = row(o)
         #expect(s.isSkipped)
-        #expect(s.pills == [.init("Skipped", .plain), .init("0 strikes this week", .plain)])
+        #expect(s.pills == [.init("Skipped", .plain)])
         #expect(s.accessibilityValue == "skipped")
     }
 
@@ -225,13 +225,13 @@ struct TodayPresentationTests {
         func strikes(_ others: [RoutineOccurrence]) -> String? {
             row(open, occurrences: [open] + others).pills.first { $0.text.contains("strike") }?.text
         }
-        #expect(strikes([]) == "0 strikes this week")
+        #expect(strikes([]) == nil)
         #expect(strikes([done("2026-W40", source: routineID)]) == "1 strike this week")
         // Last week's session does not count, this week's library pick of the same routine does.
         #expect(strikes([done("2026-W39", source: routineID), done("2026-W40", source: routineID),
                          done("2026-W40", adHocFrom: routineID)]) == "2 strikes this week")
         // Somebody else's routine does not.
-        #expect(strikes([done("2026-W40", source: UUID())]) == "0 strikes this week")
+        #expect(strikes([done("2026-W40", source: UUID())]) == nil)
     }
 
     @Test func anAdHocRowHasNoStrikes() {
@@ -244,7 +244,7 @@ struct TodayPresentationTests {
         let walk = RoutineTask()
         walk.autoVerifyRule = "calendar:workout"
         let s = row(occurrence("Incline walk"), routine: walk)
-        #expect(s.pills == [.init("+20", .payout), .init("0 strikes this week", .plain)])
+        #expect(s.pills == [.init("+20", .payout)])
         #expect(s.accessibilityLabel == "Incline walk, pays 20 coins, auto-verified")
         #expect(row(occurrence("Incline walk")).accessibilityLabel == "Incline walk, pays 20 coins")
     }
@@ -257,13 +257,13 @@ struct TodayPresentationTests {
         let light = row(o, tier: .low)
         #expect(light.title == "Stretch 15 min")
         #expect(light.version == .init(note: "Light version · Strength session", switchLabel: "Do original"))
-        #expect(light.pills == [.init("+13", .payout), .init("0 strikes this week", .plain), .init("light version", .plain)])
+        #expect(light.pills == [.init("+13", .payout), .init("light version", .plain)])
 
         o.usedDegraded = false
         let original = row(o, tier: .low)
         #expect(original.title == "Strength session")
         #expect(original.version == .init(note: "Original · light version available", switchLabel: "Use light"))
-        #expect(original.pills == [.init("+26", .payout), .init("0 strikes this week", .plain)])
+        #expect(original.pills == [.init("+26", .payout)])
 
         o.completedDayKey = friday
         o.awardedPoints = 26

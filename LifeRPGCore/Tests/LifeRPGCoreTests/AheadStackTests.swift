@@ -65,10 +65,9 @@ struct AheadStackTests {
         #expect(c.id == r.id)
         #expect(c.title == "Workout: weight training")
         #expect(c.doodle == DoodleKey.forText("Workout: weight training"))
-        #expect(c.pills == [.init("+30", .payout), .init("0 strikes this week", .plain),
-                            .init("due tomorrow", .plain)])
+        #expect(c.pills == [.init("+30", .payout), .init("due tomorrow", .plain)])
         #expect(c.accessibilityLabel == "Workout: weight training, pays 30 coins, due tomorrow")
-        #expect(c.accessibilityValue == "0 strikes this week, not done")
+        #expect(c.accessibilityValue == "not done")
         #expect(s.summary == "1 open")
     }
 

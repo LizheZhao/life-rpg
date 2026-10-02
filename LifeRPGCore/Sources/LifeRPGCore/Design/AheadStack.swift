@@ -23,15 +23,17 @@ public struct AheadCandidateState: Equatable, Identifiable, Sendable {
         let points = bases.map { Scoring.routinePoints(basePoints: $0, tier: tier, late: false) }
         let pays = (points.min() ?? 0)...(points.max() ?? 0)
         let due = PresentationText.dueIn(ahead.nextDueDayKey, from: today, in: timeZone)
-        let strikes = "\(ahead.doneThisWeek) strike\(ahead.doneThisWeek == 1 ? "" : "s") this week"
+        // Nothing to say before the first one.
+        let strikes = ahead.doneThisWeek > 0
+            ? "\(ahead.doneThisWeek) strike\(ahead.doneThisWeek == 1 ? "" : "s") this week" : nil
 
         id = routine.id
         title = routine.text
         doodle = DoodleKey.forText(routine.text)
-        pills = [PillState("+\(PresentationText.range(pays))", .payout),
-                 PillState(strikes, .plain), PillState(due, .plain)]
+        pills = [PillState("+\(PresentationText.range(pays))", .payout)]
+            + (strikes.map { [PillState($0, .plain)] } ?? []) + [PillState(due, .plain)]
         accessibilityLabel = "\(routine.text), pays \(PresentationText.spokenRange(pays)), \(due)"
-        accessibilityValue = "\(strikes), not done"
+        accessibilityValue = strikes.map { "\($0), not done" } ?? "not done"
     }
 }
 

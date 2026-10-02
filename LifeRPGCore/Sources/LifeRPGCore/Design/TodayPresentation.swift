@@ -228,7 +228,8 @@ public struct RoutineRowState: Equatable, Identifiable, Sendable {
         // Completions of this routine in today's week (`Schedule.doneThisWeek`); an ad-hoc row has none.
         if let routineID = o.routineID {
             let n = Schedule.doneThisWeek(occurrences, routineID: routineID, weekKey: DayKey.weekKey(of: today))
-            pills.append(PillState("\(n) strike\(n == 1 ? "" : "s") this week", .plain))
+            // Nothing to say before the first one.
+            if n > 0 { pills.append(PillState("\(n) strike\(n == 1 ? "" : "s") this week", .plain)) }
         }
         if o.usedDegraded { pills.append(PillState("light version", .plain)) }
         if let day = overdueDay { pills.append(PillState("overdue · day \(day)", .clay)) }
