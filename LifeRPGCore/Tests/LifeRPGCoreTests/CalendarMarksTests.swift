@@ -29,11 +29,13 @@ struct CalendarMarksTests {
         return o
     }
 
-    @Test func greenDotsCountCompletedRandomQuests() {
+    @Test func randomDotsAreTheTiersOfCompletedRandomQuests() {
         let marks = CalendarMarks.marks(quests: [
-            quest(day, .easy), quest(day, .medium), quest(day, .hard, done: false),
+            quest(day, .hard), quest(day, .easy), quest(day, .medium, done: false),
         ], occurrences: [])
-        #expect(marks[day] == DayMarks(randomsDone: 2))
+        // Easiest first, whatever order the rows arrive in; the open medium is not a dot.
+        #expect(marks[day] == DayMarks(randomTiers: [.easy, .hard]))
+        #expect(marks[day]?.randomsDone == 2)
     }
 
     /// Hidden is the star, not a green dot; epic and ad-hoc-replaced slots are neither.
@@ -43,12 +45,32 @@ struct CalendarMarksTests {
             quest(day, .epic),
             quest(day, .medium, replaced: true),
         ], occurrences: [])
-        #expect(marks[day] == DayMarks(randomsDone: 0, hiddenDone: true))
+        #expect(marks[day] == DayMarks(hiddenDone: true))
     }
 
-    @Test func greenDotsCapAtThree() {
-        let marks = CalendarMarks.marks(quests: (0..<4).map { _ in quest(day) }, occurrences: [])
-        #expect(marks[day]?.randomsDone == 3)
+    /// The cap keeps the three **easiest** (the rule is "sorted easiest first, then the first
+    /// three"), so a fourth, harder completion never pushes a lower tier's dot off the day.
+    @Test func randomDotsKeepTheThreeEasiest() {
+        let four = CalendarMarks.marks(quests: [.hard, .trivial, .medium, .easy].map { quest(day, $0) },
+                                       occurrences: [])
+        #expect(four[day]?.randomTiers == [.trivial, .easy, .medium])
+        let same = CalendarMarks.marks(quests: (0..<4).map { _ in quest(day) }, occurrences: [])
+        #expect(same[day]?.randomTiers == [.easy, .easy, .easy])
+        #expect(same[day]?.randomsDone == 3)
+    }
+
+    /// The micro-action group is one quest on the trivial slot: one trivial dot.
+    @Test func microActionGroupIsOneTrivialDot() {
+        let group = quest(day, .trivial)
+        group.trivialGroup = ["Stretch", "Water", "Tidy"]
+        group.trivialDone = [true, true, true]
+        let marks = CalendarMarks.marks(quests: [group, quest(day, .medium)], occurrences: [])
+        #expect(marks[day]?.randomTiers == [.trivial, .medium])
+    }
+
+    /// The app colours a dot with `QuestTint(difficulty)`; the mapping is Core's.
+    @Test func tierToTintMapping() {
+        #expect(Difficulty.allCases.map { QuestTint($0) } == [.trivial, .easy, .medium, .hard, .hard])
     }
 
     @Test func blueDotNeedsEveryGatingRoutineDoneOnTheDay() {
@@ -127,6 +149,6 @@ struct CalendarMarksTests {
         try ctx.save()
         let marks = CalendarMarks.marks(quests: try ctx.fetch(FetchDescriptor<DailyQuest>()),
                                         occurrences: try ctx.fetch(FetchDescriptor<RoutineOccurrence>()))
-        #expect(marks[day] == DayMarks(randomsDone: 1, routinesCleared: true))
+        #expect(marks[day] == DayMarks(randomTiers: [.medium], routinesCleared: true))
     }
 }

@@ -60,7 +60,8 @@ public enum QuestTint: Hashable, Sendable, CaseIterable {
     case trivial, easy, medium, hard, hidden
 
     /// An epic is never a tile (it is a routine-style card of its own), so it takes the hardest tint.
-    init(_ difficulty: Difficulty) {
+    /// Public so the calendar's dots and the epic-week band colour themselves by the same mapping.
+    public init(_ difficulty: Difficulty) {
         switch difficulty {
         case .trivial: self = .trivial
         case .easy: self = .easy
