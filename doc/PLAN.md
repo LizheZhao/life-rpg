@@ -251,6 +251,10 @@ Determined by HealthKit `menstrualFlow` entries. Two weeks of them are read rath
 
 On the Calendar side, events written by the Shortcut are read, and anything past a duration threshold auto-verifies (`calendar_workout:30`). iOS 17+ needs Full Access to Calendar. Meditation goes through HealthKit's `mindfulSession`, allowing multiple sessions to accumulate in a day. Auto-verified quests are marked `sourceType = .healthKit` and need no manual tap.
 
+Which calendars are read is a selection (`CalendarSelection`): none, some (a set of calendar IDs) or all. It is stored under the same setting key that once held a single calendar ID, so an older install reads as that one calendar.
+
+The keyword rule applies to every selection, including all calendars: an event counts only if its title contains one of the user's keywords, and all-day events never count, so a meeting is not mistaken for a workout.
+
 Reading has no app that writes to HealthKit, so it can only go through FamilyControls + DeviceActivity (needs a separate entitlement, and the data is an opaque token usable only for threshold checks) — this is scheduled last; manual check-in for now.
 
 ---
