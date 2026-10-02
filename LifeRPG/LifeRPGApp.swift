@@ -8,6 +8,7 @@ import SwiftUI
     private let seedStatus: String
 
     init() {
+        LRFonts.register()
         do {
             let container = try ModelContainer(for: LifeRPGSchema.current,
                                                migrationPlan: LifeRPGMigrationPlan.self)
