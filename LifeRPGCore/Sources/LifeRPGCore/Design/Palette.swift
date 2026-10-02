@@ -41,6 +41,13 @@ public enum Palette {
     public static let clayBg = Token(light: 0xF3DDD2, dark: 0x4A2E22)
     public static let avatarPink = Token(light: 0xF7C6D4, dark: 0x6B3F4C)
 
+    /// A pill on a white card or on the canvas: darker than either, so it keeps its edge there.
+    public static let pillFill = Token(light: 0xECE8E4, dark: 0x34343A)
+    /// A pill on a pastel tile is this colour laid over the tile at `pillVeilAlpha`, so one token
+    /// serves all five tints; `pillOnTint(over:_:)` is the blend the contrast tests check.
+    public static let pillVeil = Token(light: 0xFFFFFF, dark: 0x151517)
+    public static let pillVeilAlpha = 0.55
+
     // The epic card is dark in both appearances, but `fill` inverts in dark mode, so it has its own.
     public static let epic = Token(light: 0x18181B, dark: 0x303036)
     public static let epicTrack = Token(light: 0x3A3A40, dark: 0x4A4A52)
@@ -57,6 +64,7 @@ public enum Palette {
         ("tintTrivial", tintTrivial), ("tintEasy", tintEasy), ("tintMedium", tintMedium),
         ("tintHard", tintHard), ("tintHidden", tintHidden),
         ("clay", clay), ("clayBg", clayBg), ("avatarPink", avatarPink),
+        ("pillFill", pillFill), ("pillVeil", pillVeil),
         ("epic", epic), ("epicTrack", epicTrack), ("onEpic", onEpic),
         ("epicSecondary", epicSecondary), ("epicLabel", epicLabel),
     ]
@@ -93,6 +101,26 @@ public enum Palette {
         add(("onEpic", onEpic), on: ("epicTrack", epicTrack))
         return pairs
     }()
+
+    /// The five pastel tiles, in the order the gallery lists them.
+    public static let tints: [(name: String, token: Token)] = [
+        ("tintTrivial", tintTrivial), ("tintEasy", tintEasy), ("tintMedium", tintMedium),
+        ("tintHard", tintHard), ("tintHidden", tintHidden),
+    ]
+
+    /// What a pill looks like over `tint`: the veil at `pillVeilAlpha`.
+    public static func pillOnTint(over tint: Token, _ appearance: Appearance) -> Int {
+        blend(pillVeil.value(appearance), over: tint.value(appearance), alpha: pillVeilAlpha)
+    }
+
+    /// `foreground` painted over `background` at `alpha`, channel by channel, rounded.
+    public static func blend(_ foreground: Int, over background: Int, alpha: Double) -> Int {
+        func channel(_ shift: Int) -> Int {
+            let f = Double((foreground >> shift) & 0xFF), b = Double((background >> shift) & 0xFF)
+            return Int((f * alpha + b * (1 - alpha)).rounded()) << shift
+        }
+        return channel(16) | channel(8) | channel(0)
+    }
 
     /// WCAG 2.x contrast ratio, 1...21, symmetric in its arguments.
     public static func contrast(_ a: Int, _ b: Int) -> Double {

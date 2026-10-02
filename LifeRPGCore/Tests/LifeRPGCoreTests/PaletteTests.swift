@@ -65,4 +65,53 @@ struct PaletteTests {
             #expect((0...0xFFFFFF).contains(token.dark), "\(name) dark")
         }
     }
+
+    // MARK: pills
+
+    @Test(arguments: Palette.Appearance.allCases)
+    func pillTextClearsFourPointFiveOnACardAndOnTheCanvas(appearance: Palette.Appearance) {
+        let fill = Palette.pillFill.value(appearance)
+        for fg in [("ink", Palette.ink), ("inkOnTint", Palette.inkOnTint)] {
+            let ratio = Palette.contrast(fg.1.value(appearance), fill)
+            #expect(ratio >= 4.5, "\(fg.0) on pillFill in \(appearance): \(ratio)")
+        }
+    }
+
+    @Test(arguments: Palette.Appearance.allCases)
+    func aPillHasAVisibleShapeOnACardAndOnTheCanvas(appearance: Palette.Appearance) {
+        // The first gallery drew pills in the canvas colour, so on the canvas they had no edge.
+        let fill = Palette.pillFill.value(appearance)
+        for ground in [Palette.surface, Palette.canvas] {
+            let ratio = Palette.contrast(fill, ground.value(appearance))
+            #expect(ratio >= 1.1, "pillFill vs ground in \(appearance): \(ratio)")
+        }
+    }
+
+    @Test(arguments: Palette.Appearance.allCases)
+    func pillTextClearsFourPointFiveOnEveryTint(appearance: Palette.Appearance) {
+        for tint in Palette.tints {
+            let fill = Palette.pillOnTint(over: tint.token, appearance)
+            for fg in [("ink", Palette.ink), ("inkOnTint", Palette.inkOnTint)] {
+                let ratio = Palette.contrast(fg.1.value(appearance), fill)
+                #expect(ratio >= 4.5, "\(fg.0) on a pill over \(tint.name) in \(appearance): \(ratio)")
+            }
+        }
+    }
+
+    @Test func aPillOverATintIsStillVisibleAgainstIt() {
+        for appearance in Palette.Appearance.allCases {
+            for tint in Palette.tints {
+                let ratio = Palette.contrast(Palette.pillOnTint(over: tint.token, appearance),
+                                             tint.token.value(appearance))
+                #expect(ratio >= 1.15, "pill over \(tint.name) in \(appearance): \(ratio)")
+            }
+        }
+    }
+
+    @Test func blendingMatchesHandComputedChannels() {
+        #expect(Palette.blend(0xFFFFFF, over: 0x000000, alpha: 0.5) == 0x808080)
+        #expect(Palette.blend(0x102030, over: 0x102030, alpha: 0.3) == 0x102030)
+        #expect(Palette.blend(0xFF0000, over: 0x0000FF, alpha: 1) == 0xFF0000)
+        #expect(Palette.blend(0xFF0000, over: 0x0000FF, alpha: 0) == 0x0000FF)
+    }
 }

@@ -16,6 +16,14 @@ public enum SavingsGoal {
         /// Nil when the pace is zero or negative — no honest estimate exists. 0 once affordable.
         public var weeksLeft: Int?
         public var ready: Bool { balance >= price }
+
+        public init(name: String, price: Int, balance: Int, fraction: Double, weeksLeft: Int?) {
+            self.name = name
+            self.price = price
+            self.balance = balance
+            self.fraction = fraction
+            self.weeksLeft = weeksLeft
+        }
     }
 
     /// The pinned reward, if it is still active.
