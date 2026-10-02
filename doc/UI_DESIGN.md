@@ -61,9 +61,38 @@ Contrast ≥ 4.5:1 for text (tested in Core), hit targets ≥ 44 pt, Dynamic Typ
 
 ## Slices
 
-1. **Design system** — Core `Palette` + `DoodleKey` with tests; app `DesignSystem/` (tokens, fonts, typography, doodles, primitive components, gallery preview).
-2. **Settings and the tab bar** — floating tab bar, Settings (Debug, Library, export / restore).
-3. **Today reskin** — level card, compact epic, routine rows, quest tiles, menus replacing swipe actions, motion.
-4. Later: Calendar, Rewards, Settings polish, the Library page, a Hero-style page for the level track if wanted.
+Each slice is built by one owner, verified on the simulator (light, dark, largest accessibility text size; `verify` skill) and committed on its own. Core logic gets tests first; views only render.
 
-Verify each slice on the simulator in light, dark and the largest accessibility text size (`verify` skill).
+### Done (branch `v0.1`)
+
+| # | Slice | Commits |
+|---|---|---|
+| 1 | **Design system.** Core `Palette` (light/dark hex + contrast tests) and `DoodleKey`; app `DesignSystem/` (tokens, fonts, doodles, primitive components, gallery). | `2770976`, `9add522` |
+| 2 | **Floating tab bar and Settings.** Four tabs (Today, Calendar, Rewards, Settings); Library, Debug, design gallery and export / restore live in Settings. | `e4212c8` |
+| 3 | **Today reskin.** Core presentation values (`TodayPresentation`); level card, compact epic, routine rows, tinted quest tiles, `⋯` menus replacing swipe actions, one-VoiceOver-element cards. Level card about 120 pt and epic about 74 pt so Routines and Today's quests start on the first screen. | `00e1713`, `9158b79` |
+
+Built differently from the first draft of this document: the tab bar is an overlay on the `TabView` (a bottom safe-area inset did not reach scroll views inside navigation stacks), each scroll view reserves its own bottom margin through `reservingTabBarSpace()`, and the bar fades out while the keyboard is up.
+
+### Gate: use it on the phone first
+
+Slices 1 to 3 were only checked on the simulator. Haptics, how the animations feel, real text sizes and whether the doodles and colours are right can only be judged on a device. Live with it for a few days, then collect fixes (layout, colours, doodle character, anything that feels slow) before slice 4, because every later screen reuses these components.
+
+### Next, in this order
+
+| # | Slice | Scope |
+|---|---|---|
+| 4 | **Payout reveal and moments.** Seen after every completion, so highest value. | Restyle `PointsRollView` (the roll and the rating card); turn the level-up and streak-milestone alerts into cards with a sparkle; restyle the Levels sheet. Tabular digits and a `CADisplayLink` number roll; `CAEmitterLayer`-style sparkle particles from the sparkle doodle (off with Reduce Motion, keep the number change and the haptic). |
+| 5 | **Add and Replace sheets.** | `AdHocView` (add, replace a slot, replace a routine) and the epic replace sheet, using the card and tile language and the doodle table. |
+| 6 | **Calendar and day detail.** | Month grid with per-day completion in the dot style, day detail as cards, rating summary. |
+| 7 | **Rewards.** | Reward cards with price, the savings-goal bar, blocked and negative-balance states in clay. |
+| 8 | **Settings and Library.** | Restyle rows; Library rows with doodle and tint; surface the workout-calendar and keyword settings now buried in Debug as a real Settings section. |
+| 9 | **Polish.** | Grow the keyword-to-doodle table so fewer quests fall back to the sparkle (and add more doodles if wanted); tune motion; VoiceOver, Reduce Motion and Bold Text passes on device; app icon and launch screen. |
+
+Optional, only if wanted after use: a Hero-style page for the level track, perks, streak milestones and the savings goal. Today's level card already opens the Levels sheet.
+
+### Known gaps carried forward
+
+- Not verified so far: haptics, Reduce Motion, Bold Text, VoiceOver, the long-press context menu, the "+N" float and the dot stagger on a real level-up.
+- The trivial-group tile (three micro-actions) only appears on low days, which the simulator cannot produce; it is checked in the gallery and unit tests only.
+- Most quests currently show the generic sparkle doodle.
+- The payout card, level-up alert, Levels sheet, Add / Replace sheets, Calendar, Rewards, Library and Debug still use the old plain look.
