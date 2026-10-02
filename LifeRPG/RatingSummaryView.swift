@@ -18,7 +18,8 @@ struct RatingSummaryView: View {
         let rows = (try? Feedback.topRated(context, since: since, limit: 50)) ?? []
         ScrollView {
             VStack(alignment: .leading, spacing: 10) {
-                WindowPicker(selection: $days)
+                PillSegmentedControl(options: [("7 days", 7), ("30 days", 30), ("90 days", 90), ("All", 0)],
+                                     selection: $days, accessibilityLabel: "Window")
                     .padding(.bottom, 4)
                 SectionTitle(title: since.map { "Since \(PresentationText.shortDate($0))" } ?? "All time")
                 if rows.isEmpty {
@@ -54,55 +55,5 @@ struct RatingSummaryView: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(row.text)
         .accessibilityValue("average \(average), rated \(row.count) time\(row.count == 1 ? "" : "s")")
-    }
-}
-
-/// 7 / 30 / 90 / All as a capsule with a sliding fill. At accessibility sizes the four options
-/// no longer fit in a row, so they wrap into two.
-private struct WindowPicker: View {
-    @Binding var selection: Int
-
-    private let options: [(label: String, days: Int)] = [("7 days", 7), ("30 days", 30), ("90 days", 90), ("All", 0)]
-
-    @Namespace private var slider
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    var body: some View {
-        ViewThatFits(in: .horizontal) {
-            HStack(spacing: 0) { buttons }
-            LazyVGrid(columns: [GridItem(.flexible(), spacing: 0), GridItem(.flexible(), spacing: 0)],
-                      spacing: 0) { buttons }
-        }
-        .padding(4)
-        .background(Capsule().fill(LR.Color.pillFill))
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel("Window")
-    }
-
-    private var buttons: some View {
-        ForEach(options, id: \.days) { option in
-            let selected = selection == option.days
-            Button {
-                guard !selected else { return }
-                Haptics.selection()
-                withAnimation(reduceMotion ? .easeInOut(duration: 0.2) : .spring(response: 0.3, dampingFraction: 0.8)) {
-                    selection = option.days
-                }
-            } label: {
-                Text(option.label)
-                    .lr(.bodyStrong)
-                    .foregroundStyle(selected ? LR.Color.onFill : LR.Color.ink)
-                    .frame(maxWidth: .infinity, minHeight: 36)
-                    .padding(.horizontal, 8)
-                    .background {
-                        if selected {
-                            Capsule().fill(LR.Color.fill).matchedGeometryEffect(id: "selected", in: slider)
-                        }
-                    }
-                    .contentShape(Capsule())
-            }
-            .buttonStyle(.plain)
-            .accessibilityAddTraits(selected ? .isSelected : [])
-        }
     }
 }

@@ -69,7 +69,7 @@ public enum JSONImport {
     public static func plan(_ data: Data, against context: ModelContext) throws -> Plan {
         guard let probe = try? JSONDecoder().decode(VersionProbe.self, from: data) else { throw Failure.unreadable }
         if probe.schemaVersion > JSONExport.schemaVersion { throw Failure.newerExport(probe.schemaVersion) }
-        if probe.schemaVersion < JSONExport.schemaVersion { throw Failure.exportTooOld }
+        if probe.schemaVersion < JSONExport.oldestReadableVersion { throw Failure.exportTooOld }
         guard let snapshot = try? JSONExport.decode(data) else { throw Failure.unreadable }
         guard let library = snapshot.library else { throw Failure.exportTooOld }
 
@@ -161,6 +161,7 @@ public enum JSONImport {
             row.penaltyApplied = o.penaltyApplied; row.skipped = o.skipped; row.completedAt = o.completedAt
             row.sourceTypeRaw = o.sourceType; row.replacesQuestID = o.replacesQuestID
             row.adHocSourceRoutineID = o.adHocSourceRoutineID.map(routine); row.replacedByID = o.replacedByID
+            row.iconKey = o.iconKey
             context.insert(row)
         }
 

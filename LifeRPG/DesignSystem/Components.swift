@@ -343,3 +343,53 @@ struct ConfirmSheet: View {
         }
     }
 }
+
+/// Two to four options as a capsule with a sliding fill (the ratings window, Add's From library /
+/// Custom). At accessibility sizes the options no longer fit in a row, so they wrap into two.
+struct PillSegmentedControl<Value: Hashable>: View {
+    let options: [(label: String, value: Value)]
+    @Binding var selection: Value
+    var accessibilityLabel: String
+
+    @Namespace private var slider
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 0) { buttons }
+            LazyVGrid(columns: [GridItem(.flexible(), spacing: 0), GridItem(.flexible(), spacing: 0)],
+                      spacing: 0) { buttons }
+        }
+        .padding(4)
+        .background(Capsule().fill(LR.Color.pillFill))
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(accessibilityLabel)
+    }
+
+    private var buttons: some View {
+        ForEach(Array(options.enumerated()), id: \.offset) { _, option in
+            let selected = selection == option.value
+            Button {
+                guard !selected else { return }
+                Haptics.selection()
+                withAnimation(reduceMotion ? .easeInOut(duration: 0.2) : .spring(response: 0.3, dampingFraction: 0.8)) {
+                    selection = option.value
+                }
+            } label: {
+                Text(option.label)
+                    .lr(.bodyStrong)
+                    .foregroundStyle(selected ? LR.Color.onFill : LR.Color.ink)
+                    .frame(maxWidth: .infinity, minHeight: 36)
+                    .padding(.horizontal, 8)
+                    .background {
+                        if selected {
+                            Capsule().fill(LR.Color.fill).matchedGeometryEffect(id: "selected", in: slider)
+                        }
+                    }
+                    .contentShape(Capsule())
+            }
+            .buttonStyle(.plain)
+            .accessibilityAddTraits(selected ? .isSelected : [])
+        }
+    }
+}

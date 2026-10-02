@@ -1,7 +1,8 @@
 import Testing
 @testable import LifeRPGCore
 
-/// Which doodle a quest wears is decided by its text, never stored: `SchemaV3` has no icon column.
+/// Which doodle a quest wears is decided by its text. Only a custom ad-hoc routine can carry a chosen
+/// one (`RoutineOccurrence.iconKey`, `SchemaV4`); `resolve` is the one rule that reads it.
 struct DoodleKeyTests {
     @Test(arguments: [
         ("Walk 8,000 steps", DoodleKey.sneaker),
@@ -89,5 +90,32 @@ struct DoodleKeyTests {
         // The avatar and the epic flag are placed by the layout, not chosen from a quest's text.
         let inTable = Set(DoodleKey.table.map(\.key))
         #expect(Set(DoodleKey.allCases).subtracting(inTable) == [.avatar, .flag])
+    }
+
+    // MARK: a chosen doodle
+
+    @Test func aStoredKeyBeatsTheKeywords() {
+        #expect(DoodleKey.resolve(iconKey: "dumbbell", text: "Walk the dog") == .dumbbell)
+        #expect(DoodleKey.resolve(iconKey: "flag", text: "") == .flag)
+    }
+
+    @Test func noKeyFallsBackToTheText() {
+        #expect(DoodleKey.resolve(iconKey: nil, text: "Walk the dog") == .sneaker)
+        #expect(DoodleKey.resolve(iconKey: nil, text: "Say no to something") == .sparkle)
+    }
+
+    /// A key written by a newer build, or damaged on the way through a backup, must not crash or
+    /// leave a blank disc: the text decides, as it did before the column existed.
+    @Test func anUnknownKeyFallsBackToTheText() {
+        #expect(DoodleKey.resolve(iconKey: "telescope", text: "Walk the dog") == .sneaker)
+        #expect(DoodleKey.resolve(iconKey: "", text: "Drink water") == .potion)
+        #expect(DoodleKey.resolve(iconKey: "Dumbbell", text: "Drink water") == .potion)   // keys are exact
+    }
+
+    @Test func everyKeyHasAShortSpokenName() {
+        #expect(DoodleKey.allCases.map(\.title) == [
+            "Person", "Sneaker", "Potion", "Braces", "Notebook", "Dumbbell", "Paper plane", "Trend line",
+            "Flag", "Sparkle",
+        ])
     }
 }

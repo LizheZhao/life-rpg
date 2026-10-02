@@ -167,6 +167,67 @@ struct JSONImportTests {
         #expect(try Economy.balance(target) == balanceBefore)
     }
 
+    // MARK: the doodle a custom routine wears (SchemaV4, export v4)
+
+    private func sourceWithACustomRoutine() throws -> ModelContext {
+        let source = try sourceStore()
+        let custom = RoutineOccurrence()
+        custom.textSnapshot = "Fix the bike"; custom.dueDayKey = saturday; custom.weekKey = "2026-W38"
+        custom.basePoints = 38; custom.iconKey = "dumbbell"
+        source.insert(custom)
+        try source.save()
+        return source
+    }
+
+    @Test func aChosenDoodleSurvivesARestore() throws {
+        let source = try sourceWithACustomRoutine()
+        let target = try freshStore()
+        _ = try restore(source, into: target)
+
+        let restored = try #require(try target.fetch(FetchDescriptor<RoutineOccurrence>())
+            .first { $0.textSnapshot == "Fix the bike" })
+        #expect(restored.iconKey == "dumbbell")
+        #expect(restored.doodle == .dumbbell)
+        #expect(try target.fetch(FetchDescriptor<RoutineOccurrence>())
+            .filter { $0.textSnapshot != "Fix the bike" }.allSatisfy { $0.iconKey == nil })
+    }
+
+    /// A backup made before the column existed: version 3, no `iconKey` anywhere. It restores, and
+    /// every row keeps the doodle its text gives it.
+    @Test func aVersion3ExportStillImports() throws {
+        let source = try sourceWithACustomRoutine()
+        var json = try #require(try JSONSerialization.jsonObject(with: try JSONExport.data(source)) as? [String: Any])
+        json["schemaVersion"] = 3
+        var rows = try #require(json["routineOccurrences"] as? [[String: Any]])
+        for i in rows.indices { rows[i].removeValue(forKey: "iconKey") }
+        json["routineOccurrences"] = rows
+        let data = try JSONSerialization.data(withJSONObject: json)
+        #expect(!String(decoding: data, as: UTF8.self).contains("iconKey"))
+
+        let target = try freshStore()
+        let plan = try JSONImport.plan(data, against: target)
+        try JSONImport.apply(plan, to: target)
+        #expect(try Economy.balance(target) == (try Economy.balance(source)))
+        let restored = try target.fetch(FetchDescriptor<RoutineOccurrence>())
+        #expect(restored.count == (try source.fetchCount(FetchDescriptor<RoutineOccurrence>())))
+        #expect(restored.allSatisfy { $0.iconKey == nil })
+    }
+
+    @Test func anUnknownDoodleKeyRestoresAndFallsBackToTheText() throws {
+        let source = try sourceWithACustomRoutine()
+        var snapshot = try JSONExport.snapshot(source)
+        let i = try #require(snapshot.routineOccurrences.firstIndex { $0.text == "Fix the bike" })
+        snapshot.routineOccurrences[i].iconKey = "telescope"
+        let target = try freshStore()
+        let plan = try JSONImport.plan(try JSONExport.encode(snapshot), against: target)
+        try JSONImport.apply(plan, to: target)
+
+        let restored = try #require(try target.fetch(FetchDescriptor<RoutineOccurrence>())
+            .first { $0.textSnapshot == "Fix the bike" })
+        #expect(restored.iconKey == "telescope")
+        #expect(restored.doodle == DoodleKey.forText("Fix the bike"))
+    }
+
     // MARK: refusing
 
     @Test func anAuditFailureRollsEverythingBack() throws {

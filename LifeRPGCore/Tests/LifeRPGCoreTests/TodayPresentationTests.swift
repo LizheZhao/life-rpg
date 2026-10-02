@@ -33,6 +33,29 @@ struct TodayPresentationTests {
                         today: friday, tier: tier, level: level, quests: quests, occurrences: occurrences)
     }
 
+    // MARK: a routine row's doodle
+
+    @Test func aRoutineRowWearsItsChosenDoodle() {
+        let o = occurrence("Say no to something")
+        #expect(row(o).doodle == .sparkle)
+        o.iconKey = "dumbbell"
+        #expect(row(o).doodle == .dumbbell)
+    }
+
+    @Test func aRoutineRowFallsBackToItsTextForAKeyNothingKnows() {
+        let o = occurrence("Walk the dog")
+        o.iconKey = "telescope"
+        #expect(row(o).doodle == .sneaker)
+    }
+
+    /// The light version is what the row says, so it is what picks the doodle when no key is stored.
+    @Test func aLightVersionPicksTheDoodleFromItsOwnText() {
+        let o = occurrence("Workout: weight training")
+        o.degradedTextSnapshot = "Walk 30 minutes"
+        o.usedDegraded = true
+        #expect(row(o).doodle == .sneaker)
+    }
+
     // MARK: quest tiles
 
     @Test func openMediumTile() {

@@ -44,6 +44,10 @@ import SwiftData
     // for something at least as heavy" apart from "gave up" (backlog, day detail, calendar).
     // Added after V2 shipped: optional, so lightweight migration fills nil.
     public var replacedByID: UUID?
+    // The doodle picked for a custom ad-hoc routine (`DoodleKey.rawValue`). Nil = none chosen, so
+    // the text decides (`DoodleKey.forText`) — which is every row from before `SchemaV4`. Read
+    // only through `doodle`, which also survives a key this build doesn't know.
+    public var iconKey: String?
 
     public init() {}
 
@@ -53,6 +57,9 @@ import SwiftData
     public var displayText: String {
         usedDegraded ? (degradedTextSnapshot ?? textSnapshot) : textSnapshot
     }
+
+    /// The doodle this row wears: its chosen one, else the one its text suggests.
+    public var doodle: DoodleKey { DoodleKey.resolve(iconKey: iconKey, text: displayText) }
 
     /// The base the version currently chosen is worth — what scoring and the overdue penalty are
     /// both measured against, so a day that only asked for a walk is neither paid nor charged as
