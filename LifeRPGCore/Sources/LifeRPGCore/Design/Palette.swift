@@ -1,8 +1,11 @@
 import Foundation
 
 /// The colour tokens of `doc/UI_DESIGN.md`, as hex ints so the contrast bar can be a test. The
-/// values are the user's palette sheet (`diary_palette.xlsx`), light and dark. The app wraps each in
-/// a dynamic `Color`; a view never contains a hex literal of its own.
+/// canvas and the five tints are the user's palette sheet (`diary_palette.xlsx`), light and dark.
+/// A neutral card is the opposite polarity of the page in both appearances (dark on the light page,
+/// light on the dark one), so what is drawn on the canvas and what is drawn on a card are separate
+/// tokens: `ink`, `inkSecondary`, `accent` for the canvas, the `card…` ones for a card. The app
+/// wraps each in a dynamic `Color`; a view never contains a hex literal of its own.
 public enum Palette {
     public enum Appearance: CaseIterable, Sendable { case light, dark }
 
@@ -20,26 +23,49 @@ public enum Palette {
         }
     }
 
-    // MARK: neutrals
+    // MARK: canvas
 
     /// The page behind everything.
     public static let canvas = Token(light: 0xFBFBF8, dark: 0x14141A)
-    /// A neutral card, a row, the tab bar.
-    public static let surface = Token(light: 0xFFFFFF, dark: 0x1D1C25)
-    /// The 1 pt edge of a neutral card. In dark the card is only about 1.09:1 above the page, so
-    /// this edge, not a luminance step, is what separates them.
-    public static let hairline = Token(light: 0xEEEFE9, dark: 0x272631)
-    /// The ruled lines between rows and under stacked cards.
+    /// Ruled lines on the canvas: the outline of a tinted slab peeking out of a stack.
     public static let divider = Token(light: 0xE9EBE5, dark: 0x2B2A35)
+    /// Text and doodles drawn on the canvas: the greeting, section titles, `Collapse`.
     public static let ink = Token(light: 0x25232F, dark: 0xE6E4EC)
     public static let inkSecondary = Token(light: 0x6A6877, dark: 0xB1AFBD)
-    /// The Caveat hand labels and the ring of an open complete button. Large text, so held to 3:1
-    /// (`largeTextBar`): light is 3.96 on the canvas, dark 8.08.
+    /// The Caveat hand labels on the canvas. Large text, so held to 3:1 (`largeTextBar`): light is
+    /// 3.96 on the canvas, dark 8.08.
     public static let accent = Token(light: 0x4682B4, dark: 0x8FB0CC)
+    /// The filled done check on a tinted row (`fill`) and the check drawn on it (`onFill`).
     public static let fill = Token(light: 0x25232F, dark: 0xE6E4EC)
     public static let onFill = Token(light: 0xFFFFFF, dark: 0x14141A)
-    public static let dotEmpty = Token(light: 0xDDDED9, dark: 0x34333F)
-    public static let dotFill = Token(light: 0x9CAF88, dark: 0x86987A)
+    /// A pill on the canvas, darker than it so it keeps its edge there.
+    public static let pillFill = Token(light: 0xEEEFEA, dark: 0x2E2D38)
+
+    // MARK: neutral card (inverted against the page)
+
+    /// A neutral card, a row, the tab bar: dark on the light page, light on the dark one.
+    public static let surface = Token(light: 0x25232F, dark: 0xEEEFE9)
+    /// The 1 pt edge of a neutral card.
+    public static let hairline = Token(light: 0x34323F, dark: 0xDCDDD6)
+    public static let cardInk = Token(light: 0xE6E4EC, dark: 0x25232F)
+    public static let cardInkSecondary = Token(light: 0xA9A7B6, dark: 0x6A6877)
+    /// The ring of an open complete button and a card's chevrons.
+    public static let cardAccent = Token(light: 0x8FB0CC, dark: 0x4682B4)
+    /// The filled done check on a neutral card, and the selected tab circle; `cardOnFill` is the
+    /// check drawn on it, which is the card's own colour.
+    public static let cardFill = cardInk
+    public static let cardOnFill = surface
+    /// A pill and the doodle disc on a neutral card.
+    public static let cardPill = Token(light: 0x34323F, dark: 0xE1E2DB)
+    /// Ruled lines between the rows of a card list (Settings).
+    public static let cardDivider = Token(light: 0x464456, dark: 0xD9DAD3)
+    /// Overdue and a negative balance on a neutral card: the other appearance's `clay`.
+    public static let cardClay = Token(light: 0xE8A183, dark: 0x9C472A)
+    /// The empty and the filled dots of the level grid, the epic's week and the goal bar. All sit
+    /// on a neutral card. The filled dot is the sage in light and a deeper sage in dark, so it is
+    /// 3:1 against a light card.
+    public static let dotEmpty = Token(light: 0x3A3847, dark: 0xD9DAD3)
+    public static let dotFill = Token(light: 0x9CAF88, dark: 0x65785A)
 
     // MARK: tints (trivial, easy, medium, hard, hidden)
 
@@ -56,8 +82,6 @@ public enum Palette {
 
     /// A pill on a tinted row: a solid chip, so the range or `+N` keeps its shape on every tint.
     public static let chip = Token(light: 0xFFFFFF, dark: 0x14141A)
-    /// A pill on a neutral card or the canvas: darker than either, so it keeps its edge there.
-    public static let pillFill = Token(light: 0xEEEFEA, dark: 0x2E2D38)
 
     /// Overdue and negative balance. Never an alarm red.
     public static let clay = Token(light: 0x9C472A, dark: 0xE8A183)
@@ -85,13 +109,17 @@ public enum Palette {
 
     /// Every token by name, in the order the gallery lists them.
     public static let tokens: [(name: String, token: Token)] = [
-        ("canvas", canvas), ("surface", surface), ("hairline", hairline), ("divider", divider),
+        ("canvas", canvas), ("divider", divider),
         ("ink", ink), ("inkSecondary", inkSecondary), ("accent", accent),
-        ("fill", fill), ("onFill", onFill), ("dotEmpty", dotEmpty), ("dotFill", dotFill),
+        ("fill", fill), ("onFill", onFill), ("pillFill", pillFill),
+        ("surface", surface), ("hairline", hairline), ("cardInk", cardInk),
+        ("cardInkSecondary", cardInkSecondary), ("cardAccent", cardAccent), ("cardFill", cardFill),
+        ("cardOnFill", cardOnFill), ("cardPill", cardPill), ("cardDivider", cardDivider),
+        ("cardClay", cardClay), ("dotEmpty", dotEmpty), ("dotFill", dotFill),
         ("tintTrivial", tintTrivial), ("tintEasy", tintEasy), ("tintMedium", tintMedium),
         ("tintHard", tintHard), ("tintHidden", tintHidden),
         ("onTintDark", onTintDark), ("onTintWhite", onTintWhite),
-        ("chip", chip), ("pillFill", pillFill),
+        ("chip", chip),
         ("clay", clay), ("clayBg", clayBg), ("avatarPink", avatarPink),
     ]
 
@@ -116,11 +144,14 @@ public enum Palette {
     public static func textPairs(_ appearance: Appearance) -> [TextPair] {
         func v(_ token: Token) -> Int { token.value(appearance) }
         var pairs: [TextPair] = []
-        for (name, ground) in [("canvas", canvas), ("surface", surface)] {
-            pairs.append(TextPair(label: "ink on \(name)", foreground: v(ink), background: v(ground)))
-            pairs.append(TextPair(label: "inkSecondary on \(name)", foreground: v(inkSecondary), background: v(ground)))
-            pairs.append(TextPair(label: "clay on \(name)", foreground: v(clay), background: v(ground)))
-        }
+        pairs.append(TextPair(label: "ink on canvas", foreground: v(ink), background: v(canvas)))
+        pairs.append(TextPair(label: "inkSecondary on canvas", foreground: v(inkSecondary), background: v(canvas)))
+        pairs.append(TextPair(label: "clay on canvas", foreground: v(clay), background: v(canvas)))
+        pairs.append(TextPair(label: "cardInk on surface", foreground: v(cardInk), background: v(surface)))
+        pairs.append(TextPair(label: "cardInkSecondary on surface", foreground: v(cardInkSecondary), background: v(surface)))
+        pairs.append(TextPair(label: "cardClay on surface", foreground: v(cardClay), background: v(surface)))
+        pairs.append(TextPair(label: "cardInk on cardPill", foreground: v(cardInk), background: v(cardPill)))
+        pairs.append(TextPair(label: "cardOnFill on cardFill", foreground: v(cardOnFill), background: v(cardFill)))
         for (name, kind, token) in tints {
             pairs.append(TextPair(label: "ink on \(name)", foreground: v(ink(on: kind)), background: v(token)))
         }
@@ -135,15 +166,30 @@ public enum Palette {
     public static let largeTextBar = 3.0
 
     public static func largeTextPairs(_ appearance: Appearance) -> [TextPair] {
-        [TextPair(label: "accent on canvas", foreground: accent.value(appearance), background: canvas.value(appearance)),
-         TextPair(label: "accent on surface", foreground: accent.value(appearance), background: surface.value(appearance))]
+        [TextPair(label: "accent on canvas", foreground: accent.value(appearance), background: canvas.value(appearance))]
+    }
+
+    /// Drawn shapes that carry meaning (the open ring, a done circle, a filled dot against an empty
+    /// one) are held to 3:1, the WCAG bar for UI components.
+    public static let nonTextBar = 3.0
+
+    public static func nonTextPairs(_ appearance: Appearance) -> [TextPair] {
+        func v(_ token: Token) -> Int { token.value(appearance) }
+        return [
+            TextPair(label: "cardAccent ring on surface", foreground: v(cardAccent), background: v(surface)),
+            TextPair(label: "cardFill on surface", foreground: v(cardFill), background: v(surface)),
+            TextPair(label: "dotFill on surface", foreground: v(dotFill), background: v(surface)),
+            TextPair(label: "dotFill on dotEmpty", foreground: v(dotFill), background: v(dotEmpty)),
+            TextPair(label: "cardFill on dotEmpty", foreground: v(cardFill), background: v(dotEmpty)),
+        ]
     }
 
     // MARK: shadows
 
-    /// A soft drop shadow under cards (radius 16, y 6). Light: faint black under a neutral card and
-    /// the row's own colour under a tinted one. Dark: plain black. The one exception to "only the
-    /// tab bar has a shadow".
+    /// A soft drop shadow under cards (radius 16, y 6). Light: soft black under a neutral (dark)
+    /// card and the row's own colour under a tinted one. Dark: a very faint black under a neutral
+    /// (light) card and plain black under a tinted one. The one exception to "only the tab bar has
+    /// a shadow".
     public struct CardShadow: Equatable, Sendable {
         /// Opacity under a neutral card.
         public let surface: Double
@@ -155,8 +201,8 @@ public enum Palette {
 
     public static func shadow(_ appearance: Appearance) -> CardShadow {
         switch appearance {
-        case .light: CardShadow(surface: 0.07, tint: 0.22, tintedByCard: true)
-        case .dark: CardShadow(surface: 0.4, tint: 0.4, tintedByCard: false)
+        case .light: CardShadow(surface: 0.14, tint: 0.22, tintedByCard: true)
+        case .dark: CardShadow(surface: 0.1, tint: 0.4, tintedByCard: false)
         }
     }
 
