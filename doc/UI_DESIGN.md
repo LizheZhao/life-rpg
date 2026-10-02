@@ -11,10 +11,12 @@ Refined from `LifeRPG UI 设计规范与 UIKit Implementation Plan.md` (the orig
 | Epic weight | The epic is a **routine-style card**: same neutral surface, radius and layout as a routine row, never a dark or separate hero card. Its title shows in full and a tap on the card expands the detail. Routines and today's quests are the focus of the page. |
 | Appearance | Follows the system (light / dark automatically). Every colour token has a light and a dark value. |
 | Tabs | Floating tab bar, four tabs: **Today, Calendar, Rewards, Settings**. Debug becomes a section of Settings (simulator/dev tools); Library becomes a page inside Settings; the export / restore menu moves from Today's toolbar into Settings. |
-| Completion | Completion is final (`PLAN.md` §3): no Undo, no reverse animation, no Undo toast. The existing confirm alert stays. |
+| Completion | Completion is final (`PLAN.md` §3): no Undo, no reverse animation, no Undo toast. The single confirm step stays, now the Complete sheet (see Popups). |
 | Doodles | Drawn in code as SwiftUI `Path`s in a 100×100 box (stroke 3.5, round caps and joins), so static icons and the draw-on animation (`trim`) share one mechanism. No PDF pipeline. |
 | Per-quest icon | No `iconKey` in the model (that would be `SchemaV4`). Core owns a keyword → `DoodleKey` table with a generic default. |
 | Fonts | Plus Jakarta Sans and Caveat (SIL OFL, in `LifeRPG/Fonts/`), registered at launch with `CTFontManagerRegisterFontsForURL` (no Info.plist or pbxproj edit). Both are variable fonts: weights are applied through the `wght` variation axis. All text scales with Dynamic Type. |
+| Popups | Every Today popup is one language (`ConfirmSheet`, 2026-10-02, user chose mockup B): a bottom sheet on the canvas (drag indicator, 26 pt corners, a detent as tall as its content, scrolls at accessibility sizes), the card the question is about (same doodle, tint and pill as on the page), one full-width ink pill and a quiet `Not yet` under it. **Mark as done?** has no heading and no "this is final" line: it asks once, and completion is still final in the code. A routine done ahead on a low day with a lighter version shows `Did the original` and `Did a lighter version` (each with its payout) instead of `Complete`. Reroll / extend / cancel (`Reroll?`) keep a Caveat title and the price on the pill (`Spend 30`, `Use free reroll`); `Can't reroll` swaps the content of that same sheet (no second sheet); the level-up / streak moment keeps `Nice`. |
+| `⋯` menu | A tap opens a card popover (surface, hairline, 26 pt neutral icon circle, bold title, price pill on the right, a blocked row greyed with its price still shown), no longer the system `Menu`. The long-press context menu on a card and the VoiceOver actions stay as they were. |
 | Swipe actions | Reroll / replace / extend / cancel are swipe actions in a `List` today. Swipe is gone: each card has a trailing `⋯` `Menu` (and a context menu) carrying the same actions, greyed out under the same Core rules (`Purchase.blocked`). |
 
 ## Tokens
@@ -105,6 +107,7 @@ Each slice is built by one owner, verified on the simulator (light, dark, larges
 | 3 | **Today reskin.** Core presentation values (`TodayPresentation`); level card, epic, routine rows, tinted quest tiles, `⋯` menus replacing swipe actions, one-VoiceOver-element cards. Level card about 120 pt so Routines and Today's quests start on the first screen; the epic was first a compact dark card and is now a routine-style card (this change). | `00e1713`, `9158b79` |
 | 3c | **Today round 2.** Ahead this week as a section header over the shared `StackedCards`; quests as full-width tinted rows (one row implementation for open and done); the palette sheet (`diary_palette.xlsx`) as the one palette, with per-tint text colours, an accent, solid chips, dividers and card shadows. | uncommitted |
 | 3b | **Completed stack on the real page.** The user compared a stacked-cards sample with a flat dimmed list in the gallery and chose the stack (2026-10-02). Done cards gather in the Completed section; open sections show only open items; `Settings → Design gallery → Completed stack` renders it collapsed, expanded, with one item and with only the epic. | uncommitted |
+| 4a | **Today popups.** `ConfirmSheet` / `SheetFrame` / `CompleteSheet` replace the Mark as done, spend, Can't reroll and moment alerts; `CardMenuButton` is a card popover with price pills (`CardAction.label`, `.trailing`); `Settings → Design gallery → Popups` raises every one with sample rows, including the low-day light-version choice. | uncommitted |
 | 6 | **Calendar, day detail, ratings.** Core `DayMarks.randomTiers` (dots by tier); month grid in one card with an epic-week band, legend chips and a Ratings row; day detail as cards with Today's row frame (`HistoryRowView`); ratings with a pill window picker. | uncommitted |
 
 Built differently from the first draft of this document: the tab bar is an overlay on the `TabView` (a bottom safe-area inset did not reach scroll views inside navigation stacks), each scroll view reserves its own bottom margin through `reservingTabBarSpace()`, and the bar fades out while the keyboard is up.
@@ -117,7 +120,7 @@ Slices 1 to 3 were only checked on the simulator. Haptics, how the animations fe
 
 | # | Slice | Scope |
 |---|---|---|
-| 4 | **Payout reveal and moments.** Seen after every completion, so highest value. | Restyle `PointsRollView` (the roll and the rating card); turn the level-up and streak-milestone alerts into cards with a sparkle; restyle the Levels sheet. Tabular digits and a `CADisplayLink` number roll; `CAEmitterLayer`-style sparkle particles from the sparkle doodle (off with Reduce Motion, keep the number change and the haptic). |
+| 4 | **Payout reveal and moments.** Seen after every completion, so highest value. | Restyle `PointsRollView` (the roll and the rating card); the level-up and streak-milestone card is now a sheet (4a), the sparkle particles are still to do; restyle the Levels sheet. Tabular digits and a `CADisplayLink` number roll; `CAEmitterLayer`-style sparkle particles from the sparkle doodle (off with Reduce Motion, keep the number change and the haptic). |
 | 5 | **Add and Replace sheets.** | `AdHocView` (add, replace a slot, replace a routine) and the epic replace sheet, using the card and tile language and the doodle table. |
 | 7 | **Rewards.** | Reward cards with price, the savings-goal bar, blocked and negative-balance states in clay. |
 | 8 | **Settings and Library.** | Restyle rows; Library rows with doodle and tint; surface the workout-calendar and keyword settings now buried in Debug as a real Settings section. |
@@ -135,4 +138,4 @@ Optional, only if wanted after use: a Hero-style page for the level track, perks
 - Not verified so far: haptics, Reduce Motion, Bold Text, VoiceOver, the long-press context menu, the "+N" float and the dot stagger on a real level-up.
 - The trivial-group tile (three micro-actions) only appears on low days, which the simulator cannot produce; it is checked in the gallery and unit tests only.
 - Most quests currently show the generic sparkle doodle.
-- The payout card, level-up alert, Levels sheet, Add / Replace sheets, Rewards, Library and Debug still use the old plain look.
+- The payout card, Levels sheet, Add / Replace sheets, Rewards, Library and Debug still use the old plain look.

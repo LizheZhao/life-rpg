@@ -48,8 +48,9 @@ struct TodayView: View {
     @State private var actionError: String?
     /// A purchase waiting for its confirmation. Spending is as final as completing, so it asks too.
     @State private var spending: Spend?
-    /// A reroll that was refused only once it tried to draw (nothing else in the pool).
-    @State private var rerollRefusal: String?
+    /// A reroll that was refused only once it tried to draw (nothing else in the pool). Shown in
+    /// the spend sheet itself, which stays up and swaps its content.
+    @State private var rerollRefusal: RerollRefusal?
     /// A level-up or streak milestone waiting to be shown, once the payout reveal is out of the way.
     @State private var moment: Moment?
     @State private var showingTrack = false
@@ -58,6 +59,11 @@ struct TodayView: View {
     /// already unlocked.
     @AppStorage("announcedLevel") private var announcedLevel = 0
     @AppStorage("announcedStreakBonusAt") private var announcedStreakBonusAt: Double = 0
+
+    private struct RerollRefusal {
+        let subject: SheetSubject
+        let reason: String
+    }
 
     private struct Moment: Identifiable {
         let id = UUID()
@@ -83,11 +89,20 @@ struct TodayView: View {
 
     /// Everything bought from a row's swipe actions. The rules and prices are Core's; this only
     /// says what the confirmation reads.
-    private enum Spend {
+    private enum Spend: Identifiable {
         case reroll(DailyQuest)
         case extend(DailyQuest)
         case cancelQuest(DailyQuest)
         case cancelRoutine(RoutineOccurrence)
+
+        var id: String {
+            switch self {
+            case .reroll(let q): "reroll-\(q.id)"
+            case .extend(let q): "extend-\(q.id)"
+            case .cancelQuest(let q): "cancel-\(q.id)"
+            case .cancelRoutine(let o): "cancel-\(o.id)"
+            }
+        }
 
         var title: String {
             switch self {
@@ -113,11 +128,20 @@ struct TodayView: View {
         return c == 0 ? "free" : "\(c) coins"
     }
 
-    private enum PendingAction {
+    private enum PendingAction: Identifiable {
         case quest(DailyQuest)
         case trivialItem(DailyQuest, Int)
         case routine(RoutineOccurrence)
         case ahead(RoutineTask)
+
+        var id: String {
+            switch self {
+            case .quest(let q): "quest-\(q.id)"
+            case .trivialItem(let q, let i): "tick-\(q.id)-\(i)"
+            case .routine(let o): "routine-\(o.id)"
+            case .ahead(let r): "ahead-\(r.id)"
+            }
+        }
 
         var label: String {
             switch self {
@@ -456,15 +480,11 @@ struct TodayView: View {
     /// modifier chain is already past what the type checker handles in one expression.
     private var page: some View {
         questList
-            .alert(moment?.title ?? "",
-                   isPresented: Binding(get: { moment != nil }, set: { if !$0 { moment = nil } }),
-                   presenting: moment) { m in
-                Button("Nice") {
-                    announcedLevel = m.level
-                    announcedStreakBonusAt = m.streakBonusAt
-                }
-            } message: { m in
-                Text(m.message)
+            .sheet(item: momentBinding) { m in
+                ConfirmSheet(title: m.title,
+                             subject: SheetSubject(doodle: .sparkle, title: m.message),
+                             choices: [SheetChoice(title: "Nice", dismisses: true) {}],
+                             quietTitle: nil)
             }
             .sheet(isPresented: $showingTrack) { trackSheet }
             .onAppear { checkMoments() }
@@ -476,48 +496,12 @@ struct TodayView: View {
         NavigationStack {
             page
             .navigationTitle("Today")
-            // An alert rather than a sheet or an inline toggle: completion is irreversible, so it
-            // asks once, every time. The action arrives through `presenting:` rather than being
-            // read back out of `pending` inside the button. SwiftUI does run the action before the
-            // dismissal clears that state — measured, not assumed — but the ordering isn't
-            // documented, and the failure it would cause is a tap that silently completes nothing.
-            .alert("Mark as done?",
-                   isPresented: Binding(get: { pending != nil }, set: { if !$0 { pending = nil } }),
-                   presenting: pending) { action in
-                // Done ahead there is no row to switch versions on afterwards, so on a low day the
-                // version is picked here — and a lighter version pays its own points.
-                if case .ahead(let routine) = action, offersLightVersion(routine) {
-                    Button("Did a lighter version") { perform(action, light: true) }
-                    Button("Did the original") { perform(action, light: false) }
-                } else {
-                    Button("Complete") { perform(action) }
-                }
-                Button("Cancel", role: .cancel) {}
-            } message: { action in
-                if case .ahead(let routine) = action, offersLightVersion(routine) {
-                    Text("\(routine.text)\nLighter: \(lightVersionList(routine))\n\nA lighter version pays its own points, and one of them is drawn when you pick it. This is final — completion cannot be undone.")
-                } else {
-                    Text("\(action.label)\n\nThis is final — completion cannot be undone.")
-                }
-            }
-            // Only reachable when the purchase can go through: its swipe button is greyed out otherwise.
-            .alert(spending?.title ?? "",
-                   isPresented: Binding(get: { spending != nil },
-                                        set: { if !$0 { spending = nil } }),
-                   presenting: spending) { spend in
-                Button(cost(of: spend) == 0 ? "Use free reroll" : "Spend \(cost(of: spend))") { buy(spend) }
-                Button("Keep it", role: .cancel) {}
-            } message: { spend in
-                Text(message(for: spend))
-            }
-            .alert("Can't reroll",
-                   isPresented: Binding(get: { rerollRefusal != nil },
-                                        set: { if !$0 { rerollRefusal = nil } }),
-                   presenting: rerollRefusal) { _ in
-                Button("OK", role: .cancel) {}
-            } message: { reason in
-                Text(reason)
-            }
+            // A sheet rather than an inline toggle: completion is irreversible, so it asks once,
+            // every time. `.sheet(item:)` hands the action to its content, so the Complete button
+            // never reads it back out of `pending` while the dismissal is clearing it.
+            .sheet(item: $pending) { action in completeSheet(action) }
+            // Only reachable when the purchase can go through: its `⋯` row is greyed out otherwise.
+            .sheet(item: $spending, onDismiss: { rerollRefusal = nil }) { spend in spendSheet(spend) }
             .overlay {
                 if let roll {
                     PointsRollView(title: roll.title, slotLabel: roll.slotLabel,
@@ -540,6 +524,90 @@ struct TodayView: View {
             .sheet(item: $replacingEpic) { epic in
                 EpicReplaceView(today: today, epic: epic)
             }
+        }
+    }
+
+    /// A swipe-down counts as "Nice" too, so a card is announced once however it was closed.
+    private var momentBinding: Binding<Moment?> {
+        Binding(get: { moment }, set: { new in
+            if new == nil, let m = moment {
+                announcedLevel = m.level
+                announcedStreakBonusAt = m.streakBonusAt
+            }
+            moment = new
+        })
+    }
+
+    // MARK: popups
+    // The card each popup is about is drawn from the same Core state the page's card uses, so the
+    // doodle, tint and pill are the card's own.
+
+    private func subject(for quest: DailyQuest) -> SheetSubject {
+        quest.slot == .epic && !quest.isHiddenSlot
+            ? SheetSubject(EpicCardState(quest, today: today, tier: tier, level: level))
+            : SheetSubject(questState(quest))
+    }
+
+    private func subject(for occurrence: RoutineOccurrence) -> SheetSubject {
+        SheetSubject(routineState(occurrence, .today))
+    }
+
+    private func subject(for action: PendingAction) -> SheetSubject {
+        switch action {
+        case .quest(let quest): return subject(for: quest)
+        case .trivialItem:
+            return SheetSubject(doodle: .sparkle, fill: .tint(.trivial), title: action.label,
+                                caption: "Micro-actions pay once all three are ticked")
+        case .routine(let occurrence): return subject(for: occurrence)
+        case .ahead(let routine):
+            let candidate = aheadState.items.lazy.compactMap { item -> AheadCandidateState? in
+                if case .candidate(let state) = item, state.id == routine.id { return state }
+                return nil
+            }.first
+            return SheetSubject(doodle: candidate?.doodle ?? DoodleKey.forText(routine.text), title: routine.text,
+                                caption: "Ahead of schedule",
+                                pill: offersLightVersion(routine) ? nil : candidate?.pills.first?.text)
+        }
+    }
+
+    private func subject(for spend: Spend) -> SheetSubject {
+        switch spend {
+        case .reroll(let q), .extend(let q), .cancelQuest(let q): subject(for: q)
+        case .cancelRoutine(let o): subject(for: o)
+        }
+    }
+
+    /// What a pick pays, as the pill on its button: the same Core rule `completeAhead` applies.
+    private func aheadPill(_ basePoints: [Int]) -> String {
+        let points = basePoints.map { Scoring.routinePoints(basePoints: $0, tier: tier, late: false) }
+        return "+" + PresentationText.range((points.min() ?? 0)...(points.max() ?? 0))
+    }
+
+    @ViewBuilder private func completeSheet(_ action: PendingAction) -> some View {
+        // Done ahead there is no row to switch versions on afterwards, so on a low day the version
+        // is picked here, and a lighter version pays its own points.
+        if case .ahead(let routine) = action, offersLightVersion(routine) {
+            CompleteSheet(subject: subject(for: action),
+                          light: .init(versions: lightVersionList(routine),
+                                       originalPill: aheadPill([routine.basePoints]),
+                                       lighterPill: aheadPill(Degrade.versions(of: routine, in: routines).map(\.basePoints)))) {
+                perform(action, light: $0 ?? true)
+            }
+        } else {
+            CompleteSheet(subject: subject(for: action)) { _ in perform(action) }
+        }
+    }
+
+    @ViewBuilder private func spendSheet(_ spend: Spend) -> some View {
+        if let refusal = rerollRefusal {
+            ConfirmSheet(title: "Can't reroll", subject: refusal.subject, notes: [refusal.reason],
+                         choices: [SheetChoice(title: "OK") { spending = nil }], quietTitle: nil)
+        } else {
+            let free = cost(of: spend) == 0
+            ConfirmSheet(title: spend.title, subject: subject(for: spend), notes: [message(for: spend)],
+                         choices: [SheetChoice(title: free ? "Use free reroll" : "Spend \(cost(of: spend))") {
+                             buy(spend)
+                         }])
         }
     }
 
@@ -681,7 +749,8 @@ struct TodayView: View {
         try? context.save()
     }
     // The `⋯` menu, the context menu and VoiceOver's custom actions all list these. Whether each
-    // can go through is Core's rule; when it can't, the item is greyed out and shows no price.
+    // can go through is Core's rule; when it can't, the item is greyed out. The popover keeps its
+    // price pill, the context menu and VoiceOver title drop the price.
 
     private func rerollAction(_ quest: DailyQuest) -> CardAction? {
         guard quest.completedAt == nil else { return nil }
@@ -731,26 +800,22 @@ struct TodayView: View {
 
     private func spendAction(_ spend: Spend, _ name: String, _ icon: String, open: Bool) -> CardAction {
         CardAction(title: open ? "\(name) · \(cost(of: spend) == 0 ? "free" : "\(cost(of: spend))")" : name,
-                   systemImage: icon, isEnabled: open) { spending = spend }
+                   systemImage: icon, isEnabled: open, label: name, trailing: price(spend)) { spending = spend }
     }
 
-
-    private func slotText(_ quest: DailyQuest) -> String {
-        quest.isTrivialGroup ? quest.trivialGroup.joined(separator: " · ") : quest.textSnapshot
-    }
 
     private func message(for spend: Spend) -> String {
         switch spend {
         case .reroll(let q):
-            "\(slotText(q))\n\n" + (q.slot == .epic
+            q.slot == .epic
                 ? "Swap it for a different epic for \(price(spend)). It keeps the same deadline. Once extended, an epic can't be rerolled."
-                : "Swap it for a different \(q.slot.code) for \(price(spend)). The next reroll of this slot today costs more.")
-        case .extend(let q):
-            "\(q.textSnapshot)\n\nOne more week, for \(price(spend)). The week it runs into gets no new epic, and it can't be rerolled or replaced any more."
-        case .cancelQuest(let q):
-            "\(slotText(q))\n\nDrop it for \(price(spend)). It no longer blocks the hidden quest, but it earns nothing and doesn't count toward the streak."
-        case .cancelRoutine(let o):
-            "\(o.displayText)\n\nDrop it for \(price(spend)). No more overdue deductions, and it no longer blocks the hidden quest. Deductions already charged stay."
+                : "Swap it for a different \(q.slot.code) for \(price(spend)). The next reroll of this slot today costs more."
+        case .extend:
+            "One more week, for \(price(spend)). The week it runs into gets no new epic, and it can't be rerolled or replaced any more."
+        case .cancelQuest:
+            "Drop it for \(price(spend)). It no longer blocks the hidden quest, but it earns nothing and doesn't count toward the streak."
+        case .cancelRoutine:
+            "Drop it for \(price(spend)). No more overdue deductions, and it no longer blocks the hidden quest. Deductions already charged stay."
         }
     }
 
@@ -767,11 +832,12 @@ struct TodayView: View {
             actionError = nil
         } catch let refused as Purchase.Blocked {
             // Only a reroll can be refused this late (nothing left to draw); nothing was charged.
-            if case .reroll(let q) = spend {
-                rerollRefusal = "\(slotText(q))\n\n\(refused.description). Nothing was charged."
-            } else {
-                actionError = refused.description
+            if case .reroll = spend {
+                rerollRefusal = RerollRefusal(subject: subject(for: spend),
+                                              reason: "\(refused.description). Nothing was charged.")
+                return
             }
+            actionError = refused.description
         } catch {
             actionError = "\(error)"
         }

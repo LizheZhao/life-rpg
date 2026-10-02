@@ -213,3 +213,133 @@ struct FlowRow: Layout {
         return (origins, CGSize(width: maxX, height: y + rowHeight))
     }
 }
+
+// MARK: - sheets
+
+/// One thing a bottom sheet answers: a full-width ink pill, with the payout it leads to when there
+/// is one.
+struct SheetChoice: Identifiable {
+    let title: String
+    var pill: String?
+    /// Closes the sheet after the action, for a pill that only acknowledges. The ones that change
+    /// something close it through the state they clear.
+    var dismisses = false
+    let action: () -> Void
+
+    var id: String { title }
+}
+
+/// The full-width ink-filled pill at the foot of a sheet, sized for the thumb.
+struct SheetPrimaryButtonStyle: ButtonStyle {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .lr(.heading)
+            .foregroundStyle(LR.Color.onFill)
+            .multilineTextAlignment(.center)
+            .padding(.horizontal, 20)
+            .padding(.vertical, 14)
+            .frame(maxWidth: .infinity, minHeight: 56)
+            .background(Capsule().fill(LR.Color.fill))
+            .scaleEffect(configuration.isPressed && !reduceMotion ? 0.97 : 1)
+            .opacity(configuration.isPressed && reduceMotion ? 0.8 : 1)
+            .animation(reduceMotion ? .easeInOut(duration: 0.2) : .spring(response: 0.3, dampingFraction: 0.7),
+                       value: configuration.isPressed)
+    }
+}
+
+private struct SheetHeightKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = max(value, nextValue()) }
+}
+
+/// The frame every Today popup shares: the canvas, a drag indicator, 26 pt corners, and a detent
+/// as tall as the content. The content scrolls once it outgrows the screen (accessibility sizes).
+struct SheetFrame<Content: View>: View {
+    @ViewBuilder let content: Content
+
+    @State private var contentHeight: CGFloat = 0
+
+    var body: some View {
+        ScrollView {
+            content
+                .padding(.horizontal, LR.Spacing.inset)
+                .padding(.top, 14)
+                .padding(.bottom, 2)
+                .background {
+                    GeometryReader { proxy in
+                        Color.clear.preference(key: SheetHeightKey.self, value: proxy.size.height)
+                    }
+                }
+        }
+        .scrollBounceBehavior(.basedOnSize)
+        .onPreferenceChange(SheetHeightKey.self) { contentHeight = $0 }
+        .presentationDetents([.height(contentHeight > 0 ? contentHeight : 360)])
+        .presentationDragIndicator(.visible)
+        .presentationBackground(LR.Color.canvas)
+        .presentationCornerRadius(26)
+    }
+}
+
+/// The popup language of the Today page: an optional hand-written title, the card the question is
+/// about, a few secondary lines, one or two ink pills, and a quiet text button underneath.
+struct ConfirmSheet: View {
+    var title: String?
+    var subject: SheetSubject?
+    var notes: [String] = []
+    let choices: [SheetChoice]
+    /// The quiet way out under the pills; nil leaves only the pills.
+    var quietTitle: String? = "Not yet"
+
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        SheetFrame {
+            VStack(alignment: .leading, spacing: 16) {
+                if let title {
+                    Text(title).lr(.handTitle).foregroundStyle(LR.Color.ink)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityAddTraits(.isHeader)
+                }
+                if let subject { SheetSubjectRow(subject: subject) }
+                if !notes.isEmpty {
+                    VStack(alignment: .leading, spacing: 4) {
+                        ForEach(notes, id: \.self) { note in
+                            Text(note).lr(.caption).foregroundStyle(LR.Color.inkSecondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                    .padding(.horizontal, 4)
+                }
+                VStack(spacing: 6) {
+                    ForEach(choices) { choice in
+                        Button {
+                            choice.action()
+                            if choice.dismisses { dismiss() }
+                        } label: { choiceLabel(choice) }
+                            .buttonStyle(SheetPrimaryButtonStyle())
+                    }
+                    if let quietTitle {
+                        Button(quietTitle) { dismiss() }
+                            .lr(.bodyStrong).foregroundStyle(LR.Color.inkSecondary)
+                            .frame(maxWidth: .infinity, minHeight: 44)
+                            .contentShape(Rectangle())
+                    }
+                }
+                .padding(.top, 4)
+            }
+        }
+    }
+
+    private func choiceLabel(_ choice: SheetChoice) -> some View {
+        HStack(spacing: 10) {
+            Text(choice.title)
+            if let pill = choice.pill {
+                Text(pill).lr(.pill)
+                    .padding(.horizontal, 10).padding(.vertical, 4)
+                    .background(Capsule().fill(LR.Color.onFill.opacity(0.2)))
+            }
+        }
+    }
+}

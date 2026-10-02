@@ -82,7 +82,7 @@ A proof is: the **action** (screenshot before + after, or the dialog), the **res
 - On a freshly booted simulator the first day generation can take 10s+, and Today briefly shows `0 random slots` / "No quests today — the pool is empty". That is not an empty pool: `V up` waits until quests exist (60s cap); if you launch by hand, run `V doctor` until `dailyQuest` is above 0 before judging the screen.
 - A tap issued right after a sheet or alert dismisses is swallowed. Screenshot first and re-tap.
 - Time travel writes future-dated rows that never go away (going back doesn't undo). It is simulator-only on purpose. After a time-travel proof, `V up --fresh` to start clean.
-- `Mark as done?` is an alert, not an inline toggle, and says completion cannot be undone. Tap `Complete` (right button).
+- `Mark as done?` is a bottom sheet (the card, a full-width `Complete` pill, a quiet `Not yet`), not an inline toggle. Tap `Complete`.
 - After a completion the payout card also asks "How did that feel?" (five thumbs → ratings −2…+2). Tap one to dismiss and log a rating, or the card stays up.
 - HealthKit and EventKit auto-verify can't be exercised: no data and no calendar on a fresh sim. Debug → *Allow Health access* shows the real system sheet; don't confuse a dismissed sheet with an app failure.
 - Fixed day keys in a feature recipe will go stale. Read today's from `V doctor` (`app day`).

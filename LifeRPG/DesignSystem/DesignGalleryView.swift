@@ -14,6 +14,7 @@ struct DesignGalleryView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 28) {
                 header
+                section("Popups") { PopupsGallery() }
                 section("Completed stack") { CompletedStackGallery() }
                 section("Ahead stack") { AheadStackGallery() }
                 section("Colours (light | dark)") { swatches }

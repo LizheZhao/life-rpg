@@ -190,6 +190,95 @@ private struct RowLayout<Details: View, Controls: View, Footer: View>: View {
     }
 }
 
+// MARK: - the card a popup is about
+
+/// What a popup shows of the card it was raised from: the same doodle, fill, title and pill the
+/// card itself draws, so the sheet reads as that card lifted off the page.
+struct SheetSubject {
+    var doodle: DoodleKey
+    var fill: CardFill = .surface
+    var title: String
+    var caption: String?
+    var pill: String?
+}
+
+extension SheetSubject {
+    /// A quest keeps its tint, doodle and caption (the drawn value, or the three micro-actions).
+    init(_ state: QuestCardState) {
+        self.init(doodle: state.doodle, fill: .tint(state.tint), title: state.title,
+                  caption: state.layout == .trivialGroup ? state.items.map(\.text).joined(separator: " · ") : state.subtitle,
+                  pill: state.pillText)
+    }
+
+    /// The epic is the neutral routine-style card with the flag.
+    init(_ state: EpicCardState) {
+        self.init(doodle: .flag, title: state.title, pill: state.pills.first?.text)
+    }
+
+    init(_ state: RoutineRowState) {
+        self.init(doodle: state.doodle, title: state.title,
+                  pill: state.pills.first { $0.kind == .payout }?.text)
+    }
+}
+
+/// A routine-style row without controls: a tinted one for a quest, the neutral one for a routine
+/// and the epic.
+struct SheetSubjectRow: View {
+    let subject: SheetSubject
+
+    var body: some View {
+        let tint = subject.fill.tint
+        RowLayout(doodle: subject.doodle, fill: subject.fill) {
+            VStack(alignment: .leading, spacing: 6) {
+                DoneTitle(text: subject.title, isDone: false)
+                if let caption = subject.caption {
+                    Text(caption).lr(.caption)
+                        .foregroundStyle(tint.map(LR.Color.ink(on:)) ?? LR.Color.inkSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                if let pill = subject.pill {
+                    PillLabel(text: pill, style: tint == nil ? .plain : .onTint)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        } controls: {
+            EmptyView()
+        } footer: {
+            EmptyView()
+        }
+        .accessibilityElement(children: .combine)
+    }
+}
+
+/// "Mark as done?": the card, one Complete pill and "Not yet". Completion is final, but the sheet
+/// does not say so; it asks once and that is the whole confirmation. A routine done ahead on a low
+/// day with lighter versions on offer asks which one was done instead.
+struct CompleteSheet: View {
+    struct Light {
+        /// The lighter versions' texts, as one line.
+        let versions: String
+        let originalPill: String
+        let lighterPill: String
+    }
+
+    let subject: SheetSubject
+    var light: Light?
+    /// `nil` for a plain completion, otherwise whether the lighter version was the one done.
+    let onComplete: (Bool?) -> Void
+
+    var body: some View {
+        if let light {
+            ConfirmSheet(subject: subject,
+                         notes: ["Lighter: \(light.versions)",
+                                 "A lighter version pays its own points, and one of them is drawn when you pick it."],
+                         choices: [SheetChoice(title: "Did the original", pill: light.originalPill) { onComplete(false) },
+                                   SheetChoice(title: "Did a lighter version", pill: light.lighterPill) { onComplete(true) }])
+        } else {
+            ConfirmSheet(subject: subject, choices: [SheetChoice(title: "Complete") { onComplete(nil) }])
+        }
+    }
+}
+
 // MARK: - epic
 
 /// The week's epic: a routine row with a flag in the disc, an "Epic" pill, the week as seven thin

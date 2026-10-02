@@ -418,3 +418,106 @@ struct AheadStackGallery: View {
         state([routine("Incline walk 30 min", base: 20, spec: "SAT", target: 2)], [])
     }
 }
+
+/// The Today page's popups, each one a button that raises the real sheet with sample rows, plus a
+/// `⋯` button with the priced rows (one blocked) that raises the real popover.
+struct PopupsGallery: View {
+    private static let friday = "2026-10-02"
+
+    private enum Popup: String, Identifiable {
+        case completeQuest, completeRoutine, completeEpic, completeLight, spend, refusal, moment
+        var id: String { rawValue }
+    }
+
+    @State private var popup: Popup?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: LR.Spacing.gridGap) {
+            button("Complete: quest", .completeQuest)
+            button("Complete: routine", .completeRoutine)
+            button("Complete: epic", .completeEpic)
+            button("Complete: low day, light version", .completeLight)
+            button("Spend: reroll", .spend)
+            button("Can't reroll", .refusal)
+            button("Level-up moment", .moment)
+            HStack {
+                Text("The ⋯ popover, a blocked row").lr(.bodyStrong).foregroundStyle(LR.Color.ink)
+                Spacer()
+                CardMenuButton(actions: Self.menu)
+            }
+            .padding(.leading, 16)
+            .frame(minHeight: 44)
+            .lrCard(.surface, radius: LR.Radius.row)
+        }
+        .sheet(item: $popup) { popup in sheet(popup) }
+    }
+
+    private func button(_ title: String, _ popup: Popup) -> some View {
+        Button(title) { self.popup = popup }
+            .lr(.bodyStrong).foregroundStyle(LR.Color.ink)
+            .frame(maxWidth: .infinity, minHeight: 44)
+            .lrCard(.surface, radius: LR.Radius.row)
+    }
+
+    @ViewBuilder private func sheet(_ popup: Popup) -> some View {
+        switch popup {
+        case .completeQuest:
+            CompleteSheet(subject: SheetSubject(Self.quest("Walk by the river", .medium, variant: "20 minutes"))) { _ in }
+        case .completeRoutine:
+            CompleteSheet(subject: SheetSubject(Self.routine("Incline walk, 30 minutes", base: 20))) { _ in }
+        case .completeEpic:
+            CompleteSheet(subject: SheetSubject(Self.epic)) { _ in }
+        case .completeLight:
+            CompleteSheet(subject: SheetSubject(doodle: .forText("Workout: weight training"),
+                                                title: "Workout: weight training", caption: "Ahead of schedule"),
+                          light: .init(versions: "Stretch 15 min / Walk 20 min",
+                                       originalPill: "+20", lighterPill: "+10–14")) { _ in }
+        case .spend:
+            ConfirmSheet(title: "Reroll?", subject: SheetSubject(Self.quest("Walk by the river", .medium, variant: nil)),
+                         notes: ["Swap it for a different M for 30 coins. The next reroll of this slot today costs more."],
+                         choices: [SheetChoice(title: "Spend 30") {}])
+        case .refusal:
+            ConfirmSheet(title: "Can't reroll", subject: SheetSubject(Self.quest("Walk by the river", .medium, variant: nil)),
+                         notes: ["Nothing else in the pool. Nothing was charged."],
+                         choices: [SheetChoice(title: "OK", dismisses: true) {}], quietTitle: nil)
+        case .moment:
+            ConfirmSheet(title: "Level 7",
+                         subject: SheetSubject(doodle: .sparkle, title: "Unlocked:\n· A third free reroll each day"),
+                         choices: [SheetChoice(title: "Nice", dismisses: true) {}], quietTitle: nil)
+        }
+    }
+
+    private static var menu: [CardAction] {
+        [CardAction(title: "Reroll · 30", systemImage: "dice", label: "Reroll", trailing: "30 coins") {},
+         CardAction(title: "Cancel", systemImage: "xmark", isEnabled: false, label: "Cancel", trailing: "120 coins") {},
+         CardAction(title: "Replace", systemImage: "arrow.triangle.swap") {}]
+    }
+
+    private static func quest(_ text: String, _ slot: Difficulty, variant: String?) -> QuestCardState {
+        let q = DailyQuest()
+        q.dayKey = friday
+        q.slot = slot
+        q.textSnapshot = text
+        q.variantSnapshot = variant
+        return QuestCardState(q, tier: .normal)
+    }
+
+    private static func routine(_ text: String, base: Int) -> RoutineRowState {
+        let o = RoutineOccurrence()
+        o.textSnapshot = text
+        o.basePoints = base
+        o.dueDayKey = friday
+        o.weekKey = "2026-W40"
+        o.routineID = UUID()
+        return RoutineRowState(o, placement: .today, routine: nil, flexible: false, today: friday,
+                               tier: .normal, level: 1, quests: [], occurrences: [o])
+    }
+
+    private static var epic: EpicCardState {
+        let e = DailyQuest()
+        e.slot = .epic
+        e.dayKey = "2026-09-28"
+        e.textSnapshot = "Get a side project to demo-able state"
+        return EpicCardState(e, today: friday, tier: .normal, level: 8)
+    }
+}

@@ -1,37 +1,105 @@
 import SwiftUI
 
-/// One thing a card's `⋯` menu, context menu and VoiceOver actions all offer. A swipe action has
+/// One thing a card's `⋯` popover, context menu and VoiceOver actions all offer. A swipe action has
 /// no equivalent in a grid, so the same list is shown three ways. Whether it can go through is
 /// Core's rule, decided by the caller: a blocked one is greyed out here, not hidden, so the price
-/// stays visible, and is simply not offered to VoiceOver.
+/// stays visible in the popover, and is simply not offered to VoiceOver.
 struct CardAction: Identifiable {
     let title: String
     let systemImage: String
     var isEnabled = true
+    /// The popover's row title when `title` carries the price for the menu and VoiceOver
+    /// ("Reroll · 30"); nil shows `title`.
+    var label: String?
+    /// The price pill at the popover row's trailing edge, shown on a blocked row too.
+    var trailing: String?
     let run: () -> Void
 
     var id: String { title }
 }
 
-/// The trailing `⋯`, with a 44 pt hit target.
+/// The trailing `⋯`, with a 44 pt hit target. A tap opens a small card popover; the long-press
+/// context menu on the card itself stays the system one.
 struct CardMenuButton: View {
     let actions: [CardAction]
 
     @Environment(\.lrTint) private var tint
+    @State private var showing = false
+    /// The row that was tapped, run once the popover has finished leaving: a sheet raised while it
+    /// is still dismissing is dropped by UIKit.
+    @State private var chosen: (() -> Void)?
 
     var body: some View {
         if !actions.isEmpty {
-            Menu {
-                CardActionButtons(actions: actions)
-            } label: {
+            Button { showing = true } label: {
                 Image(systemName: "ellipsis")
                     .font(.system(size: 17, weight: .bold))
                     .foregroundStyle(tint.map(LR.Color.ink(on:)) ?? LR.Color.inkSecondary)
                     .frame(width: 44, height: 44)
                     .contentShape(Rectangle())
             }
+            .buttonStyle(PressableCardStyle())
+            .popover(isPresented: $showing) {
+                CardPopoverList(actions: actions) { action in
+                    chosen = action.run
+                    showing = false
+                }
+                .presentationCompactAdaptation(.popover)
+            }
+            .onChange(of: showing) { _, isShowing in
+                guard !isShowing, let run = chosen else { return }
+                chosen = nil
+                Task { @MainActor in
+                    try? await Task.sleep(for: .milliseconds(350))
+                    run()
+                }
+            }
             .accessibilityLabel("More actions")
         }
+    }
+}
+
+/// The popover's card: a row per action with a neutral icon circle, a bold title and the price.
+struct CardPopoverList: View {
+    let actions: [CardAction]
+    let pick: (CardAction) -> Void
+
+    var body: some View {
+        VStack(spacing: 0) {
+            ForEach(Array(actions.enumerated()), id: \.element.id) { index, action in
+                if index > 0 { Rectangle().fill(LR.Color.divider).frame(height: 1).padding(.leading, 52) }
+                row(action)
+            }
+        }
+        .padding(.vertical, 4)
+        .frame(minWidth: 240)
+        .presentationBackground(LR.Color.surface)
+        .presentationCornerRadius(18)
+    }
+
+    private func row(_ action: CardAction) -> some View {
+        Button { pick(action) } label: {
+            HStack(spacing: 12) {
+                Image(systemName: action.systemImage)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(action.isEnabled ? LR.Color.ink : LR.Color.iconNeutral)
+                    .frame(width: 26, height: 26)
+                    .background(Circle().fill(LR.Color.pillFill))
+                    .accessibilityHidden(true)
+                Text(action.label ?? action.title).lr(.bodyStrong)
+                    .foregroundStyle(action.isEnabled ? LR.Color.ink : LR.Color.inkSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 8)
+                if let trailing = action.trailing {
+                    PillLabel(text: trailing, style: .plain, dense: true)
+                }
+            }
+            .padding(.horizontal, 14)
+            .frame(minHeight: 44)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(!action.isEnabled)
     }
 }
 
