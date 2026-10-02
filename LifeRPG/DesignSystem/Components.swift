@@ -37,26 +37,27 @@ extension View {
 }
 
 struct PillLabel: View {
+    /// `plain` sits on a white card or the canvas, `onTint` on a pastel tile; each has its own
+    /// fill so the pill keeps a visible shape on both (`Palette.pillFill`, `Palette.pillVeil`).
     enum Style { case plain, onTint, clay, onEpic }
 
     let text: String
     var style: Style = .plain
+    /// Less padding, for a second line under a title.
+    var dense = false
 
     var body: some View {
         Text(text)
             .lr(.pill)
             .foregroundStyle(foreground)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 5)
+            .padding(.horizontal, dense ? 8 : 10)
+            .padding(.vertical, dense ? 2 : 5)
             .background(RoundedRectangle(cornerRadius: LR.Radius.pill, style: .continuous).fill(background))
     }
 
-    // On a tile the pill is a translucent surface, so it stays legible in either appearance
-    // without a token per tint.
     private var foreground: Color {
         switch style {
-        case .plain: LR.Color.inkSecondary
-        case .onTint: LR.Color.ink
+        case .plain, .onTint: LR.Color.ink
         case .clay: LR.Color.clay
         case .onEpic: LR.Color.onEpic
         }
@@ -64,8 +65,8 @@ struct PillLabel: View {
 
     private var background: Color {
         switch style {
-        case .plain: LR.Color.canvas
-        case .onTint: LR.Color.surface.opacity(0.6)
+        case .plain: LR.Color.pillFill
+        case .onTint: LR.Color.pillVeil
         case .clay: LR.Color.clayBg
         case .onEpic: LR.Color.epicTrack
         }
@@ -101,5 +102,38 @@ struct SegmentedProgress: View {
             }
         }
         .accessibilityHidden(true)
+    }
+}
+
+/// Wraps its children onto new lines, so pills never truncate at large text sizes.
+struct FlowRow: Layout {
+    var spacing: CGFloat = 8
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        // Take the whole offered width: a narrower answer would be wrapped again at that narrower
+        // width when the children are placed, and the extra line would spill out of the card.
+        let result = arrange(proposal.width ?? .infinity, subviews)
+        return CGSize(width: proposal.width ?? result.size.width, height: result.size.height)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let result = arrange(bounds.width, subviews)
+        for (subview, origin) in zip(subviews, result.origins) {
+            subview.place(at: CGPoint(x: bounds.minX + origin.x, y: bounds.minY + origin.y), proposal: .unspecified)
+        }
+    }
+
+    private func arrange(_ width: CGFloat, _ subviews: Subviews) -> (origins: [CGPoint], size: CGSize) {
+        var origins: [CGPoint] = []
+        var x: CGFloat = 0, y: CGFloat = 0, rowHeight: CGFloat = 0, maxX: CGFloat = 0
+        for subview in subviews {
+            let size = subview.sizeThatFits(.unspecified)
+            if x > 0, x + size.width > width { x = 0; y += rowHeight + spacing; rowHeight = 0 }
+            origins.append(CGPoint(x: x, y: y))
+            x += size.width + spacing
+            rowHeight = max(rowHeight, size.height)
+            maxX = max(maxX, x - spacing)
+        }
+        return (origins, CGSize(width: maxX, height: y + rowHeight))
     }
 }

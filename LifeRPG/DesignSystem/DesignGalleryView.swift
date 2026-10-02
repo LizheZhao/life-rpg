@@ -25,6 +25,7 @@ struct DesignGalleryView: View {
                 section("Hand underline") { HandUnderlineText(lead: "let's", emphasis: "level up") }
                 section("Cards") { cards }
                 section("Avatar") { avatars }
+                section("Today cards") { TodayCardsGallery() }
             }
             .padding(.horizontal, LR.Spacing.inset)
             .padding(.vertical, 20)
@@ -87,6 +88,7 @@ struct DesignGalleryView: View {
         case .displayGreeting: "Good morning"
         case .displayGreetingEmphasis: "level up"
         case .displayLevel: "8"
+        case .levelInline: "Lv 8"
         case .titleCard: "Weekly epic"
         case .heading: "Today's quests"
         case .bodyStrong: "Walk 8,000 steps"
@@ -141,12 +143,25 @@ struct DesignGalleryView: View {
     }
 
     private var pills: some View {
-        FlowRow {
-            PillLabel(text: "+15").padding(6).lrCard(.surface, radius: 14)
-            PillLabel(text: "Wed · Sat").padding(6).lrCard(.surface, radius: 14)
-            PillLabel(text: "overdue · day 2", style: .clay).padding(6).lrCard(.surface, radius: 14)
-            PillLabel(text: "auto-verified", style: .onTint).padding(6).lrCard(.tint(LR.Color.tintEasy), radius: 14)
-            PillLabel(text: "5–15", style: .onEpic).padding(6).lrCard(.epic, radius: 14)
+        VStack(alignment: .leading, spacing: 10) {
+            FlowRow {
+                PillLabel(text: "+15")
+                PillLabel(text: "Wed · Sat")
+                PillLabel(text: "overdue · day 2", style: .clay)
+            }
+            .padding(12).lrCard(.surface, radius: 14)
+            FlowRow {
+                PillLabel(text: "+15")
+                PillLabel(text: "auto-verified")
+            }
+            .padding(.vertical, 6)
+            FlowRow {
+                ForEach(Palette.tints, id: \.name) { tint in
+                    PillLabel(text: "12–30", style: .onTint).padding(6)
+                        .lrCard(.tint(LR.Color.color(tint.token)), radius: 14)
+                }
+            }
+            FlowRow { PillLabel(text: "5–15", style: .onEpic).padding(6).lrCard(.epic, radius: 14) }
         }
     }
 
@@ -224,36 +239,6 @@ struct DesignGalleryView: View {
             content()
             Text(name).lr(.caption).foregroundStyle(LR.Color.inkSecondary)
         }
-    }
-}
-
-/// Wraps its children onto new lines, so pills never truncate at large text sizes.
-private struct FlowRow: Layout {
-    var spacing: CGFloat = 8
-
-    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        arrange(proposal.width ?? .infinity, subviews).size
-    }
-
-    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        let result = arrange(bounds.width, subviews)
-        for (subview, origin) in zip(subviews, result.origins) {
-            subview.place(at: CGPoint(x: bounds.minX + origin.x, y: bounds.minY + origin.y), proposal: .unspecified)
-        }
-    }
-
-    private func arrange(_ width: CGFloat, _ subviews: Subviews) -> (origins: [CGPoint], size: CGSize) {
-        var origins: [CGPoint] = []
-        var x: CGFloat = 0, y: CGFloat = 0, rowHeight: CGFloat = 0, maxX: CGFloat = 0
-        for subview in subviews {
-            let size = subview.sizeThatFits(.unspecified)
-            if x > 0, x + size.width > width { x = 0; y += rowHeight + spacing; rowHeight = 0 }
-            origins.append(CGPoint(x: x, y: y))
-            x += size.width + spacing
-            rowHeight = max(rowHeight, size.height)
-            maxX = max(maxX, x - spacing)
-        }
-        return (origins, CGSize(width: maxX, height: y + rowHeight))
     }
 }
 

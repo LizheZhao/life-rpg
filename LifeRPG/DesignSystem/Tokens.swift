@@ -24,6 +24,9 @@ enum LR {
         static let clay = color(Palette.clay)
         static let clayBg = color(Palette.clayBg)
         static let avatarPink = color(Palette.avatarPink)
+        static let pillFill = color(Palette.pillFill)
+        /// Laid over a pastel tile; the opacity is part of the token, so the contrast test covers it.
+        static let pillVeil = color(Palette.pillVeil).opacity(Palette.pillVeilAlpha)
         static let epic = color(Palette.epic)
         static let epicTrack = color(Palette.epicTrack)
         static let onEpic = color(Palette.onEpic)
@@ -62,7 +65,7 @@ enum LR {
     }
 
     enum Typography: CaseIterable {
-        case displayGreeting, displayGreetingEmphasis, displayLevel
+        case displayGreeting, displayGreetingEmphasis, displayLevel, levelInline
         case titleCard, heading, bodyStrong, caption, pill, hand
 
         struct Spec {
@@ -82,6 +85,8 @@ enum LR {
                 Spec(family: .jakarta, weight: 800, size: 32, textStyle: .largeTitle, maximumSize: 52, tracking: -0.5)
             case .displayLevel:
                 Spec(family: .jakarta, weight: 300, size: 52, textStyle: .largeTitle, maximumSize: 72, tracking: -2)
+            case .levelInline:
+                Spec(family: .jakarta, weight: 300, size: 34, textStyle: .largeTitle, maximumSize: 52, tracking: -1)
             case .titleCard:
                 Spec(family: .jakarta, weight: 700, size: 22, textStyle: .title2)
             case .heading:
@@ -114,6 +119,7 @@ enum LR {
             case .displayGreeting: "displayGreeting"
             case .displayGreetingEmphasis: "displayGreeting emphasis"
             case .displayLevel: "displayLevel"
+            case .levelInline: "levelInline"
             case .titleCard: "titleCard"
             case .heading: "heading"
             case .bodyStrong: "bodyStrong"

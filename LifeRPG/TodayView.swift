@@ -2,8 +2,8 @@ import LifeRPGCore
 import SwiftData
 import SwiftUI
 
-/// The daily page: HUD, routines (overdue pinned on top), today's random slots, and the hidden
-/// quest once the day is cleared.
+/// The daily page: level card, epic, routines (overdue pinned on top), today's random slots, and
+/// the hidden quest once the day is cleared.
 ///
 /// There is no undo anywhere on this page — completion writes a ledger entry and starts the
 /// template's cooldown, both final. That is why every tap goes through a confirmation.
@@ -131,184 +131,6 @@ struct TodayView: View {
     /// hardest thing in the pool as the reward for a day you barely got through.
     private var inputs: DayInputs { DayInputs(tier: tier, cycleDay: cycleDay) }
 
-    /// Only what is on today: due today, plus fixed routines that are overdue — those cost
-    /// points every day they stay undone, so they are never folded away.
-    @ViewBuilder private var routinesSection: some View {
-        // Only what is on today: due today, plus fixed routines that are overdue — those
-        // cost points every day they stay undone, so they are never folded away.
-        if !overdueRoutines.isEmpty || !todaysRoutines.isEmpty {
-            Section("Routines") {
-                ForEach(overdueRoutines) { o in
-                    routineRow(o, note: .overdue).swipeActions(edge: .trailing) {
-                        cancelRoutineButton(o)
-                        replaceRoutineButton(o)
-                    }
-                }
-                ForEach(todaysRoutines) { o in
-                    routineRow(o).swipeActions(edge: .trailing) {
-                        cancelRoutineButton(o)
-                        replaceRoutineButton(o)
-                    }
-                }
-            }
-        }
-    }
-
-    /// The week's epic, on every day it is live — its row carries the day it was drawn, so it is
-    /// looked up by `Epic.current` rather than by today's `dayKey`. Done, it stays until Sunday.
-    @ViewBuilder private var epicSection: some View {
-        if let epic = currentEpic {
-            Section {
-                questRow(epic).swipeActions(edge: .trailing) {
-                    rerollButton(epic)
-                    extendButton(epic)
-                    replaceEpicButton(epic)
-                }
-            } header: {
-                Text("Epic · until \(Epic.lastDayKey(of: epic) ?? "Sunday")"
-                     + (epic.extensionCount > 0 ? " · extended \(epic.extensionCount)/\(Epic.maxExtensions(level: level))" : ""))
-            }
-        }
-    }
-
-    /// Today's random slots.
-    @ViewBuilder private var randomSection: some View {
-        Section("Random slots") {
-            if randomQuests.isEmpty {
-                Text("No quests today — the pool is empty or fully on cooldown. The day is yours.")
-                    .foregroundStyle(.secondary)
-            }
-            ForEach(randomQuests) { quest in
-                if quest.replaced { replacedRow(quest) }
-                else if quest.isTrivialGroup {
-                    trivialGroupRow(quest).swipeActions(edge: .trailing) {
-                        rerollButton(quest)
-                        replaceButton(quest)
-                    }
-                } else {
-                    questRow(quest).swipeActions(edge: .trailing) {
-                        rerollButton(quest)
-                        cancelQuestButton(quest)
-                        replaceButton(quest)
-                    }
-                }
-            }
-        }
-    }
-
-    /// Nothing drawn means nothing to clear and no hidden reward to earn — then the section is
-    /// hidden rather than showing a lock with no key.
-    @ViewBuilder private var hiddenSection: some View {
-        // Nothing was drawn, so there is nothing to clear and no hidden reward to earn —
-        // the section is hidden rather than showing a lock with no key.
-        if !randomQuests.isEmpty || hiddenQuest != nil {
-            Section("Hidden") {
-                if let hiddenQuest {
-                    questRow(hiddenQuest)
-                } else if hiddenUnlocked {
-                    Button { revealHidden() } label: {
-                        Label("Reveal the hidden quest", systemImage: "sparkles")
-                            // Without this the tappable area is just the label's own box,
-                            // which is a smaller target than the row it looks like.
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .contentShape(Rectangle())
-                    }
-                } else {
-                    Label("Clear every slot to unlock", systemImage: "lock")
-                        .foregroundStyle(.secondary)
-                }
-            }
-        }
-    }
-
-    /// The rest of the week's flexible work, folded away: sessions from earlier days still open
-    /// (full pay until Sunday), what was pulled forward today, and what can be.
-    @ViewBuilder private var aheadSection: some View {
-        // The rest of the week's flexible work, folded: sessions from earlier days still
-        // open (full pay until Sunday), what was pulled forward today, and what can be.
-        // Saturday's session done today counts as Saturday's, and Saturday no longer carries it.
-        if !thisWeekRoutines.isEmpty || !aheadCandidates.isEmpty || !doneAhead.isEmpty {
-            Section {
-                if aheadOpen {
-                    ForEach(thisWeekRoutines) { o in
-                        routineRow(o, note: .thisWeek).swipeActions(edge: .trailing) { replaceRoutineButton(o) }
-                    }
-                    ForEach(doneAhead) { doneAheadRow($0) }
-                    ForEach(aheadCandidates, id: \.routine.id) { aheadRow($0) }
-                }
-            } header: {
-                Button {
-                    let open = !aheadOpen
-                    withAnimation {
-                        aheadExpanded = open
-                        aheadToggledOn = today
-                    }
-                } label: {
-                    HStack {
-                        Text("Ahead this week")
-                        Text("\(aheadPending)").monospacedDigit()
-                        if !doneAhead.isEmpty {
-                            Text("· \(doneAhead.count) done").monospacedDigit()
-                        }
-                        if weekEndBill > 0 {
-                            Text("· −\(weekEndBill) Sun night").monospacedDigit().foregroundStyle(.red)
-                        }
-                        Spacer()
-                        Image(systemName: "chevron.right")
-                            .rotationEffect(.degrees(aheadOpen ? 90 : 0))
-                    }
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-            }
-        }
-    }
-
-    /// Skipped and never done: a record rather than a to-do.
-    private func backlogRow(_ o: RoutineOccurrence) -> some View {
-        HStack(alignment: .firstTextBaseline) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(o.textSnapshot).foregroundStyle(.secondary)
-                Text("Due \(o.dueDayKey)").font(.caption).foregroundStyle(.tertiary)
-            }
-            Spacer()
-            if o.penaltyApplied > 0 {
-                Text("−\(o.penaltyApplied)").monospacedDigit().foregroundStyle(.red)
-            }
-        }
-    }
-
-    /// A flexible routine already done ahead of its due day.
-    private func doneAheadRow(_ o: RoutineOccurrence) -> some View {
-        HStack(alignment: .firstTextBaseline) {
-            badge("R", range: nil)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(o.displayText)
-                Text("Done ahead · counts for \(o.dueDayKey)")
-                    .font(.caption).foregroundStyle(.secondary)
-            }
-            Spacer()
-            let awarded = o.awardedPoints ?? 0
-            Text("+\(awarded)").monospacedDigit().foregroundStyle(.green)
-        }
-    }
-
-    /// A flexible routine that can be pulled forward. On a low day doing it ahead draws a lighter
-    /// version, which is why the payout is a range rather than a number the draw could contradict.
-    private func aheadRow(_ c: Schedule.Ahead) -> some View {
-        HStack(alignment: .firstTextBaseline) {
-            badge("R", range: aheadPayout(c.routine))
-            VStack(alignment: .leading, spacing: 2) {
-                Text(c.routine.text)
-                Text("\(c.doneThisWeek)/\(c.routine.weeklyTarget) this week · next due \(c.nextDueDayKey)")
-                    .font(.caption).foregroundStyle(.secondary)
-            }
-            Spacer()
-            Button("Do now") { pending = .ahead(c.routine) }
-                .buttonStyle(.bordered)
-        }
-    }
-
     /// What doing this routine ahead would pay. On a low day one of its downgrade versions is
     /// drawn when it is done, so what is shown is the range across the versions on offer rather
     /// than a number the draw could contradict.
@@ -397,37 +219,244 @@ struct TodayView: View {
         (try? DayService.hiddenUnlocked(on: today, in: context)) ?? false
     }
 
+    // MARK: states
+    // Each card renders a state Core builds from the rows the queries already hold
+    // (`TodayPresentation`); nothing below chooses a number or a note.
+
+    private func routineState(_ o: RoutineOccurrence, _ placement: RoutineRowState.Placement) -> RoutineRowState {
+        RoutineRowState(o, placement: placement, routine: routines.first { $0.id == o.routineID },
+                        flexible: isFlexible(o), today: today, tier: tier, level: level,
+                        quests: allQuests, occurrences: occurrences)
+    }
+
+    private func questState(_ quest: DailyQuest) -> QuestCardState { QuestCardState(quest, tier: tier) }
+
+    private var levelState: LevelCardState {
+        LevelCardState(totalEarned: totalEarned, balance: balance, streak: streak, tier: tier,
+                       randomSlots: todayContext?.randomSlots ?? 0, goal: goal)
+    }
+
+    private var greeting: TodayGreeting {
+        TodayGreeting(dayKey: today, hour: LifeCalendar.gregorian().component(.hour, from: Date()), streak: streak)
+    }
+
     /// The page itself; the modifiers stay on `body`.
     private var questList: some View {
-    List {
-        if let generationError {
-            Section { Text(generationError).foregroundStyle(.red) } header: { Text("Today could not be generated") }
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: LR.Spacing.sectionGap) {
+                topBar
+                greetingBlock
+                if let generationError { BannerView(title: "Today could not be generated", message: generationError) }
+                if let actionError { BannerView(message: actionError) }
+                LevelCardView(state: levelState) { showingTrack = true }
+                epicBlock
+                routinesBlock
+                questsBlock
+                aheadBlock
+                backlogBlock
+            }
+            .padding(.horizontal, LR.Spacing.inset)
+            .padding(.top, 8)
         }
-        if let actionError {
-            Section { Text(actionError).foregroundStyle(.red) }
+        .background(LR.Color.canvas.ignoresSafeArea())
+        .reservingTabBarSpace()
+        .toolbar(.hidden, for: .navigationBar)
+    }
+
+    private var topBar: some View {
+        HStack {
+            Button { showingTrack = true } label: { AvatarView(size: 44) }
+                .buttonStyle(PressableCardStyle())
+                .accessibilityLabel("Levels")
+                .accessibilityHint("Shows what each level unlocks")
+            Spacer()
+            Button { adding = true } label: {
+                Image(systemName: "plus")
+                    .font(.system(size: 20, weight: .semibold))
+                    .foregroundStyle(LR.Color.ink)
+                    .frame(width: 44, height: 44)
+                    .background(Circle().fill(LR.Color.surface))
+            }
+            .buttonStyle(PressableCardStyle())
+            .accessibilityLabel("Add for today")
         }
+    }
 
-        Section { hud } header: { Text(today) }
+    private var greetingBlock: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text(greeting.handLine).lr(.hand).foregroundStyle(LR.Color.inkHand)
+            Text(greeting.salutation).lr(.displayGreeting).foregroundStyle(LR.Color.ink)
+            HandUnderlineText(lead: "let's", emphasis: "level up")
+        }
+        .padding(.vertical, 6)
+    }
 
-        epicSection
+    /// The week's epic, on every day it is live — its row carries the day it was drawn, so it is
+    /// looked up by `Epic.current` rather than by today's `dayKey`. Done, it stays until Sunday.
+    @ViewBuilder private var epicBlock: some View {
+        if let epic = currentEpic {
+            EpicCardView(state: EpicCardState(epic, today: today, tier: tier, level: level),
+                         actions: [rerollAction(epic), extendAction(epic), replaceEpicAction(epic)].compactMap { $0 },
+                         onComplete: { pending = .quest(epic) })
+        }
+    }
 
-        routinesSection
-
-        randomSection
-
-        hiddenSection
-
-        aheadSection
-
-        // Skipped and never done: read-only, a record rather than a to-do.
-        if !backlog.isEmpty {
-            Section("Backlog") {
-                ForEach(backlog) { backlogRow($0) }
+    /// Only what is on today: due today, plus fixed routines that are overdue — those cost
+    /// points every day they stay undone, so they are never folded away.
+    @ViewBuilder private var routinesBlock: some View {
+        if !overdueRoutines.isEmpty || !todaysRoutines.isEmpty {
+            let rows = overdueRoutines.map { ($0, RoutineRowState.Placement.overdue) }
+                + todaysRoutines.map { ($0, RoutineRowState.Placement.today) }
+            let states = rows.map { routineState($0.0, $0.1) }
+            SectionTitle(title: "Routines", count: "\(states.filter(\.isDone).count) / \(states.count) done")
+            ForEach(Array(rows.enumerated()), id: \.element.0.id) { index, row in
+                routineCard(row.0, states[index], menu: [cancelRoutineAction(row.0), replaceRoutineAction(row.0)])
             }
         }
     }
-    .reservingTabBarSpace()
+
+    private func routineCard(_ o: RoutineOccurrence, _ state: RoutineRowState, menu: [CardAction?]) -> some View {
+        RoutineRowView(state: state, actions: menu.compactMap { $0 },
+                       onComplete: { pending = .routine(o) },
+                       onSwitchVersion: { switchVersion(o) })
     }
+
+    /// Today's random slots, the hidden quest once the day is cleared, and what was swapped away.
+    @ViewBuilder private var questsBlock: some View {
+        // Nothing drawn means nothing to clear and no hidden reward to earn — then there is no
+        // lock either, rather than a lock with no key.
+        let live = randomQuests.filter { !$0.replaced }
+        let tiles = live.filter { !$0.isTrivialGroup }
+        let groups = live.filter(\.isTrivialGroup)
+        let counted = live.map(questState)
+        SectionTitle(title: "Today's quests",
+                     count: counted.isEmpty ? nil : "\(counted.filter(\.isDone).count) / \(counted.count) done")
+        if randomQuests.isEmpty {
+            Text("No quests today — the pool is empty or fully on cooldown. The day is yours.")
+                .lr(.bodyStrong).foregroundStyle(LR.Color.inkSecondary)
+                .padding(16).frame(maxWidth: .infinity, alignment: .leading)
+                .lrCard(.surface, radius: LR.Radius.row)
+        }
+        if !tiles.isEmpty {
+            TileGrid {
+                ForEach(tiles) { quest in
+                    QuestTileView(state: questState(quest),
+                                  actions: [rerollAction(quest), cancelQuestAction(quest), replaceAction(quest)]
+                                      .compactMap { $0 },
+                                  onComplete: { pending = .quest(quest) })
+                }
+            }
+        }
+        ForEach(groups) { quest in
+            MicroGroupTileView(state: questState(quest),
+                               actions: [rerollAction(quest), replaceAction(quest)].compactMap { $0 },
+                               onTick: { index in
+                                   let done = quest.trivialDone.indices.contains(index) && quest.trivialDone[index]
+                                   guard quest.completedAt == nil, !done else { return }
+                                   pending = .trivialItem(quest, index)
+                               })
+        }
+        if let hiddenQuest {
+            QuestTileView(state: questState(hiddenQuest), onComplete: { pending = .quest(hiddenQuest) })
+        } else if !randomQuests.isEmpty {
+            HiddenGateTile(unlocked: hiddenUnlocked, onReveal: revealHidden)
+        }
+        ForEach(randomQuests.filter(\.replaced)) { ReplacedRowView(state: ReplacedRowState($0)) }
+    }
+
+    /// The rest of the week's flexible work, folded away: sessions from earlier days still open
+    /// (full pay until Sunday), what was pulled forward today, and what can be.
+    /// Saturday's session done today counts as Saturday's, and Saturday no longer carries it.
+    @ViewBuilder private var aheadBlock: some View {
+        if !thisWeekRoutines.isEmpty || !aheadCandidates.isEmpty || !doneAhead.isEmpty {
+            aheadHeader
+            if aheadOpen {
+                ForEach(thisWeekRoutines) { o in
+                    routineCard(o, routineState(o, .thisWeek), menu: [replaceRoutineAction(o)])
+                }
+                ForEach(doneAhead) { o in
+                    RecordRowView(title: o.displayText, caption: "Done ahead · counts for \(o.dueDayKey)",
+                                  doodle: DoodleKey.forText(o.displayText)) {
+                        PillLabel(text: "+\(o.awardedPoints ?? 0)")
+                    }
+                }
+                ForEach(aheadCandidates, id: \.routine.id) { c in
+                    RecordRowView(title: c.routine.text,
+                                  caption: "\(c.doneThisWeek)/\(c.routine.weeklyTarget) this week · next due \(c.nextDueDayKey)",
+                                  doodle: DoodleKey.forText(c.routine.text)) {
+                        VStack(alignment: .trailing, spacing: 6) {
+                            PillLabel(text: PresentationText.range(aheadPayout(c.routine)))
+                            Button("Do now") { pending = .ahead(c.routine) }
+                                .buttonStyle(DoNowButtonStyle())
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private var aheadHeader: some View {
+        Button {
+            let open = !aheadOpen
+            withAnimation {
+                aheadExpanded = open
+                aheadToggledOn = today
+            }
+        } label: {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text("Ahead this week").lr(.heading).foregroundStyle(LR.Color.ink)
+                    Spacer(minLength: 8)
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundStyle(LR.Color.inkSecondary)
+                        .rotationEffect(.degrees(aheadOpen ? 90 : 0))
+                }
+                FlowRow(spacing: 6) {
+                    PillLabel(text: "\(aheadPending) open")
+                    if !doneAhead.isEmpty { PillLabel(text: "\(doneAhead.count) done") }
+                    if weekEndBill > 0 { PillLabel(text: "−\(weekEndBill) Sun night", style: .clay) }
+                }
+            }
+            .padding(14)
+            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+            .lrCard(.surface, radius: LR.Radius.row)
+            .contentShape(RoundedRectangle(cornerRadius: LR.Radius.row, style: .continuous))
+        }
+        .buttonStyle(PressableCardStyle())
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Ahead this week, \(aheadPending) open"
+                            + (doneAhead.isEmpty ? "" : ", \(doneAhead.count) done")
+                            + (weekEndBill > 0 ? ", minus \(weekEndBill) coins Sunday night" : ""))
+        .accessibilityValue(aheadOpen ? "expanded" : "collapsed")
+        .accessibilityAddTraits(.isButton)
+    }
+
+    /// Skipped and never done: read-only, a record rather than a to-do.
+    @ViewBuilder private var backlogBlock: some View {
+        if !backlog.isEmpty {
+            SectionTitle(title: "Backlog")
+            ForEach(backlog) { o in
+                RecordRowView(title: o.textSnapshot, caption: "Due \(o.dueDayKey)", secondary: true) {
+                    if o.penaltyApplied > 0 {
+                        PillLabel(text: "−\(o.penaltyApplied)", style: .clay)
+                    }
+                }
+            }
+        }
+    }
+
+    /// A routine with a light version on offer today: both versions pay the same, so switching
+    /// takes no confirmation.
+    private func switchVersion(_ occurrence: RoutineOccurrence) {
+        do {
+            try Degrade.choose(light: !occurrence.usedDegraded, for: occurrence, in: context)
+            actionError = nil
+        } catch {
+            actionError = "\(error)"
+        }
+    }
+
 
     /// The page plus the level-up / milestone card and the level track — split off `body`, whose
     /// modifier chain is already past what the type checker handles in one expression.
@@ -453,12 +482,6 @@ struct TodayView: View {
         NavigationStack {
             page
             .navigationTitle("Today")
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button { adding = true } label: { Image(systemName: "plus") }
-                        .accessibilityLabel("Add for today")
-                }
-            }
             // An alert rather than a sheet or an inline toggle: completion is irreversible, so it
             // asks once, every time. The action arrives through `presenting:` rather than being
             // read back out of `pending` inside the button. SwiftUI does run the action before the
@@ -523,60 +546,6 @@ struct TodayView: View {
             .sheet(item: $replacingEpic) { epic in
                 EpicReplaceView(today: today, epic: epic)
             }
-        }
-    }
-
-    // MARK: HUD
-
-    private var hud: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .firstTextBaseline) {
-                // Negative is shown in red rather than clamped to zero — more honest.
-                Text("\(balance)")
-                    .font(.largeTitle.monospacedDigit().bold())
-                    .foregroundStyle(balance < 0 ? .red : .primary)
-                Text("coins").font(.caption).foregroundStyle(.secondary)
-                Spacer()
-                Button { showingTrack = true } label: {
-                    Text("Lv \(level)").font(.headline)
-                }
-                .buttonStyle(.borderless)
-                .accessibilityHint("Shows what each level unlocks")
-            }
-            if let goal { goalLine(goal) }
-            HStack(spacing: 16) {
-                stat("Streak", "\(streak)d")
-                stat("Next level", "\(Economy.pointsToNextLevel(totalEarned: totalEarned))")
-                stat("Tier", tier.rawValue)
-                stat("Slots", "\(todayContext?.randomSlots ?? 0)")
-            }
-            .font(.caption)
-            .foregroundStyle(.secondary)
-        }
-        .padding(.vertical, 4)
-    }
-
-    /// The pinned reward: how far the balance is toward it and roughly how long is left, both
-    /// from `SavingsGoal`.
-    private func goalLine(_ goal: SavingsGoal.Progress) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack(alignment: .firstTextBaseline) {
-                Text(goal.name).font(.subheadline)
-                Spacer()
-                Group {
-                    if goal.ready {
-                        Text("ready to redeem").foregroundStyle(.green)
-                    } else if let weeks = goal.weeksLeft {
-                        Text("\(max(0, goal.balance)) / \(goal.price) · ~\(weeks) wk")
-                    } else {
-                        Text("\(max(0, goal.balance)) / \(goal.price)")
-                    }
-                }
-                .font(.caption.monospacedDigit())
-                .foregroundStyle(.secondary)
-            }
-            ProgressView(value: goal.fraction)
-                .tint(goal.ready ? .green : .accentColor)
         }
     }
 
@@ -648,199 +617,6 @@ struct TodayView: View {
                         streakBonusAt: bonuses.last.map { $0.timestamp.timeIntervalSince1970 } ?? announcedStreakBonusAt)
     }
 
-    private func stat(_ name: String, _ value: String) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(name)
-            Text(value).monospacedDigit().foregroundStyle(.primary)
-        }
-    }
-
-    // MARK: rows
-
-    private func questRow(_ quest: DailyQuest) -> some View {
-        HStack(alignment: .firstTextBaseline) {
-            badge(quest.isHiddenSlot ? "★" : quest.slot.code,
-                  range: Scoring.payoutRange(quest, tier: tier))
-            VStack(alignment: .leading, spacing: 2) {
-                Text(quest.textSnapshot)
-                // The drawn value of a parameterized template, kept beside the wording rather
-                // than spliced into it, so the CSV row stays recognisable in history.
-                if let variant = quest.variantSnapshot, !variant.isEmpty {
-                    Text(variant).font(.subheadline).foregroundStyle(.secondary)
-                }
-                if let url = quest.launchURLSnapshot, let link = URL(string: url) {
-                    Link("Open", destination: link).font(.caption)
-                }
-            }
-            Spacer()
-            if let points = quest.points {
-                Text("+\(points)").monospacedDigit().foregroundStyle(.green)
-            } else {
-                Button("Done") { pending = .quest(quest) }
-                    .buttonStyle(.bordered)
-            }
-        }
-    }
-
-    private enum RoutineNote { case overdue, thisWeek }
-
-    /// A routine pays a fixed amount, so the badge shows one number rather than a range — the
-    /// same number `Completion.completeRoutine` will pay today (half for an overdue one).
-    private func routineRow(_ occurrence: RoutineOccurrence, note: RoutineNote? = nil) -> some View {
-        let flexible = isFlexible(occurrence)
-        let pays = Completion.routinePayout(occurrence, flexible: flexible, on: today, tier: tier, level: level)
-        return HStack(alignment: .firstTextBaseline) {
-            badge("R", range: pays.map { $0...$0 })
-            VStack(alignment: .leading, spacing: 2) {
-                Text(occurrence.displayText)
-                if occurrence.degradedTextSnapshot != nil { versionNote(occurrence) }
-                if occurrence.completedDayKey == nil {
-                    switch note {
-                    case .overdue:
-                        Text("Overdue −50%").font(.caption).foregroundStyle(.red)
-                    case .thisWeek:
-                        Text("Not done · due \(occurrence.dueDayKey)")
-                            .font(.caption).foregroundStyle(.secondary)
-                    case nil:
-                        EmptyView()
-                    }
-                }
-                if let questID = occurrence.replacesQuestID {
-                    let replaced = allQuests.first { $0.id == questID }
-                    Text("\(addedOn(occurrence)) · replaces \(replaced.map(slotText) ?? "a random slot")")
-                        .font(.caption).foregroundStyle(.secondary)
-                } else if let replaced = occurrences.first(where: { $0.replacedByID == occurrence.id }) {
-                    Text("Replaces \(replaced.displayText)").font(.caption).foregroundStyle(.secondary)
-                } else if occurrence.routineID == nil {
-                    // Added with + on top of the day (`AdHoc.add`): extra, never a liability.
-                    Text("\(addedOn(occurrence)) · extra, no penalty").font(.caption).foregroundStyle(.secondary)
-                }
-                if !occurrence.countsForClear {
-                    Text("Doesn't gate the hidden quest").font(.caption).foregroundStyle(.secondary)
-                }
-            }
-            Spacer()
-            if let points = occurrence.awardedPoints {
-                Text("+\(points)").monospacedDigit().foregroundStyle(.green)
-            } else if occurrence.skipped {
-                Text("Skipped").font(.caption).foregroundStyle(.secondary)
-            } else {
-                Button("Done") { pending = .routine(occurrence) }
-                    .buttonStyle(.bordered)
-            }
-        }
-    }
-
-    /// An ad-hoc occurrence still open from an earlier day is overdue like any other; its note
-    /// shouldn't claim it was added today.
-    private func addedOn(_ o: RoutineOccurrence) -> String {
-        o.dueDayKey == today ? "Added today" : "Added \(o.dueDayKey)"
-    }
-
-    /// A routine with a light version on offer today: which one is chosen, and — while it is
-    /// still open — a switch to the other. Both pay the same, so no confirmation.
-    @ViewBuilder
-    private func versionNote(_ occurrence: RoutineOccurrence) -> some View {
-        let open = occurrence.completedDayKey == nil && !occurrence.skipped
-        HStack(spacing: 6) {
-            Text(occurrence.usedDegraded ? "Light version · \(occurrence.textSnapshot)"
-                                         : "Original · light version available")
-                .font(.caption).foregroundStyle(.secondary)
-            if open {
-                Button(occurrence.usedDegraded ? "Do original" : "Use light") {
-                    do {
-                        try Degrade.choose(light: !occurrence.usedDegraded, for: occurrence, in: context)
-                        actionError = nil
-                    } catch {
-                        actionError = "\(error)"
-                    }
-                }
-                .font(.caption)
-                .buttonStyle(.borderless)
-            }
-        }
-    }
-
-    private func replacedNote(_ reason: ReplacedReason) -> String {
-        switch reason {
-        case .replan: "Dropped — the day was re-planned"
-        case .cancelled: "Cancelled"
-        case .rerolled: "Rerolled away"
-        case .adHoc: "Replaced"
-        case .swapped: "Swapped"
-        }
-    }
-
-    /// A slot that is no longer today's ask — taken over by an ad-hoc routine, dropped by a
-    /// re-plan, or cancelled: kept on the page as a record, no longer to do.
-    private func replacedRow(_ quest: DailyQuest) -> some View {
-        HStack(alignment: .firstTextBaseline) {
-            badge(quest.isTrivialGroup ? "T×3" : quest.slot.code)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(slotText(quest)).strikethrough().foregroundStyle(.secondary)
-                Text(replacedNote(quest.replacedReason))
-                    .font(.caption).foregroundStyle(.tertiary)
-            }
-        }
-    }
-
-    private func slotText(_ quest: DailyQuest) -> String {
-        quest.isTrivialGroup ? quest.trivialGroup.joined(separator: " · ") : quest.textSnapshot
-    }
-
-    /// Three micro-actions in one E slot, scored 12 as a whole once all three are ticked.
-    private func trivialGroupRow(_ quest: DailyQuest) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                badge("T×3", range: Scoring.payoutRange(quest, tier: tier))
-                Text("Micro-actions").font(.subheadline.bold())
-                Spacer()
-                if let points = quest.points {
-                    Text("+\(points)").monospacedDigit().foregroundStyle(.green)
-                }
-            }
-            ForEach(Array(quest.trivialGroup.enumerated()), id: \.offset) { index, text in
-                let done = quest.trivialDone.indices.contains(index) && quest.trivialDone[index]
-                let variant = quest.trivialVariants.indices.contains(index) ? quest.trivialVariants[index] : ""
-                HStack(alignment: .firstTextBaseline) {
-                    Image(systemName: done ? "checkmark.circle.fill" : "circle")
-                        .foregroundStyle(done ? .green : .secondary)
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text(text).strikethrough(done)
-                        if !variant.isEmpty {
-                            Text(variant).font(.caption).foregroundStyle(.secondary)
-                        }
-                    }
-                    Spacer()
-                }
-                .contentShape(Rectangle())
-                .onTapGesture {
-                    guard quest.completedAt == nil, !done else { return }
-                    pending = .trivialItem(quest, index)
-                }
-            }
-        }
-    }
-
-    /// The difficulty code with what it can pay underneath — the stake, visible before you decide
-    /// to do it rather than only in the reveal afterwards. The span comes from `Scoring`, tier
-    /// multiplier and hidden bonus already applied, so it is the same arithmetic the roll obeys.
-    private func badge(_ text: String, range: ClosedRange<Int>? = nil) -> some View {
-        VStack(spacing: 0) {
-            Text(text).font(.caption2.bold())
-            if let range {
-                Text(range.lowerBound == range.upperBound
-                     ? "\(range.lowerBound)"
-                     : "\(range.lowerBound)–\(range.upperBound)")
-                    .font(.system(size: 9, weight: .medium).monospacedDigit())
-                    .foregroundStyle(.secondary)
-            }
-        }
-        .frame(minWidth: 46)
-        .padding(.vertical, 4)
-        .background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
-    }
-
     // MARK: actions
 
     private func perform(_ action: PendingAction, light: Bool = true) {
@@ -862,6 +638,8 @@ struct TodayView: View {
             case .ahead(let routine):
                 try Completion.completeAhead(routine, on: today, tier: tier, light: light, in: context)
             }
+            // The tap that opened the confirmation is silent; this is the completion itself.
+            Haptics.impact(.medium)
             actionError = nil
         } catch {
             actionError = "\(error)"
@@ -894,80 +672,63 @@ struct TodayView: View {
         try? Affinity.sync(context)           // the next draw already weighs it
         try? context.save()
     }
+    // The `⋯` menu, the context menu and VoiceOver's custom actions all list these. Whether each
+    // can go through is Core's rule; when it can't, the item is greyed out and shows no price.
 
-    // Swipe actions. Whether each can go through is Core's rule; when it can't, the button is
-    // simply greyed out and shows no price.
-
-    @ViewBuilder private func rerollButton(_ quest: DailyQuest) -> some View {
-        if quest.completedAt == nil {
-            spendButton(.reroll(quest), "Reroll", "dice", .orange,
-                        open: Reroll.blocked(for: quest, on: today, balance: balance, level: level,
-                                             freeUsedToday: freeRerollsUsed) == nil)
-        }
+    private func rerollAction(_ quest: DailyQuest) -> CardAction? {
+        guard quest.completedAt == nil else { return nil }
+        return spendAction(.reroll(quest), "Reroll", "dice",
+                           open: Reroll.blocked(for: quest, on: today, balance: balance, level: level,
+                                                freeUsedToday: freeRerollsUsed) == nil)
     }
 
-    @ViewBuilder private func extendButton(_ epic: DailyQuest) -> some View {
-        if epic.completedAt == nil {
-            spendButton(.extend(epic), "Extend", "calendar.badge.plus", .blue,
-                        open: Epic.blocked(epic, on: today, balance: balance, level: level) == nil)
-        }
+    private func extendAction(_ epic: DailyQuest) -> CardAction? {
+        guard epic.completedAt == nil else { return nil }
+        return spendAction(.extend(epic), "Extend", "calendar.badge.plus",
+                           open: Epic.blocked(epic, on: today, balance: balance, level: level) == nil)
     }
 
     /// Free — the price of an ad-hoc routine is that it now loses points if left undone — so it
-    /// only appears where it applies rather than sitting greyed out on every row.
-    @ViewBuilder private func replaceButton(_ quest: DailyQuest) -> some View {
-        if replaceableIDs.contains(quest.id) {
-            Button { replacing = quest } label: {
-                Label("Replace", systemImage: "arrow.triangle.swap")
-            }
-            .tint(.indigo)
-        }
+    /// only appears where it applies rather than sitting greyed out on every card.
+    private func replaceAction(_ quest: DailyQuest) -> CardAction? {
+        replaceableIDs.contains(quest.id)
+            ? CardAction(title: "Replace", systemImage: "arrow.triangle.swap") { replacing = quest } : nil
     }
 
     /// Free, for something at least as heavy (`AdHoc.replaceRoutine`); only where it applies.
-    @ViewBuilder private func replaceRoutineButton(_ o: RoutineOccurrence) -> some View {
-        if AdHoc.isReplaceable(o, flexible: isFlexible(o), on: today) {
-            Button { replacingRoutine = o } label: {
-                Label("Replace", systemImage: "arrow.triangle.swap")
-            }
-            .tint(.indigo)
-        }
+    private func replaceRoutineAction(_ o: RoutineOccurrence) -> CardAction? {
+        AdHoc.isReplaceable(o, flexible: isFlexible(o), on: today)
+            ? CardAction(title: "Replace", systemImage: "arrow.triangle.swap") { replacingRoutine = o } : nil
     }
 
     /// Free (`Epic.replace`); gone once the epic is done or extended.
-    @ViewBuilder private func replaceEpicButton(_ epic: DailyQuest) -> some View {
-        if Epic.blockedReplace(epic, on: today) == nil {
-            Button { replacingEpic = epic } label: {
-                Label("Replace", systemImage: "arrow.triangle.swap")
-            }
-            .tint(.indigo)
-        }
+    private func replaceEpicAction(_ epic: DailyQuest) -> CardAction? {
+        Epic.blockedReplace(epic, on: today) == nil
+            ? CardAction(title: "Replace", systemImage: "arrow.triangle.swap") { replacingEpic = epic } : nil
     }
 
-    @ViewBuilder private func cancelQuestButton(_ quest: DailyQuest) -> some View {
-        if quest.completedAt == nil, Redemption.cancelCost(for: quest.slot) != nil {
-            spendButton(.cancelQuest(quest), "Cancel", "xmark", .red,
-                        open: Redemption.blocked(cancelling: quest, on: today, balance: balance) == nil)
-        }
+    private func cancelQuestAction(_ quest: DailyQuest) -> CardAction? {
+        guard quest.completedAt == nil, Redemption.cancelCost(for: quest.slot) != nil else { return nil }
+        return spendAction(.cancelQuest(quest), "Cancel", "xmark",
+                           open: Redemption.blocked(cancelling: quest, on: today, balance: balance) == nil)
     }
 
-    /// Only the routines a cancel can apply to get the button at all — a flexible one or a
-    /// check-in never could, so a permanently grey button there would just be noise.
-    @ViewBuilder private func cancelRoutineButton(_ o: RoutineOccurrence) -> some View {
+    /// Only the routines a cancel can apply to get the item at all — a flexible one or a
+    /// check-in never could, so a permanently grey item there would just be noise.
+    private func cancelRoutineAction(_ o: RoutineOccurrence) -> CardAction? {
         let blocked = Redemption.blocked(cancelling: o, flexible: isFlexible(o), on: today, balance: balance)
-        if blocked != .notAvailable, blocked != .alreadyCompleted {
-            spendButton(.cancelRoutine(o), "Cancel", "xmark", .red, open: blocked == nil)
-        }
+        guard blocked != .notAvailable, blocked != .alreadyCompleted else { return nil }
+        return spendAction(.cancelRoutine(o), "Cancel", "xmark", open: blocked == nil)
     }
 
-    private func spendButton(_ spend: Spend, _ name: String, _ icon: String, _ color: Color,
-                             open: Bool) -> some View {
-        Button { spending = spend } label: {
-            Label(open ? "\(name) · \(cost(of: spend) == 0 ? "free" : "\(cost(of: spend))")" : name,
-                  systemImage: icon)
-        }
-        .tint(open ? color : .gray)
-        .disabled(!open)
+    private func spendAction(_ spend: Spend, _ name: String, _ icon: String, open: Bool) -> CardAction {
+        CardAction(title: open ? "\(name) · \(cost(of: spend) == 0 ? "free" : "\(cost(of: spend))")" : name,
+                   systemImage: icon, isEnabled: open) { spending = spend }
+    }
+
+
+    private func slotText(_ quest: DailyQuest) -> String {
+        quest.isTrivialGroup ? quest.trivialGroup.joined(separator: " · ") : quest.textSnapshot
     }
 
     private func message(for spend: Spend) -> String {
@@ -1020,6 +781,19 @@ struct TodayView: View {
         } catch {
             actionError = "\(error)"
         }
+    }
+}
+
+/// "Do now": a filled capsule with a 44 pt target.
+private struct DoNowButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .lr(.bodyStrong)
+            .foregroundStyle(LR.Color.onFill)
+            .padding(.horizontal, 16)
+            .frame(minHeight: 44)
+            .background(Capsule().fill(LR.Color.fill))
+            .opacity(configuration.isPressed ? 0.8 : 1)
     }
 }
 

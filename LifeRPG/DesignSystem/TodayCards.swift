@@ -1,0 +1,577 @@
+import LifeRPGCore
+import SwiftUI
+
+// The Today page's cards. Each takes a plain state built in Core and closures, and owns no data:
+// what a tap does (the confirmation, a purchase) is decided by `TodayView`.
+
+extension QuestTint {
+    var color: Color {
+        switch self {
+        case .trivial: LR.Color.tintTrivial
+        case .easy: LR.Color.tintEasy
+        case .medium: LR.Color.tintMedium
+        case .hard: LR.Color.tintHard
+        case .hidden: LR.Color.tintHidden
+        case .epic: LR.Color.epic
+        }
+    }
+}
+
+/// `+20`, `Wed · Sat`, `overdue · day 2`, wrapped so none of them truncates.
+private struct PillRow: View {
+    let pills: [PillState]
+    var onTint = false
+
+    var body: some View {
+        FlowRow(spacing: 6) {
+            ForEach(Array(pills.enumerated()), id: \.offset) { _, pill in
+                PillLabel(text: pill.text, style: style(pill.kind))
+            }
+        }
+    }
+
+    private func style(_ kind: PillState.Kind) -> PillLabel.Style {
+        switch kind {
+        case .clay: .clay
+        case .payout, .plain: onTint ? .onTint : .plain
+        }
+    }
+}
+
+/// A section heading: a bold title and a hand-written count.
+struct SectionTitle: View {
+    let title: String
+    var count: String?
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text(title).lr(.heading).foregroundStyle(LR.Color.ink)
+                .accessibilityAddTraits(.isHeader)
+            Spacer(minLength: 8)
+            if let count {
+                Text(count).lr(.hand).foregroundStyle(LR.Color.inkHand)
+            }
+        }
+        .padding(.top, 6)
+    }
+}
+
+/// Two columns, one at accessibility text sizes where a tile would be a sliver.
+struct TileGrid<Content: View>: View {
+    @ViewBuilder let content: Content
+    @Environment(\.dynamicTypeSize) private var typeSize
+
+    var body: some View {
+        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: LR.Spacing.gridGap, alignment: .top),
+                                 count: typeSize.isAccessibilitySize ? 1 : 2),
+                  spacing: LR.Spacing.gridGap) {
+            content
+        }
+    }
+}
+
+// MARK: - level card
+
+struct LevelCardView: View {
+    let state: LevelCardState
+    let onTap: () -> Void
+
+    @Environment(\.dynamicTypeSize) private var typeSize
+
+    var body: some View {
+        Button(action: onTap) {
+            VStack(alignment: .leading, spacing: 8) {
+                ViewThatFits(in: .horizontal) {
+                    HStack(alignment: .firstTextBaseline, spacing: 10) {
+                        levelText
+                        coinsText
+                        Spacer(minLength: 8)
+                        toNextText
+                    }
+                    VStack(alignment: .leading, spacing: 2) { levelText; coinsText; toNextText }
+                }
+                // One row of small dots; the accessibility sizes use the two-row grid.
+                LevelDotGrid(filled: state.filledDots, total: state.dotCount,
+                             columns: typeSize.isAccessibilitySize ? 10 : state.dotCount)
+                FlowRow(spacing: 6) {
+                    PillLabel(text: state.tierText, dense: true)
+                    PillLabel(text: state.slotsText, dense: true)
+                    if let streak = state.streakText { PillLabel(text: streak, dense: true) }
+                }
+                if let goal = state.goal { goalBlock(goal) }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .lrCard(.surface, radius: LR.Radius.card)
+        }
+        .buttonStyle(PressableCardStyle())
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(state.accessibilityLabel)
+        .accessibilityValue(state.accessibilityValue)
+        .accessibilityHint("Shows what each level unlocks")
+        .accessibilityAddTraits(.isButton)
+    }
+
+    private var levelText: some View {
+        Text("Lv \(state.level)").lr(.levelInline).foregroundStyle(LR.Color.ink)
+    }
+
+    private var coinsText: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 4) {
+            Text("\(state.balance)").lr(.titleCard).monospacedDigit()
+                .foregroundStyle(state.isNegative ? LR.Color.clay : LR.Color.ink)
+            Text("coins").lr(.caption).foregroundStyle(LR.Color.inkSecondary)
+        }
+    }
+
+    private var toNextText: some View {
+        Text("\(state.pointsToNext) to Lv \(state.level + 1)").lr(.caption).foregroundStyle(LR.Color.inkSecondary)
+    }
+
+    private func goalBlock(_ goal: LevelCardState.Goal) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text(goal.name).lr(.bodyStrong).foregroundStyle(LR.Color.ink)
+                    Spacer(minLength: 8)
+                    Text(goal.text).lr(.caption).monospacedDigit().foregroundStyle(LR.Color.inkSecondary)
+                }
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(goal.name).lr(.bodyStrong).foregroundStyle(LR.Color.ink)
+                    Text(goal.text).lr(.caption).monospacedDigit().foregroundStyle(LR.Color.inkSecondary)
+                }
+            }
+            GeometryReader { proxy in
+                ZStack(alignment: .leading) {
+                    Capsule().fill(LR.Color.dotEmpty)
+                    Capsule().fill(LR.Color.fill).frame(width: proxy.size.width * goal.fraction)
+                }
+            }
+            .frame(height: 6)
+        }
+    }
+}
+
+// MARK: - epic
+
+struct EpicCardView: View {
+    let state: EpicCardState
+    var actions: [CardAction] = []
+    let onComplete: () -> Void
+
+    @Environment(\.openURL) private var openURL
+    @Environment(\.dynamicTypeSize) private var typeSize
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            if typeSize.isAccessibilitySize {
+                VStack(alignment: .leading, spacing: 8) { wrappedTitleBlock; controls }
+            } else {
+                HStack(alignment: .center, spacing: 10) {
+                    DoodleView(key: .flag, size: 24, tint: LR.Color.onEpic)
+                    compactTitleBlock
+                    controls
+                }
+            }
+            SegmentedProgress(filled: state.segmentsFilled, total: state.segmentsTotal)
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 10)
+        .padding(.bottom, 10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .lrCard(.epic, radius: LR.Radius.card)
+        .cardElement(label: state.accessibilityLabel, value: state.accessibilityValue,
+                     complete: state.isDone ? nil : onComplete,
+                     actions: menuActions,
+                     extra: [])
+    }
+
+    /// The link rides in the menu: a compact card has no room for a button of its own.
+    private var menuActions: [CardAction] {
+        guard let url = state.launchURL else { return actions }
+        return actions + [CardAction(title: "Open link", systemImage: "link") { openURL(url) }]
+    }
+
+    /// One line of title, then the reward and the notes on one thin second line. The title can be
+    /// cut at the default size, so the menu repeats it in full.
+    private var compactTitleBlock: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            DoneTitle(text: state.title, isDone: state.isDone, style: .heading, color: LR.Color.onEpic,
+                      lineLimit: 1)
+            ViewThatFits(in: .horizontal) {
+                secondLine(state.detailText)
+                secondLine(state.shortDetailText)
+                secondLine(nil)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func secondLine(_ detail: String?) -> some View {
+        HStack(spacing: 6) {
+            PillLabel(text: state.rewardRangeText, style: .onEpic, dense: true)
+                .gainFloat(state.rewardRangeText, when: state.isDone)
+            if let detail {
+                Text(detail).lr(.caption).foregroundStyle(LR.Color.epicSecondary).lineLimit(1)
+            }
+        }
+    }
+
+    private var wrappedTitleBlock: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            DoneTitle(text: state.title, isDone: state.isDone, style: .heading, color: LR.Color.onEpic)
+            Text(state.detailText).lr(.caption).foregroundStyle(LR.Color.epicSecondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var controls: some View {
+        HStack(spacing: 0) {
+            if typeSize.isAccessibilitySize {
+                PillLabel(text: state.rewardRangeText, style: .onEpic)
+                    .gainFloat(state.rewardRangeText, when: state.isDone)
+                    .padding(.trailing, 4)
+            }
+            CardMenuButton(actions: menuActions, onDark: true, compact: !typeSize.isAccessibilitySize,
+                           heading: state.title)
+            CompleteButton(isDone: state.isDone, onDark: true,
+                           visibleSize: typeSize.isAccessibilitySize ? 44 : 32, action: onComplete)
+                .padding(typeSize.isAccessibilitySize ? 0 : -6)
+        }
+    }
+}
+
+// MARK: - routine row
+
+struct RoutineRowView: View {
+    let state: RoutineRowState
+    var actions: [CardAction] = []
+    let onComplete: () -> Void
+    var onSwitchVersion: () -> Void = {}
+
+    @Environment(\.dynamicTypeSize) private var typeSize
+
+    var body: some View {
+        Group {
+            if typeSize.isAccessibilitySize {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(alignment: .top, spacing: 12) { disc; details }
+                    HStack(spacing: 0) { Spacer(minLength: 0); controls }
+                }
+            } else {
+                HStack(alignment: .center, spacing: 12) {
+                    disc
+                    details
+                    controls
+                }
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .lrCard(.surface, radius: LR.Radius.row)
+        .cardElement(label: state.accessibilityLabel, value: state.accessibilityValue,
+                     complete: state.isDone || state.isSkipped ? nil : onComplete,
+                     actions: actions,
+                     extra: versionAction)
+    }
+
+    private var versionAction: [(title: String, run: () -> Void)] {
+        state.version?.switchLabel.map { [(title: $0, run: onSwitchVersion)] } ?? []
+    }
+
+    private var disc: some View {
+        Circle().fill(LR.Color.pillFill)
+            .frame(width: 52, height: 52)
+            .overlay { DoodleView(key: state.doodle, size: 28) }
+    }
+
+    private var details: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            DoneTitle(text: state.title, isDone: state.isDone)
+            PillRow(pills: state.pills)
+                .gainFloat(state.awardedPoints.map { "+\($0)" } ?? "", when: state.isDone)
+            if let version = state.version {
+                Text(version.note).lr(.caption).foregroundStyle(LR.Color.inkSecondary)
+                if let label = version.switchLabel {
+                    Button(label, action: onSwitchVersion)
+                        .lr(.caption).foregroundStyle(LR.Color.ink)
+                        .underline()
+                        .padding(.vertical, 12)
+                        .contentShape(Rectangle())
+                        .padding(.vertical, -12)
+                }
+            }
+            if let line = state.noteLine {
+                Text(line).lr(.caption).foregroundStyle(LR.Color.inkSecondary)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    @ViewBuilder private var controls: some View {
+        HStack(spacing: 0) {
+            CardMenuButton(actions: actions)
+            if !state.isSkipped {
+                CompleteButton(isDone: state.isDone, action: onComplete)
+            }
+        }
+    }
+}
+
+// MARK: - quest tiles
+
+struct QuestTileView: View {
+    let state: QuestCardState
+    var actions: [CardAction] = []
+    let onComplete: () -> Void
+
+    @Environment(\.openURL) private var openURL
+    @Environment(\.dynamicTypeSize) private var typeSize
+    /// Two tiles side by side share a height at ordinary sizes. The one-column accessibility
+    /// layout sizes to its text instead; a scaled floor there would be a screen of empty tile.
+    private var minimumHeight: CGFloat { typeSize.isAccessibilitySize ? 0 : 172 }
+
+    var body: some View {
+        Group {
+            if state.layout == .hidden { wide } else { tile }
+        }
+        .lrCard(.tint(state.tint.color), radius: LR.Radius.tile)
+        .cardElement(label: state.accessibilityLabel, value: state.accessibilityValue,
+                     complete: state.isDone ? nil : onComplete,
+                     actions: actions,
+                     extra: state.launchURL.map { url in [(title: "Open link", run: { openURL(url) })] } ?? [])
+    }
+
+    private var tile: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .top) {
+                DoodleView(key: state.doodle, size: 34)
+                Spacer(minLength: 0)
+                CardMenuButton(actions: actions)
+                    .padding(.top, -8).padding(.trailing, -8)
+            }
+            DoneTitle(text: state.title, isDone: state.isDone)
+            subtitleAndLink
+            Spacer(minLength: 4)
+            HStack(alignment: .center) {
+                PillLabel(text: state.pillText, style: .onTint)
+                    .gainFloat(state.pillText, when: state.isDone)
+                Spacer(minLength: 4)
+                CompleteButton(isDone: state.isDone, action: onComplete)
+            }
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, minHeight: minimumHeight, alignment: .topLeading)
+    }
+
+    private var wide: some View {
+        Group {
+            if typeSize.isAccessibilitySize {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(alignment: .top, spacing: 12) { DoodleView(key: state.doodle, size: 40); wideText }
+                    HStack { Spacer(minLength: 0); CompleteButton(isDone: state.isDone, action: onComplete) }
+                }
+            } else {
+                HStack(alignment: .center, spacing: 12) {
+                    DoodleView(key: state.doodle, size: 40)
+                    wideText
+                    CompleteButton(isDone: state.isDone, action: onComplete)
+                }
+            }
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var wideText: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("hidden quest").lr(.hand).foregroundStyle(LR.Color.inkOnTint)
+            DoneTitle(text: state.title, isDone: state.isDone)
+            subtitleAndLink
+            PillLabel(text: state.pillText, style: .onTint)
+                .gainFloat(state.pillText, when: state.isDone)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    @ViewBuilder private var subtitleAndLink: some View {
+        if let subtitle = state.subtitle {
+            Text(subtitle).lr(.caption).foregroundStyle(LR.Color.inkOnTint)
+        }
+        if let url = state.launchURL {
+            Link("Open", destination: url)
+                .lr(.caption).foregroundStyle(LR.Color.ink).underline()
+                .padding(.vertical, 12)
+                .contentShape(Rectangle())
+                .padding(.vertical, -12)
+        }
+    }
+}
+
+/// Three micro-actions in one wide mint tile, scored as a whole once all three are ticked.
+struct MicroGroupTileView: View {
+    let state: QuestCardState
+    var actions: [CardAction] = []
+    let onTick: (Int) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 2) {
+                    DoneTitle(text: state.title, isDone: state.isDone, style: .heading)
+                    if let subtitle = state.subtitle {
+                        Text(subtitle).lr(.caption).foregroundStyle(LR.Color.inkOnTint)
+                    }
+                }
+                Spacer(minLength: 8)
+                PillLabel(text: state.pillText, style: .onTint)
+                    .gainFloat(state.pillText, when: state.isDone)
+                CardMenuButton(actions: actions)
+                    .padding(.top, -8).padding(.trailing, -8)
+            }
+            ForEach(Array(state.items.enumerated()), id: \.offset) { index, item in
+                HStack(spacing: 6) {
+                    CompleteButton(isDone: item.isDone) { onTick(index) }
+                    VStack(alignment: .leading, spacing: 1) {
+                        DoneTitle(text: item.text, isDone: item.isDone)
+                        if let variant = item.variant {
+                            Text(variant).lr(.caption).foregroundStyle(LR.Color.inkOnTint)
+                        }
+                    }
+                    Spacer(minLength: 0)
+                }
+            }
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .lrCard(.tint(state.tint.color), radius: LR.Radius.tile)
+        .cardElement(label: state.accessibilityLabel, value: state.accessibilityValue,
+                     complete: nil,
+                     actions: actions,
+                     extra: state.items.enumerated().filter { !$0.element.isDone }.map { index, item in
+                         (title: "Tick \(item.text)", run: { onTick(index) })
+                     })
+    }
+}
+
+/// The hidden quest before it exists: a button once every slot is cleared, a lock until then.
+struct HiddenGateTile: View {
+    let unlocked: Bool
+    let onReveal: () -> Void
+
+    @Environment(\.dynamicTypeSize) private var typeSize
+
+    var body: some View {
+        if unlocked {
+            Button(action: onReveal) { content }
+                .buttonStyle(PressableCardStyle())
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("Reveal the hidden quest")
+                .accessibilityAddTraits(.isButton)
+        } else {
+            content
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("Hidden quest, locked")
+                .accessibilityValue("Clear every slot to unlock")
+        }
+    }
+
+    private var content: some View {
+        HStack(spacing: 12) {
+            if unlocked {
+                DoodleView(key: .sparkle, size: 40)
+            } else {
+                Image(systemName: "lock").font(.system(size: 26, weight: .semibold))
+                    .foregroundStyle(LR.Color.inkOnTint)
+                    .frame(width: 40, height: 40)
+                    .accessibilityHidden(true)
+            }
+            Text(unlocked ? "Reveal the hidden quest" : "Clear every slot to unlock")
+                .lr(.bodyStrong)
+                .foregroundStyle(unlocked ? LR.Color.ink : LR.Color.inkOnTint)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, minHeight: 68, alignment: .leading)
+        .lrCard(.tint(LR.Color.tintHidden), radius: LR.Radius.tile)
+        .contentShape(RoundedRectangle(cornerRadius: LR.Radius.tile, style: .continuous))
+    }
+}
+
+// MARK: - records and plain rows
+
+/// A slot that is no longer today's ask: a small strikethrough record, nothing to do.
+struct ReplacedRowView: View {
+    let state: ReplacedRowState
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
+            PillLabel(text: state.code)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(state.title).lr(.bodyStrong).strikethrough()
+                    .foregroundStyle(LR.Color.inkSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text(state.note).lr(.caption).foregroundStyle(LR.Color.inkSecondary)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 6)
+        .padding(.vertical, 4)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(state.title), \(state.note)")
+    }
+}
+
+/// A plain card row for the lists under the tiles (ahead, backlog): a title, a caption and
+/// whatever sits at the trailing edge.
+struct RecordRowView<Trailing: View>: View {
+    let title: String
+    var caption: String?
+    var doodle: DoodleKey?
+    var secondary = false
+    @ViewBuilder let trailing: Trailing
+
+    @Environment(\.dynamicTypeSize) private var typeSize
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 12) {
+            if let doodle {
+                Circle().fill(LR.Color.pillFill).frame(width: 44, height: 44)
+                    .overlay { DoodleView(key: doodle, size: 24) }
+            }
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title).lr(.bodyStrong)
+                    .foregroundStyle(secondary ? LR.Color.inkSecondary : LR.Color.ink)
+                    .fixedSize(horizontal: false, vertical: true)
+                if let caption {
+                    Text(caption).lr(.caption).foregroundStyle(LR.Color.inkSecondary)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            trailing
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .lrCard(.surface, radius: LR.Radius.row)
+    }
+}
+
+/// Generation and action errors: clay on its tinted ground, never alarm red.
+struct BannerView: View {
+    var title: String?
+    let message: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            if let title { Text(title).lr(.bodyStrong).foregroundStyle(LR.Color.clay) }
+            Text(message).lr(.caption).foregroundStyle(LR.Color.clay)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .lrCard(.tint(LR.Color.clayBg), radius: LR.Radius.row)
+        .accessibilityElement(children: .combine)
+    }
+}

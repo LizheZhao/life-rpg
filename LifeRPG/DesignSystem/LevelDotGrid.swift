@@ -5,19 +5,24 @@ import SwiftUI
 struct LevelDotGrid: View {
     let filled: Int
     let total: Int
+    /// 20 for one row of small dots; 10 for the two-row grid the accessibility sizes use.
+    var columns = 10
+    var spacing: CGFloat = 8
 
     @State private var shown: Int
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    init(filled: Int, total: Int = 20) {
+    init(filled: Int, total: Int = 20, columns: Int = 10, spacing: CGFloat = 8) {
         self.filled = filled
         self.total = total
+        self.columns = columns
+        self.spacing = spacing
         _shown = State(initialValue: min(max(filled, 0), total))
     }
 
     var body: some View {
-        let columns = Array(repeating: GridItem(.flexible(), spacing: 8), count: 10)
-        LazyVGrid(columns: columns, spacing: 8) {
+        let grid = Array(repeating: GridItem(.flexible(), spacing: spacing), count: columns)
+        LazyVGrid(columns: grid, spacing: spacing) {
             ForEach(0..<total, id: \.self) { index in
                 Circle()
                     .fill(LR.Color.dotEmpty)
