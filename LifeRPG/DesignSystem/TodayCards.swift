@@ -52,29 +52,15 @@ struct SectionTitle: View {
             HStack(alignment: .firstTextBaseline) {
                 heading
                 Spacer(minLength: 8)
-                if let count { Text(count).lr(.hand).foregroundStyle(LR.Color.inkHand) }
+                if let count { Text(count).lr(.hand).foregroundStyle(LR.Color.accent) }
             }
             // At accessibility sizes the count drops under the title instead of squeezing it.
             VStack(alignment: .leading, spacing: 2) {
                 heading
-                if let count { Text(count).lr(.hand).foregroundStyle(LR.Color.inkHand) }
+                if let count { Text(count).lr(.hand).foregroundStyle(LR.Color.accent) }
             }
         }
         .padding(.top, 6)
-    }
-}
-
-/// Two columns, one at accessibility text sizes where a tile would be a sliver.
-struct TileGrid<Content: View>: View {
-    @ViewBuilder let content: Content
-    @Environment(\.dynamicTypeSize) private var typeSize
-
-    var body: some View {
-        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: LR.Spacing.gridGap, alignment: .top),
-                                 count: typeSize.isAccessibilitySize ? 1 : 2),
-                  spacing: LR.Spacing.gridGap) {
-            content
-        }
     }
 }
 
@@ -163,11 +149,12 @@ struct LevelCardView: View {
 
 // MARK: - routine-style row (routines and the epic)
 
-/// The frame routines and the epic share: a doodle disc, the details, the controls, and an
+/// The frame routines, the epic and quests share: a doodle disc, the details, the controls, and an
 /// optional footer along the bottom of the card. At accessibility sizes the controls drop under
 /// the text.
 private struct RowLayout<Details: View, Controls: View, Footer: View>: View {
     let doodle: DoodleKey
+    var fill: CardFill = .surface
     @ViewBuilder let details: Details
     @ViewBuilder let controls: Controls
     @ViewBuilder let footer: Footer
@@ -192,11 +179,12 @@ private struct RowLayout<Details: View, Controls: View, Footer: View>: View {
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .lrCard(.surface, radius: LR.Radius.row)
+        .lrCard(fill, radius: LR.Radius.row)
+        .environment(\.lrTint, fill.tint)
     }
 
     private var disc: some View {
-        Circle().fill(LR.Color.pillFill)
+        Circle().fill(fill.disc)
             .frame(width: 52, height: 52)
             .overlay { DoodleView(key: doodle, size: 28) }
     }
@@ -334,93 +322,78 @@ struct RoutineRowView: View {
     }
 }
 
-// MARK: - quest tiles
+// MARK: - ahead
 
-struct QuestTileView: View {
+/// A flexible routine that can be done now: a routine row whose control is "Do now", which raises
+/// the usual confirmation.
+struct AheadCandidateRowView: View {
+    let state: AheadCandidateState
+    let onDoNow: () -> Void
+
+    var body: some View {
+        RowLayout(doodle: state.doodle) {
+            VStack(alignment: .leading, spacing: 6) {
+                DoneTitle(text: state.title, isDone: false)
+                PillRow(pills: state.pills)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        } controls: {
+            Button("Do now", action: onDoNow).buttonStyle(PillButtonStyle())
+        } footer: {
+            EmptyView()
+        }
+        .cardElement(label: state.accessibilityLabel, value: state.accessibilityValue,
+                     complete: nil, extra: [(title: "Do now", run: onDoNow)])
+    }
+}
+
+// MARK: - quest rows
+
+/// A quest as a routine-style row on its difficulty tint, open or done. The range pill becomes `+N`
+/// once paid. The link lives in the `⋯` menu while the quest is open.
+struct QuestRowView: View {
     let state: QuestCardState
     var actions: [CardAction] = []
     let onComplete: () -> Void
 
     @Environment(\.openURL) private var openURL
-    @Environment(\.dynamicTypeSize) private var typeSize
-    /// Two tiles side by side share a height at ordinary sizes. The one-column accessibility
-    /// layout sizes to its text instead; a scaled floor there would be a screen of empty tile.
-    private var minimumHeight: CGFloat { typeSize.isAccessibilitySize ? 0 : 172 }
 
     var body: some View {
-        Group {
-            if state.layout == .hidden { wide } else { tile }
-        }
-        .lrCard(.tint(state.tint.color), radius: LR.Radius.tile)
-        .cardElement(label: state.accessibilityLabel, value: state.accessibilityValue,
-                     complete: state.isDone ? nil : onComplete,
-                     actions: actions,
-                     extra: state.launchURL.map { url in [(title: "Open link", run: { openURL(url) })] } ?? [])
-    }
-
-    private var tile: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .top) {
-                DoodleView(key: state.doodle, size: 34)
-                Spacer(minLength: 0)
-                CardMenuButton(actions: actions)
-                    .padding(.top, -8).padding(.trailing, -8)
-            }
-            DoneTitle(text: state.title, isDone: state.isDone)
-            subtitleAndLink
-            Spacer(minLength: 4)
-            HStack(alignment: .center) {
-                PillLabel(text: state.pillText, style: .onTint)
-                    .gainFloat(state.pillText, when: state.isDone)
-                Spacer(minLength: 4)
+        RowLayout(doodle: state.doodle, fill: .tint(state.tint)) {
+            details
+        } controls: {
+            HStack(spacing: 0) {
+                CardMenuButton(actions: menuActions)
                 CompleteButton(isDone: state.isDone, action: onComplete)
             }
+        } footer: {
+            EmptyView()
         }
-        .padding(14)
-        .frame(maxWidth: .infinity, minHeight: minimumHeight, alignment: .topLeading)
+        .cardElement(label: state.accessibilityLabel, value: state.accessibilityValue,
+                     complete: state.isDone ? nil : onComplete,
+                     actions: menuActions)
     }
 
-    private var wide: some View {
-        Group {
-            if typeSize.isAccessibilitySize {
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack(alignment: .top, spacing: 12) { DoodleView(key: state.doodle, size: 40); wideText }
-                    HStack { Spacer(minLength: 0); CompleteButton(isDone: state.isDone, action: onComplete) }
-                }
-            } else {
-                HStack(alignment: .center, spacing: 12) {
-                    DoodleView(key: state.doodle, size: 40)
-                    wideText
-                    CompleteButton(isDone: state.isDone, action: onComplete)
-                }
-            }
-        }
-        .padding(14)
-        .frame(maxWidth: .infinity, alignment: .leading)
+    private var menuActions: [CardAction] {
+        guard !state.isDone, let url = state.launchURL else { return actions }
+        return actions + [CardAction(title: "Open link", systemImage: "link") { openURL(url) }]
     }
 
-    private var wideText: some View {
+    /// A finished micro-action group names its three actions; every other quest its drawn value.
+    private var caption: String? {
+        state.layout == .trivialGroup ? state.items.map(\.text).joined(separator: " · ") : state.subtitle
+    }
+
+    private var details: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("hidden quest").lr(.hand).foregroundStyle(LR.Color.inkOnTint)
             DoneTitle(text: state.title, isDone: state.isDone)
-            subtitleAndLink
+            if let caption {
+                Text(caption).lr(.caption).foregroundStyle(LR.Color.ink(on: state.tint))
+            }
             PillLabel(text: state.pillText, style: .onTint)
                 .gainFloat(state.pillText, when: state.isDone)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    @ViewBuilder private var subtitleAndLink: some View {
-        if let subtitle = state.subtitle {
-            Text(subtitle).lr(.caption).foregroundStyle(LR.Color.inkOnTint)
-        }
-        if let url = state.launchURL {
-            Link("Open", destination: url)
-                .lr(.caption).foregroundStyle(LR.Color.ink).underline()
-                .padding(.vertical, 12)
-                .contentShape(Rectangle())
-                .padding(.vertical, -12)
-        }
     }
 }
 
@@ -436,7 +409,7 @@ struct MicroGroupTileView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     DoneTitle(text: state.title, isDone: state.isDone, style: .heading)
                     if let subtitle = state.subtitle {
-                        Text(subtitle).lr(.caption).foregroundStyle(LR.Color.inkOnTint)
+                        Text(subtitle).lr(.caption).foregroundStyle(LR.Color.ink(on: .trivial))
                     }
                 }
                 Spacer(minLength: 8)
@@ -451,7 +424,7 @@ struct MicroGroupTileView: View {
                     VStack(alignment: .leading, spacing: 1) {
                         DoneTitle(text: item.text, isDone: item.isDone)
                         if let variant = item.variant {
-                            Text(variant).lr(.caption).foregroundStyle(LR.Color.inkOnTint)
+                            Text(variant).lr(.caption).foregroundStyle(LR.Color.ink(on: .trivial))
                         }
                     }
                     Spacer(minLength: 0)
@@ -460,7 +433,8 @@ struct MicroGroupTileView: View {
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .lrCard(.tint(state.tint.color), radius: LR.Radius.tile)
+        .lrCard(.tint(.trivial), radius: LR.Radius.tile)
+        .environment(\.lrTint, .trivial)
         .cardElement(label: state.accessibilityLabel, value: state.accessibilityValue,
                      complete: nil,
                      actions: actions,
@@ -495,22 +469,22 @@ struct HiddenGateTile: View {
     private var content: some View {
         HStack(spacing: 12) {
             if unlocked {
-                DoodleView(key: .sparkle, size: 40)
+                DoodleView(key: .sparkle, size: 40, tint: LR.Color.ink(on: .hidden))
             } else {
                 Image(systemName: "lock").font(.system(size: 26, weight: .semibold))
-                    .foregroundStyle(LR.Color.inkOnTint)
+                    .foregroundStyle(LR.Color.ink(on: .hidden))
                     .frame(width: 40, height: 40)
                     .accessibilityHidden(true)
             }
             Text(unlocked ? "Reveal the hidden quest" : "Clear every slot to unlock")
                 .lr(.bodyStrong)
-                .foregroundStyle(unlocked ? LR.Color.ink : LR.Color.inkOnTint)
+                .foregroundStyle(LR.Color.ink(on: .hidden))
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .fixedSize(horizontal: false, vertical: true)
         }
         .padding(14)
         .frame(maxWidth: .infinity, minHeight: 68, alignment: .leading)
-        .lrCard(.tint(LR.Color.tintHidden), radius: LR.Radius.tile)
+        .lrCard(.tint(.hidden), radius: LR.Radius.tile)
         .contentShape(RoundedRectangle(cornerRadius: LR.Radius.tile, style: .continuous))
     }
 }
@@ -539,23 +513,16 @@ struct ReplacedRowView: View {
     }
 }
 
-/// A plain card row for the lists under the tiles (ahead, backlog): a title, a caption and
-/// whatever sits at the trailing edge.
+/// A plain card row for the read-only backlog: a title, a caption and whatever sits at the
+/// trailing edge.
 struct RecordRowView<Trailing: View>: View {
     let title: String
     var caption: String?
-    var doodle: DoodleKey?
     var secondary = false
     @ViewBuilder let trailing: Trailing
 
-    @Environment(\.dynamicTypeSize) private var typeSize
-
     var body: some View {
         HStack(alignment: .center, spacing: 12) {
-            if let doodle {
-                Circle().fill(LR.Color.pillFill).frame(width: 44, height: 44)
-                    .overlay { DoodleView(key: doodle, size: 24) }
-            }
             VStack(alignment: .leading, spacing: 2) {
                 Text(title).lr(.bodyStrong)
                     .foregroundStyle(secondary ? LR.Color.inkSecondary : LR.Color.ink)
@@ -586,7 +553,7 @@ struct BannerView: View {
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .lrCard(.tint(LR.Color.clayBg), radius: LR.Radius.row)
+        .lrCard(.clayBg, radius: LR.Radius.row)
         .accessibilityElement(children: .combine)
     }
 }

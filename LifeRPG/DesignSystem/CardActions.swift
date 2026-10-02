@@ -17,6 +17,8 @@ struct CardAction: Identifiable {
 struct CardMenuButton: View {
     let actions: [CardAction]
 
+    @Environment(\.lrTint) private var tint
+
     var body: some View {
         if !actions.isEmpty {
             Menu {
@@ -24,7 +26,7 @@ struct CardMenuButton: View {
             } label: {
                 Image(systemName: "ellipsis")
                     .font(.system(size: 17, weight: .bold))
-                    .foregroundStyle(LR.Color.inkSecondary)
+                    .foregroundStyle(tint.map(LR.Color.ink(on:)) ?? LR.Color.inkSecondary)
                     .frame(width: 44, height: 44)
                     .contentShape(Rectangle())
             }
@@ -94,10 +96,12 @@ private struct GainText: View {
     let rise: CGFloat
     let opacity: Double
 
+    @Environment(\.lrTint) private var tint
+
     var body: some View {
         Text(text)
             .lr(.bodyStrong)
-            .foregroundStyle(LR.Color.ink)
+            .foregroundStyle(tint.map(LR.Color.ink(on:)) ?? LR.Color.ink)
             .fixedSize()
             .offset(y: rise)
             .opacity(opacity)
@@ -149,12 +153,14 @@ struct DoneTitle: View {
     let text: String
     let isDone: Bool
     var style: LR.Typography = .bodyStrong
-    var color: Color = LR.Color.ink
+    var color: Color?
     var lineLimit: Int?
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.lrTint) private var tint
 
     var body: some View {
+        let color = color ?? tint.map(LR.Color.ink(on:)) ?? LR.Color.ink
         Text(text)
             .lr(style)
             .strikethrough(isDone, color: color)

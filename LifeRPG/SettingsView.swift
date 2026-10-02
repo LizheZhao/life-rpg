@@ -84,6 +84,7 @@ struct SettingsView: View {
                 }
                 .listRowBackground(LR.Color.surface)
             }
+            .listRowSeparatorTint(LR.Color.divider)
             .scrollContentBackground(.hidden)
             .background(LR.Color.canvas)
             .navigationTitle("Settings")

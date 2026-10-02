@@ -138,27 +138,8 @@ struct TodayView: View {
     /// hardest thing in the pool as the reward for a day you barely got through.
     private var inputs: DayInputs { DayInputs(tier: tier, cycleDay: cycleDay) }
 
-    /// What doing this routine ahead would pay. On a low day one of its downgrade versions is
-    /// drawn when it is done, so what is shown is the range across the versions on offer rather
-    /// than a number the draw could contradict.
-    private func aheadPayout(_ routine: RoutineTask) -> ClosedRange<Int> {
-        let bases = [routine.basePoints] + Degrade.versions(of: routine, in: routines).map(\.basePoints)
-        let candidates = tier.isLow && routine.canDegrade ? Array(bases.dropFirst()) : [routine.basePoints]
-        let points = candidates.map { Scoring.routinePoints(basePoints: $0, tier: tier, late: false) }
-        return (points.min() ?? 0)...(points.max() ?? 0)
-    }
-
-    private var aheadPending: Int { thisWeekRoutines.count + aheadCandidates.count }
-
     private var aheadOpen: Bool {
         aheadToggledOn == today ? aheadExpanded : (DayKey.isWeekend(today) || aheadExpanded)
-    }
-
-    /// What Sunday night's flexible settlement would charge if nothing more is done — the same
-    /// rule that will charge it (`Overdue.weekly`), from the rows the queries already hold.
-    private var weekEndBill: Int {
-        guard let week = DayKey.weekKey(of: today) else { return 0 }
-        return Overdue.weekly(routines, occurrences: occurrences, weekKey: week).total
     }
 
     /// Whether doing this routine ahead today would offer a lighter version — only on a low day,
@@ -200,14 +181,7 @@ struct TodayView: View {
     private var overdueRoutines: [RoutineOccurrence] {
         Schedule.overdue(occurrences, flexible: flexibleIDs, on: today)
     }
-    private var thisWeekRoutines: [RoutineOccurrence] {
-        Schedule.openThisWeek(occurrences, flexible: flexibleIDs, on: today)
-    }
     private var backlog: [RoutineOccurrence] { Array(Schedule.backlog(occurrences).prefix(30)) }
-    private var aheadCandidates: [Schedule.Ahead] {
-        Schedule.aheadCandidates(routines, occurrences: occurrences, on: today)
-    }
-    private var doneAhead: [RoutineOccurrence] { Schedule.doneAhead(occurrences, on: today) }
 
     // Both rules live in Core; this only hands over the rows the query already has.
     private var balance: Int { Economy.balance(ledger) }
@@ -241,6 +215,11 @@ struct TodayView: View {
     private var levelState: LevelCardState {
         LevelCardState(totalEarned: totalEarned, balance: balance, streak: streak, tier: tier,
                        randomSlots: todayContext?.randomSlots ?? 0, goal: goal)
+    }
+
+    private var aheadState: AheadState {
+        AheadState(routines: routines, occurrences: occurrences, flexible: flexibleIDs,
+                   today: today, tier: tier) { routineState($0, $1) }
     }
 
     private var completedStack: CompletedStackState {
@@ -305,7 +284,7 @@ struct TodayView: View {
 
     private var greetingBlock: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text(greeting.handLine).lr(.hand).foregroundStyle(LR.Color.inkHand)
+            Text(greeting.handLine).lr(.hand).foregroundStyle(LR.Color.accent)
             Text(greeting.salutation).lr(.displayGreeting).foregroundStyle(LR.Color.ink)
             HandUnderlineText(lead: "let's", emphasis: "level up")
         }
@@ -356,7 +335,7 @@ struct TodayView: View {
         // Nothing drawn means nothing to clear and no hidden reward to earn — then there is no
         // lock either, rather than a lock with no key.
         let live = randomQuests.filter { !$0.replaced }
-        let tiles = live.filter { !$0.isTrivialGroup }
+        let rows = live.filter { !$0.isTrivialGroup }
         let groups = live.filter(\.isTrivialGroup)
         let counted = live.map(questState)
         SectionTitle(title: "Today's quests",
@@ -367,18 +346,14 @@ struct TodayView: View {
                 .padding(16).frame(maxWidth: .infinity, alignment: .leading)
                 .lrCard(.surface, radius: LR.Radius.row)
         }
-        if !tiles.isEmpty {
-            TileGrid {
-                ForEach(tiles) { quest in
-                    let state = questState(quest)
-                    if staysInSection(quest.id, isDone: state.isDone) {
-                        QuestTileView(state: state,
-                                      actions: [rerollAction(quest), cancelQuestAction(quest), replaceAction(quest)]
-                                          .compactMap { $0 },
-                                      onComplete: { pending = .quest(quest) })
-                            .transition(cardLeaves)
-                    }
-                }
+        ForEach(rows) { quest in
+            let state = questState(quest)
+            if staysInSection(quest.id, isDone: state.isDone) {
+                QuestRowView(state: state,
+                             actions: [rerollAction(quest), cancelQuestAction(quest), replaceAction(quest)]
+                                 .compactMap { $0 },
+                             onComplete: { pending = .quest(quest) })
+                    .transition(cardLeaves)
             }
         }
         ForEach(groups) { quest in
@@ -398,7 +373,7 @@ struct TodayView: View {
             let state = questState(hiddenQuest)
             SectionTitle(title: "Hidden", count: state.isDone ? SectionProgress.clearedLabel : nil)
             if staysInSection(hiddenQuest.id, isDone: state.isDone) {
-                QuestTileView(state: state, onComplete: { pending = .quest(hiddenQuest) })
+                QuestRowView(state: state, onComplete: { pending = .quest(hiddenQuest) })
                     .transition(cardLeaves)
             }
         } else if !randomQuests.isEmpty {
@@ -417,72 +392,38 @@ struct TodayView: View {
         }
     }
 
-    /// The rest of the week's flexible work, folded away: sessions from earlier days still open
-    /// (full pay until Sunday), what was pulled forward today, and what can be.
+    /// The rest of the week's flexible work, stacked like Completed: sessions from earlier days
+    /// still open (full pay until Sunday), what was pulled forward today, and what can be.
     /// Saturday's session done today counts as Saturday's, and Saturday no longer carries it.
     @ViewBuilder private var aheadBlock: some View {
-        if !thisWeekRoutines.isEmpty || !aheadCandidates.isEmpty || !doneAhead.isEmpty {
-            aheadHeader
-            if aheadOpen {
-                ForEach(thisWeekRoutines) { o in
-                    routineCard(o, routineState(o, .thisWeek), menu: [replaceRoutineAction(o)])
-                }
-                ForEach(doneAhead) { o in
-                    RecordRowView(title: o.displayText, caption: "Done ahead · counts for \(o.dueDayKey)",
-                                  doodle: DoodleKey.forText(o.displayText)) {
-                        PillLabel(text: "+\(o.awardedPoints ?? 0)")
-                    }
-                }
-                ForEach(aheadCandidates, id: \.routine.id) { c in
-                    RecordRowView(title: c.routine.text,
-                                  caption: "\(c.doneThisWeek)/\(c.routine.weeklyTarget) this week · next due \(c.nextDueDayKey)",
-                                  doodle: DoodleKey.forText(c.routine.text)) {
-                        VStack(alignment: .trailing, spacing: 6) {
-                            PillLabel(text: PresentationText.range(aheadPayout(c.routine)))
-                            Button("Do now") { pending = .ahead(c.routine) }
-                                .buttonStyle(DoNowButtonStyle())
-                        }
-                    }
-                }
+        let ahead = aheadState
+        if !ahead.isEmpty {
+            StackedCards(title: "Ahead this week", summary: ahead.summary, badge: ahead.billText,
+                         accessibilityLabel: ahead.accessibilityLabel,
+                         items: ahead.items, expanded: aheadBinding) { item in
+                aheadRow(item)
             }
         }
     }
 
-    private var aheadHeader: some View {
-        Button {
-            let open = !aheadOpen
-            withAnimation {
-                aheadExpanded = open
-                aheadToggledOn = today
+    /// The expand rules (`aheadOpen`) drive the stack; a toggle by hand is remembered for the day.
+    private var aheadBinding: Binding<Bool> {
+        Binding(get: { aheadOpen }, set: { aheadExpanded = $0; aheadToggledOn = today })
+    }
+
+    @ViewBuilder private func aheadRow(_ item: AheadItem) -> some View {
+        switch item {
+        case .routine(let state):
+            let occurrence = occurrences.first { $0.id == state.id }
+            RoutineRowView(state: state,
+                           actions: occurrence.flatMap(replaceRoutineAction).map { [$0] } ?? [],
+                           onComplete: { if let occurrence { pending = .routine(occurrence) } },
+                           onSwitchVersion: { if let occurrence { switchVersion(occurrence) } })
+        case .candidate(let state):
+            AheadCandidateRowView(state: state) {
+                if let routine = routines.first(where: { $0.id == state.id }) { pending = .ahead(routine) }
             }
-        } label: {
-            VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    Text("Ahead this week").lr(.heading).foregroundStyle(LR.Color.ink)
-                    Spacer(minLength: 8)
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 14, weight: .bold))
-                        .foregroundStyle(LR.Color.inkSecondary)
-                        .rotationEffect(.degrees(aheadOpen ? 90 : 0))
-                }
-                FlowRow(spacing: 6) {
-                    PillLabel(text: "\(aheadPending) open")
-                    if !doneAhead.isEmpty { PillLabel(text: "\(doneAhead.count) done") }
-                    if weekEndBill > 0 { PillLabel(text: "−\(weekEndBill) Sun night", style: .clay) }
-                }
-            }
-            .padding(14)
-            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-            .lrCard(.surface, radius: LR.Radius.row)
-            .contentShape(RoundedRectangle(cornerRadius: LR.Radius.row, style: .continuous))
         }
-        .buttonStyle(PressableCardStyle())
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Ahead this week, \(aheadPending) open"
-                            + (doneAhead.isEmpty ? "" : ", \(doneAhead.count) done")
-                            + (weekEndBill > 0 ? ", minus \(weekEndBill) coins Sunday night" : ""))
-        .accessibilityValue(aheadOpen ? "expanded" : "collapsed")
-        .accessibilityAddTraits(.isButton)
     }
 
     /// Skipped and never done: read-only, a record rather than a to-do.
@@ -848,19 +789,6 @@ struct TodayView: View {
         } catch {
             actionError = "\(error)"
         }
-    }
-}
-
-/// "Do now": a filled capsule with a 44 pt target.
-private struct DoNowButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .lr(.bodyStrong)
-            .foregroundStyle(LR.Color.onFill)
-            .padding(.horizontal, 16)
-            .frame(minHeight: 44)
-            .background(Capsule().fill(LR.Color.fill))
-            .opacity(configuration.isPressed ? 0.8 : 1)
     }
 }
 

@@ -42,31 +42,27 @@ struct TodayCardsGallery: View {
                                               base: 25, due: "2026-10-01", placement: .overdue),
                                actions: routineMenu) {}
             }
-            group("Quest tiles: easy, medium, hard, done") {
-                TileGrid {
-                    QuestTileView(state: tile("Write a journal entry", .easy, variant: "A view I've recently changed"),
-                                  actions: tileMenu) {}
-                    QuestTileView(state: tile("Walk 8,000 steps", .medium, url: "https://example.com"),
-                                  actions: tileMenu) {}
-                    QuestTileView(state: tile("Send one cold email to someone you admire", .hard),
-                                  actions: tileMenu) {}
-                    QuestTileView(state: tile("Drink 2L of water", .easy, points: 11)) {}
-                    QuestTileView(state: tile("Sort the mail", .easy, tier: .low), actions: tileMenu) {}
-                }
+            group("Quest rows: easy, medium, hard, done, low day (tap Open link in the menu)") {
+                QuestRowView(state: tile("Write a journal entry", .easy, variant: "A view I've recently changed"),
+                             actions: tileMenu) {}
+                QuestRowView(state: tile("Walk 8,000 steps", .medium, url: "https://example.com"),
+                             actions: tileMenu) {}
+                QuestRowView(state: tile("Send one cold email to someone you admire", .hard),
+                             actions: tileMenu) {}
+                QuestRowView(state: tile("Drink 2L of water", .easy, points: 11)) {}
+                QuestRowView(state: tile("Sort the mail", .easy, tier: .low), actions: tileMenu) {}
             }
             group("Complete demo") {
-                TileGrid {
-                    QuestTileView(state: tile("Stretch for ten minutes", .easy, points: demoDone ? 12 : nil)) {
-                        demoDone = true
-                    }
-                    Button("Reset") { demoDone = false }
-                        .lr(.bodyStrong).foregroundStyle(LR.Color.ink)
-                        .frame(maxWidth: .infinity, minHeight: 44)
-                        .lrCard(.surface, radius: LR.Radius.tile)
+                QuestRowView(state: tile("Stretch for ten minutes", .easy, points: demoDone ? 12 : nil)) {
+                    demoDone = true
                 }
+                Button("Reset") { demoDone = false }
+                    .lr(.bodyStrong).foregroundStyle(LR.Color.ink)
+                    .frame(maxWidth: .infinity, minHeight: 44)
+                    .lrCard(.surface, radius: LR.Radius.row)
             }
             group("Hidden quest, gate, micro-actions") {
-                QuestTileView(state: tile("Write a thank-you note", .medium, hidden: true)) {}
+                QuestRowView(state: tile("Write a thank-you note", .medium, hidden: true)) {}
                 HiddenGateTile(unlocked: true) {}
                 HiddenGateTile(unlocked: false) {}
                 MicroGroupTileView(state: trio(ticked: 1), actions: [rerollItem]) { _ in }
@@ -78,10 +74,6 @@ struct TodayCardsGallery: View {
                 ReplacedRowView(state: replaced(.adHoc))
                 RecordRowView(title: "Pay the credit card", caption: "Due 2026-09-29", secondary: true) {
                     PillLabel(text: "−20", style: .clay)
-                }
-                RecordRowView(title: "Incline walk", caption: "1/2 this week · next due 2026-10-03",
-                              doodle: .sneaker) {
-                    PillLabel(text: "20")
                 }
                 BannerView(title: "Today could not be generated", message: "The pool is empty.")
             }
@@ -331,5 +323,98 @@ struct CompletedStackGallery: View {
         e.points = points
         e.completedAt = base.addingTimeInterval(Double(minute) * 60)
         return .quest(e)
+    }
+}
+
+/// The Ahead section in the states it takes on Today, from sample routines run through the same
+/// Core builder the page uses.
+struct AheadStackGallery: View {
+    private static let friday = "2026-10-02"
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 28) {
+            demo("Collapsed: open, done ahead and a candidate, with Sunday's bill",
+                 expanded: false, state: Self.state(low: false))
+            demo("Expanded", expanded: true, state: Self.state(low: false))
+            demo("A low day: a candidate pays its lighter versions", expanded: false, state: Self.state(low: true))
+            demo("One candidate", expanded: false, state: Self.single)
+        }
+    }
+
+    private func demo(_ title: String, expanded: Bool, state: AheadState) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title).lr(.caption).foregroundStyle(LR.Color.inkSecondary)
+            AheadDemo(state: state, startsExpanded: expanded)
+        }
+    }
+
+    private struct AheadDemo: View {
+        let state: AheadState
+        @State private var expanded: Bool
+
+        init(state: AheadState, startsExpanded: Bool) {
+            self.state = state
+            _expanded = State(initialValue: startsExpanded)
+        }
+
+        var body: some View {
+            StackedCards(title: "Ahead this week", summary: state.summary, badge: state.billText,
+                         accessibilityLabel: state.accessibilityLabel,
+                         items: state.items, expanded: $expanded) { item in
+                switch item {
+                case .routine(let row): RoutineRowView(state: row, onComplete: {})
+                case .candidate(let row): AheadCandidateRowView(state: row) {}
+                }
+            }
+        }
+    }
+
+    private static func routine(_ text: String, base: Int, spec: String = "SAT", target: Int = 1) -> RoutineTask {
+        let r = RoutineTask()
+        r.text = text
+        r.spec = spec
+        r.basePoints = base
+        r.weeklyTarget = target
+        r.flexibleWithinWeek = true
+        return r
+    }
+
+    private static func occurrence(_ r: RoutineTask, due: String, paid: Int? = nil) -> RoutineOccurrence {
+        let o = RoutineOccurrence()
+        o.textSnapshot = r.text
+        o.basePoints = r.basePoints
+        o.dueDayKey = due
+        o.weekKey = "2026-W40"
+        o.routineID = r.id
+        if let paid { o.completedDayKey = friday; o.awardedPoints = paid }
+        return o
+    }
+
+    private static func state(_ routines: [RoutineTask], _ occurrences: [RoutineOccurrence],
+                              tier: Tier = .normal) -> AheadState {
+        AheadState(routines: routines, occurrences: occurrences,
+                   flexible: Set(routines.filter(\.flexibleWithinWeek).map(\.id)),
+                   today: friday, tier: tier) { o, placement in
+            RoutineRowState(o, placement: placement, routine: routines.first { $0.id == o.routineID },
+                            flexible: true, today: friday, tier: tier, level: 1,
+                            quests: [], occurrences: occurrences)
+        }
+    }
+
+    private static func state(low: Bool) -> AheadState {
+        let strength = routine("Strength session", base: 20)
+        let run = routine("Workout: running", base: 25)
+        let yoga = routine("Yoga", base: 10, spec: "SUN")
+        let light = routine("Stretch 15 min", base: 20, spec: "SAT")
+        light.flexibleWithinWeek = false
+        let weights = routine("Workout: weight training", base: 40, spec: "SUN")
+        weights.downgradeIDs = [light.id]
+        return state([strength, run, yoga, light, weights],
+                     [occurrence(strength, due: "2026-09-30"), occurrence(run, due: "2026-10-03", paid: 25)],
+                     tier: low ? .low : .normal)
+    }
+
+    private static var single: AheadState {
+        state([routine("Incline walk 30 min", base: 20, spec: "SAT", target: 2)], [])
     }
 }

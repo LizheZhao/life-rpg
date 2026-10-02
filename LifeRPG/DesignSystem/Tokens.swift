@@ -8,10 +8,13 @@ enum LR {
     enum Color {
         static let canvas = color(Palette.canvas)
         static let surface = color(Palette.surface)
+        /// The 1 pt edge of a neutral card.
+        static let hairline = color(Palette.hairline)
+        static let divider = color(Palette.divider)
         static let ink = color(Palette.ink)
         static let inkSecondary = color(Palette.inkSecondary)
-        static let inkOnTint = color(Palette.inkOnTint)
-        static let inkHand = color(Palette.inkHand)
+        /// The Caveat hand labels and the ring of an open complete button.
+        static let accent = color(Palette.accent)
         static let fill = color(Palette.fill)
         static let onFill = color(Palette.onFill)
         static let dotEmpty = color(Palette.dotEmpty)
@@ -24,9 +27,12 @@ enum LR {
         static let clay = color(Palette.clay)
         static let clayBg = color(Palette.clayBg)
         static let avatarPink = color(Palette.avatarPink)
+        /// A pill on a tinted row: a solid chip.
+        static let chip = color(Palette.chip)
         static let pillFill = color(Palette.pillFill)
-        /// Laid over a pastel tile; the opacity is part of the token, so the contrast test covers it.
-        static let pillVeil = color(Palette.pillVeil).opacity(Palette.pillVeilAlpha)
+
+        /// What is drawn on a tint (title, caption, doodle, `⋯`, open ring): per tint.
+        static func ink(on tint: QuestTint) -> SwiftUI.Color { color(Palette.ink(on: tint)) }
 
         /// A colour that re-resolves when the appearance changes, including inside a view that
         /// overrides it with `.environment(\.colorScheme, ...)`.

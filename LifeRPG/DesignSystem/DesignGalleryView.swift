@@ -15,6 +15,7 @@ struct DesignGalleryView: View {
             VStack(alignment: .leading, spacing: 28) {
                 header
                 section("Completed stack") { CompletedStackGallery() }
+                section("Ahead stack") { AheadStackGallery() }
                 section("Colours (light | dark)") { swatches }
                 section("Type") { typeStyles }
                 section("Text on tiles") { tileText }
@@ -46,7 +47,7 @@ struct DesignGalleryView: View {
 
     private func section<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text(title).lr(.hand).foregroundStyle(LR.Color.inkHand)
+            Text(title).lr(.hand).foregroundStyle(LR.Color.accent)
             content()
         }
     }
@@ -100,15 +101,12 @@ struct DesignGalleryView: View {
     }
 
     private var tileText: some View {
-        let tints: [(String, Color)] = [("trivial", LR.Color.tintTrivial), ("easy", LR.Color.tintEasy),
-                                        ("medium", LR.Color.tintMedium), ("hard", LR.Color.tintHard),
-                                        ("hidden", LR.Color.tintHidden)]
-        return LazyVGrid(columns: [GridItem(.adaptive(minimum: swatchMinimum), spacing: LR.Spacing.gridGap)], spacing: LR.Spacing.gridGap) {
-            ForEach(tints, id: \.0) { name, tint in
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: swatchMinimum), spacing: LR.Spacing.gridGap)], spacing: LR.Spacing.gridGap) {
+            ForEach(QuestTint.allCases, id: \.self) { tint in
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("Walk 8,000 steps").lr(.bodyStrong).foregroundStyle(LR.Color.ink)
-                    Text("A view I've recently changed").lr(.caption).foregroundStyle(LR.Color.inkOnTint)
-                    PillLabel(text: "\(name) · 12–30", style: .onTint)
+                    Text("Walk 8,000 steps").lr(.bodyStrong).foregroundStyle(LR.Color.ink(on: tint))
+                    Text("A view I've recently changed").lr(.caption).foregroundStyle(LR.Color.ink(on: tint))
+                    PillLabel(text: "\(String(describing: tint)) · 12–30", style: .onTint)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(14)
@@ -157,9 +155,9 @@ struct DesignGalleryView: View {
             }
             .padding(.vertical, 6)
             FlowRow {
-                ForEach(Palette.tints, id: \.name) { tint in
+                ForEach(QuestTint.allCases, id: \.self) { tint in
                     PillLabel(text: "12–30", style: .onTint).padding(6)
-                        .lrCard(.tint(LR.Color.color(tint.token)), radius: 14)
+                        .lrCard(.tint(tint), radius: 14)
                 }
             }
         }

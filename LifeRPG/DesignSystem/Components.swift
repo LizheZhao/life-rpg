@@ -1,3 +1,4 @@
+import LifeRPGCore
 import SwiftUI
 import UIKit
 
@@ -17,27 +18,78 @@ enum Haptics {
     }
 }
 
-/// What a card is filled with: the neutral surface, or a pastel tile.
+/// What a card is filled with: the neutral surface, a difficulty tint, or the clay error ground.
 enum CardFill {
-    case surface, tint(Color)
+    case surface, tint(QuestTint), clayBg
 
     var color: Color {
         switch self {
         case .surface: LR.Color.surface
-        case .tint(let color): color
+        case .tint(let tint): tint.color
+        case .clayBg: LR.Color.clayBg
+        }
+    }
+
+    /// The disc behind a doodle: a darker neutral on a surface, the translucent pill veil on a tint.
+    var disc: Color {
+        switch self {
+        case .surface, .clayBg: LR.Color.pillFill
+        case .tint: LR.Color.chip
+        }
+    }
+
+    var tint: QuestTint? {
+        if case .tint(let tint) = self { return tint }
+        return nil
+    }
+
+}
+
+private struct TintKey: EnvironmentKey {
+    static let defaultValue: QuestTint? = nil
+}
+
+extension EnvironmentValues {
+    /// The tint of the card this view sits on, nil on a surface. Titles, glyphs, captions and the
+    /// `+N` float pick the colours that read on it without every call site saying so.
+    var lrTint: QuestTint? {
+        get { self[TintKey.self] }
+        set { self[TintKey.self] = newValue }
+    }
+}
+
+private struct CardBackground: ViewModifier {
+    let fill: CardFill
+    let radius: CGFloat
+
+    @Environment(\.colorScheme) private var colorScheme
+
+    private var shadowColor: Color {
+        let shadow = Palette.shadow(colorScheme == .dark ? .dark : .light)
+        guard fill.tint != nil else { return .black.opacity(shadow.surface) }
+        return (shadow.tintedByCard ? fill.color : .black).opacity(shadow.tint)
+    }
+
+    func body(content: Content) -> some View {
+        content.background {
+            let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
+            shape.fill(fill.color)
+                .overlay { if fill.tint == nil { shape.strokeBorder(LR.Color.hairline, lineWidth: 1) } }
+                .shadow(color: shadowColor, radius: 16, x: 0, y: 6)
         }
     }
 }
 
 extension View {
+    /// A card: its fill, a neutral card's 1 pt hairline, and the soft shadow (`Palette.shadow`).
     func lrCard(_ fill: CardFill = .surface, radius: CGFloat = LR.Radius.card) -> some View {
-        background(RoundedRectangle(cornerRadius: radius, style: .continuous).fill(fill.color))
+        modifier(CardBackground(fill: fill, radius: radius))
     }
 }
 
 struct PillLabel: View {
     /// `plain` sits on a white card or the canvas, `onTint` on a pastel tile; each has its own
-    /// fill so the pill keeps a visible shape on both (`Palette.pillFill`, `Palette.pillVeil`).
+    /// fill so the pill keeps a visible shape on both (`Palette.pillFill`, `Palette.chip`).
     enum Style { case plain, onTint, clay }
 
     let text: String
@@ -56,7 +108,8 @@ struct PillLabel: View {
 
     private var foreground: Color {
         switch style {
-        case .plain, .onTint: LR.Color.ink
+        case .plain: LR.Color.ink
+        case .onTint: LR.Color.ink
         case .clay: LR.Color.clay
         }
     }
@@ -64,9 +117,26 @@ struct PillLabel: View {
     private var background: Color {
         switch style {
         case .plain: LR.Color.pillFill
-        case .onTint: LR.Color.pillVeil
+        case .onTint: LR.Color.chip
         case .clay: LR.Color.clayBg
         }
+    }
+}
+
+/// A light capsule button ("Do now"): the pill's fill and ink, a hairline edge, and a 44 pt target
+/// taller than what is drawn.
+struct PillButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .lr(.bodyStrong)
+            .foregroundStyle(LR.Color.ink)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 7)
+            .background(Capsule().fill(LR.Color.pillFill))
+            .overlay(Capsule().strokeBorder(LR.Color.inkSecondary.opacity(0.35), lineWidth: 1))
+            .frame(minHeight: 44)
+            .contentShape(Rectangle())
+            .opacity(configuration.isPressed ? 0.7 : 1)
     }
 }
 
@@ -116,7 +186,8 @@ struct FlowRow: Layout {
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
         let result = arrange(bounds.width, subviews)
         for (subview, origin) in zip(subviews, result.origins) {
-            subview.place(at: CGPoint(x: bounds.minX + origin.x, y: bounds.minY + origin.y), proposal: .unspecified)
+            subview.place(at: CGPoint(x: bounds.minX + origin.x, y: bounds.minY + origin.y),
+                          proposal: ProposedViewSize(width: bounds.width, height: nil))
         }
     }
 
@@ -124,7 +195,9 @@ struct FlowRow: Layout {
         var origins: [CGPoint] = []
         var x: CGFloat = 0, y: CGFloat = 0, rowHeight: CGFloat = 0, maxX: CGFloat = 0
         for subview in subviews {
-            let size = subview.sizeThatFits(.unspecified)
+            // Offered the row's width, so a pill wider than the row wraps its own text rather than
+            // spilling over the card's edge.
+            let size = subview.sizeThatFits(ProposedViewSize(width: width.isFinite ? width : nil, height: nil))
             if x > 0, x + size.width > width { x = 0; y += rowHeight + spacing; rowHeight = 0 }
             origins.append(CGPoint(x: x, y: y))
             x += size.width + spacing

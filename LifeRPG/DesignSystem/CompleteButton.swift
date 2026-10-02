@@ -11,6 +11,7 @@ struct CompleteButton: View {
     let action: () -> Void
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.lrTint) private var tint
 
     var body: some View {
         Button {
@@ -18,7 +19,7 @@ struct CompleteButton: View {
             action()
         } label: {
             ZStack {
-                Circle().strokeBorder(LR.Color.inkSecondary, lineWidth: 1.5)
+                Circle().strokeBorder(tint.map(LR.Color.ink(on:)) ?? LR.Color.accent, lineWidth: 1.5)
                     .opacity(isDone ? 0 : 1)
                 Circle().fill(LR.Color.fill)
                     .opacity(isDone ? 1 : 0)
