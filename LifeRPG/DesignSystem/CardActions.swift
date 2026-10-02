@@ -26,7 +26,7 @@ struct CardMenuButton: View {
             } label: {
                 Image(systemName: "ellipsis")
                     .font(.system(size: 17, weight: .bold))
-                    .foregroundStyle(tint.map(LR.Color.ink(on:)) ?? LR.Color.cardInkSecondary)
+                    .foregroundStyle(tint.map(LR.Color.ink(on:)) ?? LR.Color.inkSecondary)
                     .frame(width: 44, height: 44)
                     .contentShape(Rectangle())
             }
@@ -101,7 +101,7 @@ private struct GainText: View {
     var body: some View {
         Text(text)
             .lr(.bodyStrong)
-            .foregroundStyle(tint.map(LR.Color.ink(on:)) ?? LR.Color.cardInk)
+            .foregroundStyle(tint.map(LR.Color.ink(on:)) ?? LR.Color.ink)
             .fixedSize()
             .offset(y: rise)
             .opacity(opacity)
@@ -160,7 +160,7 @@ struct DoneTitle: View {
     @Environment(\.lrTint) private var tint
 
     var body: some View {
-        let color = color ?? tint.map(LR.Color.ink(on:)) ?? LR.Color.cardInk
+        let color = color ?? tint.map(LR.Color.ink(on:)) ?? LR.Color.ink
         Text(text)
             .lr(style)
             .strikethrough(isDone, color: color)

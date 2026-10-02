@@ -14,8 +14,8 @@ struct StackedCards<Item: Identifiable, Row: View>: View {
     let accessibilityLabel: String
     let items: [Item]
     @Binding var expanded: Bool
-    /// The card each slab behind the top one stands for.
-    let fill: (Item) -> CardFill
+    /// The colour of the slabs peeking out behind the top card.
+    let fill: (Item) -> Color
     let row: (Item) -> Row
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -23,7 +23,7 @@ struct StackedCards<Item: Identifiable, Row: View>: View {
 
     init(title: String, summary: String, badge: String? = nil, accessibilityLabel: String,
          items: [Item], expanded: Binding<Bool>,
-         fill: @escaping (Item) -> CardFill = { _ in .surface },
+         fill: @escaping (Item) -> Color = { _ in LR.Color.surface },
          @ViewBuilder row: @escaping (Item) -> Row) {
         self.title = title
         self.summary = summary
@@ -46,7 +46,7 @@ struct StackedCards<Item: Identifiable, Row: View>: View {
                 VStack(spacing: LR.Spacing.gridGap) {
                     ForEach(items) { row($0) }
                     Button("Collapse", action: toggle)
-                        .lr(.bodyStrong).foregroundStyle(LR.Color.cardInk)
+                        .lr(.bodyStrong).foregroundStyle(LR.Color.ink)
                         .frame(maxWidth: .infinity, minHeight: 44)
                         .lrCard(.surface, radius: LR.Radius.row)
                 }
@@ -99,7 +99,6 @@ struct StackedCards<Item: Identifiable, Row: View>: View {
         if let badge { Text(badge).lr(.hand).foregroundStyle(LR.Color.clay) }
     }
 
-    /// The header sits on the canvas, so its chevron is the canvas's secondary ink.
     private var chevron: some View {
         Image(systemName: "chevron.right")
             .font(.system(size: 12, weight: .bold))
@@ -107,8 +106,8 @@ struct StackedCards<Item: Identifiable, Row: View>: View {
             .rotationEffect(.degrees(expanded ? 90 : 0))
     }
 
-    /// The top card, and behind it the next two as slightly narrower slabs of the same colour faded
-    /// toward the canvas, each a little lower. The bottom padding makes room for what sticks out.
+    /// The top card, and behind it the next two as slightly narrower, dimmed slabs of the same
+    /// colour, each a little lower. The bottom padding makes room for what sticks out.
     private func stack(top: Item) -> some View {
         let behind = Array(items.dropFirst().prefix(2))
         return row(top)
@@ -116,16 +115,15 @@ struct StackedCards<Item: Identifiable, Row: View>: View {
             .background(alignment: .top) {
                 ForEach(Array(behind.enumerated()).reversed(), id: \.element.id) { index, item in
                     let depth = CGFloat(index + 1)
-                    let card = fill(item)
                     RoundedRectangle(cornerRadius: LR.Radius.row, style: .continuous)
-                        .fill(card.color)
+                        .fill(fill(item))
                         .overlay {
                             RoundedRectangle(cornerRadius: LR.Radius.row, style: .continuous)
                                 .fill(LR.Color.canvas.opacity(0.1 + 0.12 * depth))
                         }
                         .overlay {
                             RoundedRectangle(cornerRadius: LR.Radius.row, style: .continuous)
-                                .strokeBorder(card.tint == nil ? LR.Color.hairline : LR.Color.divider, lineWidth: 1)
+                                .strokeBorder(LR.Color.divider, lineWidth: 1)
                         }
                         .padding(.horizontal, 14 * depth)
                         .offset(y: peek * depth)

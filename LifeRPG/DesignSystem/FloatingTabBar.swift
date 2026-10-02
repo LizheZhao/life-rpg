@@ -25,7 +25,7 @@ enum RootTab: CaseIterable, Identifiable {
     }
 }
 
-/// The app's tab bar: a neutral-card capsule floating above the bottom edge, four round buttons, the
+/// The app's tab bar: a white capsule floating above the bottom edge, four round buttons, the
 /// selected one filled. The only shadow in the app (`doc/UI_DESIGN.md`).
 ///
 /// Meant as the bottom overlay of a `TabView` whose system bar is hidden. Seen on the simulator:
@@ -77,7 +77,7 @@ struct FloatingTabBar: View {
         } label: {
             Image(systemName: tab.symbol)
                 .font(.system(size: 22, weight: .semibold))
-                .foregroundStyle(selected ? LR.Color.cardOnFill : LR.Color.cardInkSecondary)
+                .foregroundStyle(selected ? LR.Color.onFill : LR.Color.inkSecondary)
                 .frame(width: Self.buttonSize, height: Self.buttonSize)
                 .background { indicatorCircle(selected: selected) }
                 .contentShape(Circle())
@@ -92,9 +92,9 @@ struct FloatingTabBar: View {
     @ViewBuilder
     private func indicatorCircle(selected: Bool) -> some View {
         if reduceMotion {
-            Circle().fill(LR.Color.cardFill).opacity(selected ? 1 : 0)
+            Circle().fill(LR.Color.fill).opacity(selected ? 1 : 0)
         } else if selected {
-            Circle().fill(LR.Color.cardFill).matchedGeometryEffect(id: "selection", in: indicator)
+            Circle().fill(LR.Color.fill).matchedGeometryEffect(id: "selection", in: indicator)
         }
     }
 

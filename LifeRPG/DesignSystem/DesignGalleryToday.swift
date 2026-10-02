@@ -57,7 +57,7 @@ struct TodayCardsGallery: View {
                     demoDone = true
                 }
                 Button("Reset") { demoDone = false }
-                    .lr(.bodyStrong).foregroundStyle(LR.Color.cardInk)
+                    .lr(.bodyStrong).foregroundStyle(LR.Color.ink)
                     .frame(maxWidth: .infinity, minHeight: 44)
                     .lrCard(.surface, radius: LR.Radius.row)
             }

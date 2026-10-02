@@ -273,7 +273,7 @@ struct TodayView: View {
             Button { adding = true } label: {
                 Image(systemName: "plus")
                     .font(.system(size: 20, weight: .semibold))
-                    .foregroundStyle(LR.Color.cardInk)
+                    .foregroundStyle(LR.Color.ink)
                     .frame(width: 44, height: 44)
                     .background(Circle().fill(LR.Color.surface))
             }
@@ -342,7 +342,7 @@ struct TodayView: View {
                      count: SectionProgress(done: counted.filter(\.isDone).count, total: counted.count).handLabel)
         if randomQuests.isEmpty {
             Text("No quests today — the pool is empty or fully on cooldown. The day is yours.")
-                .lr(.bodyStrong).foregroundStyle(LR.Color.cardInkSecondary)
+                .lr(.bodyStrong).foregroundStyle(LR.Color.inkSecondary)
                 .padding(16).frame(maxWidth: .infinity, alignment: .leading)
                 .lrCard(.surface, radius: LR.Radius.row)
         }

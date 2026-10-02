@@ -30,20 +30,11 @@ enum CardFill {
         }
     }
 
-    /// The disc behind a doodle: the card's pill colour on a surface, the solid chip on a tint.
+    /// The disc behind a doodle: a darker neutral on a surface, the translucent pill veil on a tint.
     var disc: Color {
         switch self {
-        case .surface: LR.Color.cardPill
-        case .clayBg: LR.Color.pillFill
+        case .surface, .clayBg: LR.Color.pillFill
         case .tint: LR.Color.chip
-        }
-    }
-
-    /// The doodle's stroke on `disc`: the card's ink on a surface, the canvas ink on the chip.
-    var doodleInk: Color {
-        switch self {
-        case .surface: LR.Color.cardInk
-        case .clayBg, .tint: LR.Color.ink
         }
     }
 
@@ -97,10 +88,9 @@ extension View {
 }
 
 struct PillLabel: View {
-    /// `plain` sits on the canvas, `onCard` on a neutral card, `onTint` on a tinted row; each has
-    /// its own fill so the pill keeps a visible shape on all three (`Palette.pillFill`,
-    /// `Palette.cardPill`, `Palette.chip`).
-    enum Style { case plain, onCard, onTint, clay }
+    /// `plain` sits on a white card or the canvas, `onTint` on a pastel tile; each has its own
+    /// fill so the pill keeps a visible shape on both (`Palette.pillFill`, `Palette.chip`).
+    enum Style { case plain, onTint, clay }
 
     let text: String
     var style: Style = .plain
@@ -118,8 +108,8 @@ struct PillLabel: View {
 
     private var foreground: Color {
         switch style {
-        case .plain, .onTint: LR.Color.ink
-        case .onCard: LR.Color.cardInk
+        case .plain: LR.Color.ink
+        case .onTint: LR.Color.ink
         case .clay: LR.Color.clay
         }
     }
@@ -127,24 +117,23 @@ struct PillLabel: View {
     private var background: Color {
         switch style {
         case .plain: LR.Color.pillFill
-        case .onCard: LR.Color.cardPill
         case .onTint: LR.Color.chip
         case .clay: LR.Color.clayBg
         }
     }
 }
 
-/// A capsule button ("Do now") on a neutral card: the card pill's fill and ink, a hairline edge,
-/// and a 44 pt target taller than what is drawn.
+/// A light capsule button ("Do now"): the pill's fill and ink, a hairline edge, and a 44 pt target
+/// taller than what is drawn.
 struct PillButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .lr(.bodyStrong)
-            .foregroundStyle(LR.Color.cardInk)
+            .foregroundStyle(LR.Color.ink)
             .padding(.horizontal, 14)
             .padding(.vertical, 7)
-            .background(Capsule().fill(LR.Color.cardPill))
-            .overlay(Capsule().strokeBorder(LR.Color.cardInkSecondary.opacity(0.35), lineWidth: 1))
+            .background(Capsule().fill(LR.Color.pillFill))
+            .overlay(Capsule().strokeBorder(LR.Color.inkSecondary.opacity(0.35), lineWidth: 1))
             .frame(minHeight: 44)
             .contentShape(Rectangle())
             .opacity(configuration.isPressed ? 0.7 : 1)
@@ -168,7 +157,7 @@ struct PressableCardStyle: ButtonStyle {
 struct SegmentedProgress: View {
     let filled: Int
     let total: Int
-    var fill: Color = LR.Color.cardFill
+    var fill: Color = LR.Color.fill
     var track: Color = LR.Color.dotEmpty
 
     var body: some View {
