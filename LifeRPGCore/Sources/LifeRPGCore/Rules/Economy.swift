@@ -72,6 +72,27 @@ public enum Economy {
         return max(0, 60 * next * next - max(0, totalEarned))
     }
 
+    /// How far through the current level `totalEarned` is, 0 up to (not including) 1. The level
+    /// card's bar and dots read this so the view never does the division itself.
+    public static func levelProgress(totalEarned: Int) -> Double {
+        let (done, span) = levelSpan(totalEarned: totalEarned)
+        return Double(done) / Double(span)
+    }
+
+    /// Filled dots of a `count`-dot grid: the floor of progress, done in integers because
+    /// `0.05 × 20` is not exactly 1 in floating point and a dot must light on the exact point.
+    public static func levelDots(totalEarned: Int, count: Int = 20) -> Int {
+        let (done, span) = levelSpan(totalEarned: totalEarned)
+        return done * count / span
+    }
+
+    private static func levelSpan(totalEarned: Int) -> (done: Int, span: Int) {
+        let total = max(0, totalEarned)
+        let current = level(totalEarned: total)
+        let start = earnedNeeded(forLevel: current)
+        return (total - start, earnedNeeded(forLevel: current + 1) - start)
+    }
+
     /// The opening balance. Coins are only earned by doing things, so a brand new store starts at
     /// zero — which means the first reroll is unaffordable and the economy has nothing in it until
     /// several days have gone by. This is the float that gets it moving.
