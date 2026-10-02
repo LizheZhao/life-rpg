@@ -195,7 +195,16 @@ struct TodayPresentationTests {
     @Test func thisWeekRowSaysWhenItWasDue() {
         let o = occurrence("Strength session", due: "2026-09-30")
         let s = row(o, .thisWeek)
-        #expect(s.notes == ["Not done · due 2026-09-30"])
+        #expect(s.notes == ["Not done · due Wed Sep 30"])
+    }
+
+    @Test func aRoutineDoneAheadSaysWhichDayItCountsFor() {
+        let o = occurrence("Strength session", due: "2026-10-03")
+        o.completedDayKey = friday
+        o.awardedPoints = 30
+        #expect(row(o, .thisWeek).notes == ["Done ahead · counts for Sat Oct 3"])
+        o.dueDayKey = friday
+        #expect(row(o, .today).notes == [])
     }
 
     @Test func strikesCountTheRoutinesCompletionsThisWeek() {
@@ -306,8 +315,8 @@ struct TodayPresentationTests {
         let o = occurrence("Strength session", due: "2026-09-30")
         o.countsForClear = false
         let s = row(o, .thisWeek)
-        #expect(s.notes == ["Not done · due 2026-09-30", "Doesn't gate the hidden quest"])
-        #expect(s.noteLine == "Not done · due 2026-09-30 · Doesn't gate the hidden quest")
+        #expect(s.notes == ["Not done · due Wed Sep 30", "Doesn't gate the hidden quest"])
+        #expect(s.noteLine == "Not done · due Wed Sep 30 · Doesn't gate the hidden quest")
         #expect(row(occurrence("Take out the trash")).noteLine == nil)
     }
 
@@ -477,5 +486,15 @@ struct TodayPresentationTests {
         #expect(PresentationText.range(12...12) == "12")
         #expect(PresentationText.spokenRange(5...15) == "5 to 15 coins")
         #expect(PresentationText.spokenRange(12...12) == "12 coins")
+    }
+
+    @Test func dueInCountsDaysFromToday() {
+        #expect(PresentationText.dueIn("2026-10-02", from: friday) == "due today")
+        #expect(PresentationText.dueIn("2026-10-03", from: friday) == "due tomorrow")
+        #expect(PresentationText.dueIn("2026-10-04", from: friday) == "due in 2 days")
+        #expect(PresentationText.dueIn("2026-10-12", from: friday) == "due in 10 days")
+        // Past, or not a day key: the date itself, never a negative count.
+        #expect(PresentationText.dueIn("2026-10-01", from: friday) == "due Thu Oct 1")
+        #expect(PresentationText.dueIn("garbage", from: friday) == "due garbage")
     }
 }

@@ -29,6 +29,17 @@ public enum PresentationText {
         return "\(weekdays[weekday.rawValue - 1]) \(months[parts[1] - 1]) \(parts[2])"
     }
 
+    /// `due today`, `due tomorrow`, `due in 3 days`; a day already past (or a malformed key) falls
+    /// back to the date, never a negative count.
+    public static func dueIn(_ dueDayKey: String, from today: String, in timeZone: TimeZone = .current) -> String {
+        switch DayKey.daysBetween(today, dueDayKey, in: timeZone) {
+        case 0?: "due today"
+        case 1?: "due tomorrow"
+        case let days? where days > 1: "due in \(days) days"
+        default: "due \(shortDate(dueDayKey, in: timeZone))"
+        }
+    }
+
     static func coins(_ n: Int) -> String { "\(n) coins" }
 }
 
@@ -45,7 +56,7 @@ public struct PillState: Equatable, Sendable {
 }
 
 /// The tint of a tile: the difficulty, or what makes it special.
-public enum QuestTint: Equatable, Sendable {
+public enum QuestTint: Hashable, Sendable, CaseIterable {
     case trivial, easy, medium, hard, hidden
 
     /// An epic is never a tile (it is a routine-style card of its own), so it takes the hardest tint.
@@ -231,7 +242,10 @@ public struct RoutineRowState: Equatable, Identifiable, Sendable {
         }
 
         var notes: [String] = []
-        if open, placement == .thisWeek { notes.append("Not done · due \(o.dueDayKey)") }
+        if open, placement == .thisWeek { notes.append("Not done · due \(PresentationText.shortDate(o.dueDayKey))") }
+        if let done = o.completedDayKey, done < o.dueDayKey {
+            notes.append("Done ahead · counts for \(PresentationText.shortDate(o.dueDayKey))")
+        }
         let added = o.dueDayKey == today ? "Added today" : "Added \(o.dueDayKey)"
         if let questID = o.replacesQuestID {
             let replaced = quests.first { $0.id == questID }
