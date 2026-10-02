@@ -46,15 +46,15 @@ public struct PillState: Equatable, Sendable {
 
 /// The tint of a tile: the difficulty, or what makes it special.
 public enum QuestTint: Equatable, Sendable {
-    case trivial, easy, medium, hard, hidden, epic
+    case trivial, easy, medium, hard, hidden
 
+    /// An epic is never a tile (it is a routine-style card of its own), so it takes the hardest tint.
     init(_ difficulty: Difficulty) {
         switch difficulty {
         case .trivial: self = .trivial
         case .easy: self = .easy
         case .medium: self = .medium
-        case .hard: self = .hard
-        case .epic: self = .epic
+        case .hard, .epic: self = .hard
         }
     }
 }
@@ -213,8 +213,11 @@ public struct RoutineRowState: Equatable, Identifiable, Sendable {
         } else if let pays {
             pills.append(PillState("+\(pays)", .payout))
         }
-        if let frequency = Self.frequencyText(routine) { pills.append(PillState(frequency, .plain)) }
-        if let rule = routine?.autoVerifyRule, !rule.isEmpty { pills.append(PillState("auto-verified", .plain)) }
+        // Completions of this routine in today's week (`Schedule.doneThisWeek`); an ad-hoc row has none.
+        if let routineID = o.routineID {
+            let n = Schedule.doneThisWeek(occurrences, routineID: routineID, weekKey: DayKey.weekKey(of: today))
+            pills.append(PillState("\(n) strike\(n == 1 ? "" : "s") this week", .plain))
+        }
         if o.usedDegraded { pills.append(PillState("light version", .plain)) }
         if let day = overdueDay { pills.append(PillState("overdue · day \(day)", .clay)) }
         self.pills = pills
@@ -243,9 +246,11 @@ public struct RoutineRowState: Equatable, Identifiable, Sendable {
         if !o.countsForClear, !isExtra { notes.append("Doesn't gate the hidden quest") }
         self.notes = notes
 
+        let autoVerified = routine?.autoVerifyRule.map { !$0.isEmpty } ?? false
         accessibilityLabel = [title,
                               overdueDay.map { "overdue day \($0)" },
-                              open ? pays.map { "pays \(PresentationText.coins($0))" } : nil]
+                              open ? pays.map { "pays \(PresentationText.coins($0))" } : nil,
+                              autoVerified ? "auto-verified" : nil]
             .compactMap { $0 }.joined(separator: ", ")
         accessibilityValue = o.awardedPoints.map { "done, \(PresentationText.coins($0)) earned" }
             ?? (o.skipped ? "skipped" : "not done")
@@ -253,17 +258,6 @@ public struct RoutineRowState: Equatable, Identifiable, Sendable {
 
     private static func slotText(_ quest: DailyQuest) -> String {
         quest.isTrivialGroup ? quest.trivialGroup.joined(separator: " · ") : quest.textSnapshot
-    }
-
-    /// `Wed · Sat` for a fixed weekly routine, `2× a week` for a flexible one; other cadences
-    /// (every N days, monthly) say nothing.
-    private static func frequencyText(_ routine: RoutineTask?) -> String? {
-        guard let routine else { return nil }
-        if routine.flexibleWithinWeek { return "\(routine.weeklyTarget)× a week" }
-        guard case .weekly(let days)? = try? FrequencySpec.parse(kind: routine.kind, spec: routine.spec) else {
-            return nil
-        }
-        return days.map { $0.code.prefix(1) + $0.code.dropFirst().lowercased() }.joined(separator: " · ")
     }
 }
 
@@ -275,13 +269,11 @@ public struct EpicCardState: Equatable, Identifiable, Sendable {
     public let segmentsFilled: Int
     public let segmentsTotal: Int
     public let lastDayKey: String?
-    public let detailText: String
-    /// `detailText` without the day count, which the segments already show: for a narrow second line.
-    public let shortDetailText: String
-    public let extensionText: String?
+    /// The reward (the span it can pay, then `+N` once it has), `Epic`, the last day, the extensions.
+    public let pills: [PillState]
+    /// What a tap on the card reveals: the week in words, the extensions used, the drawn value.
+    public let detailLines: [String]
     public let launchURL: URL?
-    /// The span it can pay, then `+N` once it has.
-    public let rewardRangeText: String
     public let awardedPoints: Int?
     public let accessibilityLabel: String
     public let accessibilityValue: String
@@ -291,6 +283,12 @@ public struct EpicCardState: Equatable, Identifiable, Sendable {
     public init(_ epic: DailyQuest, today: String, tier: Tier, level: Int) {
         let range = Scoring.payoutRange(epic, tier: tier)
         let last = Epic.lastDayKey(of: epic)
+        let due = last.map { "due \(PresentationText.shortDate($0))" }
+        // Days between today and the last day, both dayKeys; nothing once the epic has run out.
+        let daysLeft = last.flatMap { DayKey.daysBetween(today, $0) }.flatMap { $0 >= 0 ? $0 : nil }
+            .map { $0 == 0 ? "last day" : "\($0) day\($0 == 1 ? "" : "s") left" }
+        let maxExtensions = Epic.maxExtensions(level: level)
+        let extended = epic.extensionCount > 0 ? "extended \(epic.extensionCount)/\(maxExtensions)" : nil
         id = epic.id
         // The drawn value stays beside the wording, the way the confirmation reads it.
         title = [epic.textSnapshot, epic.variantSnapshot].compactMap { $0 }.filter { !$0.isEmpty }
@@ -303,17 +301,16 @@ public struct EpicCardState: Equatable, Identifiable, Sendable {
         segmentsFilled = epic.points != nil ? 7 : weekday
         lastDayKey = last
         awardedPoints = epic.points
-        extensionText = epic.extensionCount > 0
-            ? "extended \(epic.extensionCount)/\(Epic.maxExtensions(level: level))" : nil
-        rewardRangeText = epic.points.map { "+\($0)" } ?? PresentationText.range(range)
 
-        let details = ["day \(weekday) of 7", last.map { "until \(PresentationText.shortDate($0))" }, extensionText]
-            .compactMap { $0 }
-        detailText = details.joined(separator: " · ")
-        shortDetailText = details.dropFirst().joined(separator: " · ")
+        pills = [PillState(epic.points.map { "+\($0)" } ?? PresentationText.range(range), .payout)]
+            + [daysLeft, extended].compactMap { $0 }.map { PillState($0, .plain) }
+        detailLines = [(["Day \(weekday) of 7", due].compactMap { $0 }).joined(separator: " · "),
+                       "Extended \(epic.extensionCount) of \(maxExtensions)"]
+            + [epic.variantSnapshot].compactMap { $0 }.filter { !$0.isEmpty }.map { "Drawn: \($0)" }
+
         accessibilityLabel = "Weekly epic: \(title), \(PresentationText.spokenRange(range))"
         accessibilityValue = epic.points.map { "done, \(PresentationText.coins($0)) earned" }
-            ?? "not done, \(details.joined(separator: ", "))"
+            ?? (["not done", "day \(weekday) of 7", daysLeft, extended].compactMap { $0 }).joined(separator: ", ")
     }
 }
 

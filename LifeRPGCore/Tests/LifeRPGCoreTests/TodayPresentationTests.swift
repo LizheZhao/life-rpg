@@ -113,8 +113,10 @@ struct TodayPresentationTests {
     }
 
     @Test func tintFollowsDifficulty() {
-        let tints = Difficulty.allCases.map { QuestCardState(slot("x", $0), tier: .normal).tint }
-        #expect(tints == [.trivial, .easy, .medium, .hard, .epic])
+        // An epic is never a tile (it is its own routine-style card), so it has no tint of its own.
+        let tints = Difficulty.allCases.filter { $0 != .epic }
+            .map { QuestCardState(slot("x", $0), tier: .normal).tint }
+        #expect(tints == [.trivial, .easy, .medium, .hard])
     }
 
     @Test func replacedRowKeepsItsRecordNote() {
@@ -150,7 +152,7 @@ struct TodayPresentationTests {
         let s = row(occurrence("Incline walk 30 min"))
         #expect(s.title == "Incline walk 30 min")
         #expect(s.doodle == .sneaker)
-        #expect(s.pills == [.init("+20", .payout)])
+        #expect(s.pills == [.init("+20", .payout), .init("0 strikes this week", .plain)])
         #expect(s.notes.isEmpty)
         #expect(!s.isDone && !s.isSkipped && s.overdueDay == nil)
         #expect(s.accessibilityLabel == "Incline walk 30 min, pays 20 coins")
@@ -161,7 +163,7 @@ struct TodayPresentationTests {
         let o = occurrence("Cat grooming", base: 20, due: "2026-10-01")
         let s = row(o, .overdue)
         #expect(s.overdueDay == 2)
-        #expect(s.pills == [.init("+10", .payout), .init("overdue · day 2", .clay)])
+        #expect(s.pills == [.init("+10", .payout), .init("0 strikes this week", .plain), .init("overdue · day 2", .clay)])
         #expect(s.accessibilityLabel == "Cat grooming, overdue day 2, pays 10 coins")
     }
 
@@ -177,7 +179,7 @@ struct TodayPresentationTests {
         let s = row(o)
         #expect(s.isDone)
         #expect(s.awardedPoints == 5)
-        #expect(s.pills == [.init("+5", .payout)])
+        #expect(s.pills == [.init("+5", .payout), .init("0 strikes this week", .plain)])
         #expect(s.accessibilityValue == "done, 5 coins earned")
     }
 
@@ -186,7 +188,7 @@ struct TodayPresentationTests {
         o.skipped = true
         let s = row(o)
         #expect(s.isSkipped)
-        #expect(s.pills == [.init("Skipped", .plain)])
+        #expect(s.pills == [.init("Skipped", .plain), .init("0 strikes this week", .plain)])
         #expect(s.accessibilityValue == "skipped")
     }
 
@@ -196,28 +198,46 @@ struct TodayPresentationTests {
         #expect(s.notes == ["Not done · due 2026-09-30"])
     }
 
-    @Test func frequencyAndAutoVerifyPills() {
-        let fixed = RoutineTask()
-        fixed.kind = .weekly
-        fixed.spec = "WED,SAT"
-        fixed.autoVerifyRule = "calendar:workout"
-        let a = row(occurrence("Incline walk"), routine: fixed)
-        #expect(a.pills == [.init("+20", .payout), .init("Wed · Sat", .plain), .init("auto-verified", .plain)])
+    @Test func strikesCountTheRoutinesCompletionsThisWeek() {
+        let routineID = UUID()
+        func done(_ week: String, source: UUID? = nil, adHocFrom: UUID? = nil) -> RoutineOccurrence {
+            let o = occurrence("Strength")
+            o.routineID = source
+            o.adHocSourceRoutineID = adHocFrom
+            o.weekKey = week
+            o.completedDayKey = "2026-09-30"
+            o.awardedPoints = 20
+            return o
+        }
+        let open = occurrence("Strength")
+        open.routineID = routineID
+        open.weekKey = "2026-W40"
 
-        let flexible = RoutineTask()
-        flexible.kind = .weekly
-        flexible.spec = "MON"
-        flexible.flexibleWithinWeek = true
-        flexible.weeklyTarget = 2
-        let strength = occurrence("Strength")
-        strength.weekKey = "2026-W40"
-        let b = row(strength, routine: flexible)
-        #expect(b.pills == [.init("+20", .payout), .init("2× a week", .plain)])
+        func strikes(_ others: [RoutineOccurrence]) -> String? {
+            row(open, occurrences: [open] + others).pills.first { $0.text.contains("strike") }?.text
+        }
+        #expect(strikes([]) == "0 strikes this week")
+        #expect(strikes([done("2026-W40", source: routineID)]) == "1 strike this week")
+        // Last week's session does not count, this week's library pick of the same routine does.
+        #expect(strikes([done("2026-W39", source: routineID), done("2026-W40", source: routineID),
+                         done("2026-W40", adHocFrom: routineID)]) == "2 strikes this week")
+        // Somebody else's routine does not.
+        #expect(strikes([done("2026-W40", source: UUID())]) == "0 strikes this week")
+    }
 
-        let monthly = RoutineTask()
-        monthly.kind = .monthly
-        monthly.spec = "15"
-        #expect(row(occurrence("Pay the bill"), routine: monthly).pills == [.init("+20", .payout)])
+    @Test func anAdHocRowHasNoStrikes() {
+        let extra = occurrence("Water plants")
+        extra.routineID = nil
+        #expect(row(extra).pills == [.init("+20", .payout)])
+    }
+
+    @Test func autoVerifiedIsSpokenNotShown() {
+        let walk = RoutineTask()
+        walk.autoVerifyRule = "calendar:workout"
+        let s = row(occurrence("Incline walk"), routine: walk)
+        #expect(s.pills == [.init("+20", .payout), .init("0 strikes this week", .plain)])
+        #expect(s.accessibilityLabel == "Incline walk, pays 20 coins, auto-verified")
+        #expect(row(occurrence("Incline walk")).accessibilityLabel == "Incline walk, pays 20 coins")
     }
 
     @Test func lightVersionNoteAndSwitch() {
@@ -228,13 +248,13 @@ struct TodayPresentationTests {
         let light = row(o, tier: .low)
         #expect(light.title == "Stretch 15 min")
         #expect(light.version == .init(note: "Light version · Strength session", switchLabel: "Do original"))
-        #expect(light.pills == [.init("+13", .payout), .init("light version", .plain)])
+        #expect(light.pills == [.init("+13", .payout), .init("0 strikes this week", .plain), .init("light version", .plain)])
 
         o.usedDegraded = false
         let original = row(o, tier: .low)
         #expect(original.title == "Strength session")
         #expect(original.version == .init(note: "Original · light version available", switchLabel: "Use light"))
-        #expect(original.pills == [.init("+26", .payout)])
+        #expect(original.pills == [.init("+26", .payout), .init("0 strikes this week", .plain)])
 
         o.completedDayKey = friday
         o.awardedPoints = 26
@@ -313,13 +333,11 @@ struct TodayPresentationTests {
         #expect(s.segmentsFilled == 5)
         #expect(s.segmentsTotal == 7)
         #expect(s.lastDayKey == "2026-10-04")
-        #expect(s.detailText == "day 5 of 7 · until Sun Oct 4")
-        #expect(s.shortDetailText == "until Sun Oct 4")
-        #expect(s.rewardRangeText == "60–150")
+        #expect(s.pills == [.init("60–150", .payout), .init("2 days left", .plain)])
+        #expect(s.detailLines == ["Day 5 of 7 · due Sun Oct 4", "Extended 0 of 2"])
         #expect(!s.isDone)
-        #expect(s.extensionText == nil)
         #expect(s.accessibilityLabel == "Weekly epic: Ship the MCP eval set v1, 60 to 150 coins")
-        #expect(s.accessibilityValue == "not done, day 5 of 7, until Sun Oct 4")
+        #expect(s.accessibilityValue == "not done, day 5 of 7, 2 days left")
     }
 
     @Test func segmentsRunFromMondayToSunday() {
@@ -336,20 +354,35 @@ struct TodayPresentationTests {
         let s = EpicCardState(e, today: "2026-10-06", tier: .normal, level: 1)
         #expect(s.segmentsFilled == 2)
         #expect(s.lastDayKey == "2026-10-11")
-        #expect(s.extensionText == "extended 1/2")
-        #expect(s.detailText == "day 2 of 7 · until Sun Oct 11 · extended 1/2")
-        #expect(s.shortDetailText == "until Sun Oct 11 · extended 1/2")
-        #expect(EpicCardState(e, today: "2026-10-06", tier: .normal, level: 5).extensionText == "extended 1/3")
+        #expect(s.pills == [.init("60–150", .payout), .init("5 days left", .plain), .init("extended 1/2", .plain)])
+        #expect(s.detailLines == ["Day 2 of 7 · due Sun Oct 11", "Extended 1 of 2"])
+        #expect(s.accessibilityValue == "not done, day 2 of 7, 5 days left, extended 1/2")
+        // The third extension is a level 5 perk: the denominator follows the level.
+        let perk = EpicCardState(e, today: "2026-10-06", tier: .normal, level: 5)
+        #expect(perk.pills.last == .init("extended 1/3", .plain))
+        #expect(perk.detailLines.last == "Extended 1 of 3")
     }
 
-    @Test func epicKeepsTheDrawnVariantAndLinkBesideItsTitle() {
+    @Test func epicKeepsTheDrawnVariantInItsTitleAndDetail() {
         let e = epic()
         e.variantSnapshot = "v2"
         e.launchURLSnapshot = "https://example.com/e"
         let s = EpicCardState(e, today: friday, tier: .normal, level: 1)
         #expect(s.title == "Ship the MCP eval set v1 — v2")
         #expect(s.launchURL == URL(string: "https://example.com/e"))
+        #expect(s.detailLines == ["Day 5 of 7 · due Sun Oct 4", "Extended 0 of 2", "Drawn: v2"])
         #expect(s.accessibilityLabel == "Weekly epic: Ship the MCP eval set v1 — v2, 60 to 150 coins")
+    }
+
+    @Test func daysLeftCountsDownToTheLastDay() {
+        func pill(_ day: String) -> String? {
+            EpicCardState(epic(), today: day, tier: .normal, level: 1).pills.dropFirst().first?.text
+        }
+        #expect(pill("2026-09-28") == "6 days left")    // Monday
+        #expect(pill("2026-10-03") == "1 day left")     // Saturday
+        #expect(pill("2026-10-04") == "last day")       // Sunday
+        // A malformed or past day says nothing rather than a wrong number.
+        #expect(pill("2026-10-05") == nil)
     }
 
     @Test func doneEpicFillsEveryDay() {
@@ -359,7 +392,7 @@ struct TodayPresentationTests {
         #expect(s.isDone)
         #expect(s.awardedPoints == 112)
         #expect(s.segmentsFilled == 7)
-        #expect(s.rewardRangeText == "+112")
+        #expect(s.pills.first == .init("+112", .payout))
         #expect(s.accessibilityValue == "done, 112 coins earned")
     }
 

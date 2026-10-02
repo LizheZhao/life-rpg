@@ -48,13 +48,6 @@ public enum Palette {
     public static let pillVeil = Token(light: 0xFFFFFF, dark: 0x151517)
     public static let pillVeilAlpha = 0.55
 
-    // The epic card is dark in both appearances, but `fill` inverts in dark mode, so it has its own.
-    public static let epic = Token(light: 0x18181B, dark: 0x303036)
-    public static let epicTrack = Token(light: 0x3A3A40, dark: 0x4A4A52)
-    public static let onEpic = Token(light: 0xFFFFFF, dark: 0xF4F1EE)
-    public static let epicSecondary = Token(light: 0xB5B5BD, dark: 0xB5B5BD)
-    public static let epicLabel = Token(light: 0xB9E3F4, dark: 0xB9E3F4)
-
     /// Every token by name, in the order the gallery lists them.
     public static let tokens: [(name: String, token: Token)] = [
         ("canvas", canvas), ("surface", surface),
@@ -65,8 +58,6 @@ public enum Palette {
         ("tintHard", tintHard), ("tintHidden", tintHidden),
         ("clay", clay), ("clayBg", clayBg), ("avatarPink", avatarPink),
         ("pillFill", pillFill), ("pillVeil", pillVeil),
-        ("epic", epic), ("epicTrack", epicTrack), ("onEpic", onEpic),
-        ("epicSecondary", epicSecondary), ("epicLabel", epicLabel),
     ]
 
     /// A foreground that carries text over a background. Large Caveat labels are held to 4.5 too.
@@ -95,10 +86,6 @@ public enum Palette {
         }
         add(("clay", clay), on: ("clayBg", clayBg))
         add(("onFill", onFill), on: ("fill", fill))
-        add(("onEpic", onEpic), on: ("epic", epic))
-        add(("epicSecondary", epicSecondary), on: ("epic", epic))
-        add(("epicLabel", epicLabel), on: ("epic", epic))
-        add(("onEpic", onEpic), on: ("epicTrack", epicTrack))
         return pairs
     }()
 

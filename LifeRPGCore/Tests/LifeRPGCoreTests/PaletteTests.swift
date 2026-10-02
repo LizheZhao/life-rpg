@@ -38,23 +38,20 @@ struct PaletteTests {
         }
     }
 
-    @Test func textPairsCoverEveryTintAndTheEpicCard() {
+    @Test func textPairsCoverEveryTint() {
         let labels = Set(Palette.textPairs.map(\.label))
         for tint in ["tintTrivial", "tintEasy", "tintMedium", "tintHard", "tintHidden"] {
             #expect(labels.contains("ink on \(tint)"))
             #expect(labels.contains("inkOnTint on \(tint)"))
         }
-        #expect(labels.contains("onEpic on epic"))
         #expect(labels.contains("clay on clayBg"))
         #expect(labels.contains("onFill on fill"))
         #expect(labels.contains("inkHand on canvas"))
     }
 
     @Test func appearancesDifferForEverySurfaceToken() {
-        // A token that is identical in both appearances is either deliberate or a forgotten dark
-        // value; only the epic card's secondary and label inks are meant to stay put.
-        let sameOnPurpose: Set<String> = ["epicSecondary", "epicLabel"]
-        for (name, token) in Palette.tokens where !sameOnPurpose.contains(name) {
+        // A token that is identical in both appearances is a forgotten dark value.
+        for (name, token) in Palette.tokens {
             #expect(token.light != token.dark, "\(name) has no dark value")
         }
     }
