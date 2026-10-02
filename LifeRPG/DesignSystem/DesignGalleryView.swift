@@ -14,7 +14,7 @@ struct DesignGalleryView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 28) {
                 header
-                section("Completed stack (sample)") { CompletedStackSample() }
+                section("Completed stack") { CompletedStackGallery() }
                 section("Colours (light | dark)") { swatches }
                 section("Type") { typeStyles }
                 section("Text on tiles") { tileText }

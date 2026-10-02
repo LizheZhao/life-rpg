@@ -1,32 +1,7 @@
 import LifeRPGCore
 import SwiftUI
 
-// A SAMPLE, not wired to the Today page: completed items gathered into a stack of cards that
-// fans out on tap, next to a flat dimmed list for comparison. The views take value structs and
-// hold only their own expanded flag, so they can move onto the real page later unchanged.
-
-/// One finished thing, as the states Core already builds for the Today cards.
-enum CompletedItem: Identifiable {
-    case quest(QuestCardState)
-    case routine(RoutineRowState)
-    case epic(EpicCardState)
-
-    var id: UUID {
-        switch self {
-        case .quest(let s): s.id
-        case .routine(let s): s.id
-        case .epic(let s): s.id
-        }
-    }
-
-    var awardedPoints: Int {
-        switch self {
-        case .quest(let s): s.awardedPoints ?? 0
-        case .routine(let s): s.awardedPoints ?? 0
-        case .epic(let s): s.awardedPoints ?? 0
-        }
-    }
-
+extension CompletedItem {
     /// The colour of the card the item had while open: a quest keeps its tint when done.
     var fill: Color {
         switch self {
@@ -36,12 +11,8 @@ enum CompletedItem: Identifiable {
     }
 }
 
-/// `4 done · +160`, the hand label of the section.
-private func completedSummary(_ items: [CompletedItem]) -> String {
-    "\(items.count) done · +\(items.reduce(0) { $0 + $1.awardedPoints })"
-}
-
 /// A finished item as a card: a routine row, the epic row, or a small tinted row for a quest.
+/// Done rows carry no menu and complete nothing; only the epic still expands on a tap.
 private struct CompletedCardView: View {
     let item: CompletedItem
 
@@ -86,19 +57,27 @@ private struct CompletedQuestRow: View {
     }
 
     private var title: some View {
-        DoneTitle(text: state.title, isDone: true)
-            .frame(maxWidth: .infinity, alignment: .leading)
+        VStack(alignment: .leading, spacing: 2) {
+            DoneTitle(text: state.title, isDone: true)
+            if state.layout == .trivialGroup {
+                Text(state.items.map(\.text).joined(separator: " · "))
+                    .lr(.caption).foregroundStyle(LR.Color.inkOnTint)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var check: some View { CompleteButton(isDone: true) {} }
 }
 
-/// Variant A: the most recent card on top with up to two more peeking out behind it. Tap the
-/// stack (or the header) and it fans out into the full list; `Collapse` or the header folds it.
+/// Everything done today in one section: the most recent card on top with up to two more peeking
+/// out behind it. A tap on the stack or the header fans it out into the full list; `Collapse` or
+/// the header folds it again. The flag lives with the caller, so a lazily recycled row cannot
+/// forget it.
 struct CompletedStackView: View {
-    let items: [CompletedItem]
+    let state: CompletedStackState
+    @Binding var expanded: Bool
 
-    @State private var expanded = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @ScaledMetric(relativeTo: .footnote) private var captionHeight: CGFloat = 18
 
@@ -111,24 +90,28 @@ struct CompletedStackView: View {
             header
             if expanded {
                 VStack(spacing: LR.Spacing.gridGap) {
-                    ForEach(items) { CompletedCardView(item: $0) }
+                    ForEach(state.items) { CompletedCardView(item: $0) }
                     Button("Collapse", action: toggle)
                         .lr(.bodyStrong).foregroundStyle(LR.Color.ink)
                         .frame(maxWidth: .infinity, minHeight: 44)
                         .lrCard(.surface, radius: LR.Radius.row)
                 }
                 .transition(reduceMotion ? .opacity : .opacity.combined(with: .scale(scale: 0.95, anchor: .top)))
-            } else if let top = items.first {
+            } else if let top = state.items.first {
                 Button(action: toggle) { stack(top: top) }
                     .buttonStyle(PressableCardStyle())
                     .accessibilityElement(children: .ignore)
-                    .accessibilityLabel("Completed, \(completedSummary(items))")
+                    .accessibilityLabel(state.accessibilityLabel)
+                    .accessibilityValue("collapsed")
                     .accessibilityHint("Shows every completed item")
+                    .accessibilityAddTraits(.isButton)
                     .transition(.opacity)
             }
         }
     }
 
+    /// Collapsed, the stack below speaks for the whole section, so the header is skipped rather
+    /// than read twice.
     private var header: some View {
         Button(action: toggle) {
             // Stacked at accessibility sizes, so "Completed" is never broken mid-word.
@@ -144,10 +127,11 @@ struct CompletedStackView: View {
         }
         .buttonStyle(.plain)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Completed, \(completedSummary(items))")
-        .accessibilityValue(expanded ? "expanded" : "collapsed")
+        .accessibilityLabel(state.accessibilityLabel)
+        .accessibilityValue("expanded")
         .accessibilityAddTraits(.isHeader)
-        .accessibilityHint(expanded ? "Collapses the list" : "Expands the list")
+        .accessibilityHint("Collapses the list")
+        .accessibilityHidden(!expanded)
     }
 
     private var headerTitle: some View {
@@ -155,7 +139,7 @@ struct CompletedStackView: View {
     }
 
     private var headerCount: some View {
-        Text(completedSummary(items)).lr(.hand).foregroundStyle(LR.Color.inkHand)
+        Text(state.summary).lr(.hand).foregroundStyle(LR.Color.inkHand)
     }
 
     private var chevron: some View {
@@ -168,7 +152,7 @@ struct CompletedStackView: View {
     /// The top card, and behind it the next two as slightly narrower, dimmed slabs of the same
     /// colour, each a little lower. The bottom padding makes room for what sticks out.
     private func stack(top: CompletedItem) -> some View {
-        let behind = Array(items.dropFirst().prefix(2))
+        let behind = Array(state.items.dropFirst().prefix(2))
         return CompletedCardView(item: top)
             .allowsHitTesting(false)
             .background(alignment: .top) {
@@ -189,8 +173,8 @@ struct CompletedStackView: View {
                 }
             }
             .overlay(alignment: .bottomTrailing) {
-                if items.count > 1 {
-                    Text("+\(items.count - 1) more")
+                if state.count > 1 {
+                    Text("+\(state.count - 1) more")
                         .lr(.caption).foregroundStyle(LR.Color.inkSecondary)
                         .offset(y: peek * CGFloat(behind.count) + captionHeight + 4)
                 }
@@ -203,73 +187,5 @@ struct CompletedStackView: View {
 
     private func toggle() {
         withAnimation(animation) { expanded.toggle() }
-    }
-}
-
-/// Variant B: no stacking, the same cards in a flat list, dimmed so they step back from open ones.
-struct CompletedFlatListView: View {
-    let items: [CompletedItem]
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: LR.Spacing.gridGap) {
-            SectionTitle(title: "Completed", count: completedSummary(items))
-            ForEach(items) { CompletedCardView(item: $0).opacity(0.6) }
-        }
-    }
-}
-
-/// The gallery section: both variants from one set of sample items.
-struct CompletedStackSample: View {
-    var body: some View {
-        VStack(alignment: .leading, spacing: 28) {
-            VStack(alignment: .leading, spacing: 8) {
-                Text("A: stacked, tap to fan out").lr(.caption).foregroundStyle(LR.Color.inkSecondary)
-                CompletedStackView(items: Self.items)
-            }
-            VStack(alignment: .leading, spacing: 8) {
-                Text("B: flat list, dimmed").lr(.caption).foregroundStyle(LR.Color.inkSecondary)
-                CompletedFlatListView(items: Self.items)
-            }
-        }
-    }
-
-    private static let friday = "2026-10-02"
-
-    private static var items: [CompletedItem] {
-        [.quest(quest("Browse a supermarket without buying anything", .medium, points: 17)),
-         .routine(routine("Workout: running", base: 25)),
-         .quest(quest("Listen to a stand-up comedy clip", .easy, points: 6)),
-         .epic(epic("Get a side project to demo-able state", points: 112))]
-    }
-
-    private static func quest(_ text: String, _ slot: Difficulty, points: Int) -> QuestCardState {
-        let q = DailyQuest()
-        q.dayKey = friday
-        q.slot = slot
-        q.textSnapshot = text
-        q.points = points
-        return QuestCardState(q, tier: .normal)
-    }
-
-    private static func routine(_ text: String, base: Int) -> RoutineRowState {
-        let o = RoutineOccurrence()
-        o.textSnapshot = text
-        o.basePoints = base
-        o.dueDayKey = friday
-        o.weekKey = "2026-W40"
-        o.routineID = UUID()
-        o.completedDayKey = friday
-        o.awardedPoints = base
-        return RoutineRowState(o, placement: .today, routine: nil, flexible: false, today: friday,
-                               tier: .normal, level: 1, quests: [], occurrences: [o])
-    }
-
-    private static func epic(_ text: String, points: Int) -> EpicCardState {
-        let e = DailyQuest()
-        e.slot = .epic
-        e.dayKey = "2026-09-28"
-        e.textSnapshot = text
-        e.points = points
-        return EpicCardState(e, today: friday, tier: .normal, level: 1)
     }
 }

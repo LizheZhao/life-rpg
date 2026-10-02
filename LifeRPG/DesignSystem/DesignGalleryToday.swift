@@ -215,3 +215,121 @@ struct TodayCardsGallery: View {
          CardAction(title: "Extend · 50", systemImage: "calendar.badge.plus") {}, replaceItem]
     }
 }
+
+/// The Completed stack in each state it takes on Today, from sample rows run through the same Core
+/// rule the page uses.
+struct CompletedStackGallery: View {
+    private static let friday = "2026-10-02"
+    private static let base = Date(timeIntervalSince1970: 1_790_000_000)
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 28) {
+            demo("Collapsed: four done", expanded: false, state: Self.state(Self.four))
+            demo("Expanded: every kind of row", expanded: true, state: Self.state(Self.every))
+            demo("One item", expanded: false, state: Self.state([Self.quest("Listen to a stand-up comedy clip", .easy, points: 6, minute: 1)]))
+            demo("Only the epic", expanded: false, state: Self.state([Self.epic(points: 112, minute: 1)]))
+        }
+    }
+
+    private func demo(_ title: String, expanded: Bool, state: CompletedStackState) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title).lr(.caption).foregroundStyle(LR.Color.inkSecondary)
+            CompletedStackDemo(state: state, startsExpanded: expanded)
+        }
+    }
+
+    private struct CompletedStackDemo: View {
+        let state: CompletedStackState
+        @State private var expanded: Bool
+
+        init(state: CompletedStackState, startsExpanded: Bool) {
+            self.state = state
+            _expanded = State(initialValue: startsExpanded)
+        }
+
+        var body: some View { CompletedStackView(state: state, expanded: $expanded) }
+    }
+
+    private enum Row {
+        case quest(DailyQuest)
+        case routine(RoutineOccurrence)
+    }
+
+    private static func state(_ rows: [Row]) -> CompletedStackState {
+        var quests: [DailyQuest] = []
+        var occurrences: [RoutineOccurrence] = []
+        for row in rows {
+            switch row {
+            case .quest(let q): quests.append(q)
+            case .routine(let o): occurrences.append(o)
+            }
+        }
+        return CompletedStackState(quests: quests, occurrences: occurrences, today: friday,
+                                   tier: .normal, level: 1) { o in
+            RoutineRowState(o, placement: .today, routine: nil, flexible: false, today: friday,
+                            tier: .normal, level: 1, quests: quests, occurrences: occurrences)
+        }
+    }
+
+    private static var four: [Row] {
+        [quest("Browse a supermarket without buying anything", .medium, points: 17, minute: 40),
+         routine("Workout: running", points: 25, minute: 50),
+         quest("Listen to a stand-up comedy clip", .easy, points: 6, minute: 30),
+         epic(points: 112, minute: 10)]
+    }
+
+    private static var every: [Row] {
+        [quest("Write a thank-you note", .medium, points: 40, minute: 90, hidden: true),
+         group(points: 12, minute: 80),
+         routine("Workout: running", points: 25, minute: 70),
+         quest("Browse a supermarket without buying anything", .medium, points: 17, minute: 60),
+         quest("Send one cold email to someone you admire", .hard, points: 31, minute: 50),
+         epic(points: 112, minute: 10)]
+    }
+
+    private static func quest(_ text: String, _ slot: Difficulty, points: Int, minute: Int,
+                              hidden: Bool = false) -> Row {
+        let q = DailyQuest()
+        q.dayKey = friday
+        q.slot = slot
+        q.textSnapshot = text
+        q.points = points
+        q.completedAt = base.addingTimeInterval(Double(minute) * 60)
+        q.isHiddenSlot = hidden
+        return .quest(q)
+    }
+
+    private static func group(points: Int, minute: Int) -> Row {
+        let q = DailyQuest()
+        q.dayKey = friday
+        q.slot = .trivial
+        q.trivialGroup = ["Floss", "Make the bed", "Water the plant"]
+        q.trivialDone = [true, true, true]
+        q.points = points
+        q.completedAt = base.addingTimeInterval(Double(minute) * 60)
+        return .quest(q)
+    }
+
+    private static func routine(_ text: String, points: Int, minute: Int) -> Row {
+        let o = RoutineOccurrence()
+        o.textSnapshot = text
+        o.basePoints = points
+        o.dueDayKey = friday
+        o.weekKey = "2026-W40"
+        o.routineID = UUID()
+        o.completedDayKey = friday
+        o.awardedPoints = points
+        o.completedAt = base.addingTimeInterval(Double(minute) * 60)
+        return .routine(o)
+    }
+
+    private static func epic(points: Int, minute: Int) -> Row {
+        let e = DailyQuest()
+        e.slot = .epic
+        e.dayKey = "2026-09-28"
+        e.textSnapshot = "Get a side project to demo-able state"
+        e.points = points
+        e.completedAt = base.addingTimeInterval(Double(minute) * 60)
+        return .quest(e)
+    }
+}

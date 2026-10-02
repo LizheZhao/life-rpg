@@ -23,6 +23,13 @@ struct TodayView: View {
     @Query private var rewards: [Reward]
 
     @State private var pending: PendingAction?
+    /// Local on purpose: collapsed on every launch, however it was left.
+    @State private var completedExpanded = false
+    /// Rows that have just been completed and still sit in their own section for a moment, so the
+    /// check, the strikethrough and the "+N" finish where the tap was before the card moves into
+    /// the Completed stack. A UI convenience, not data: after a relaunch it is simply empty.
+    @State private var settling: Set<UUID> = []
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// Collapsed by default on weekdays: it lists every flexible routine still short this week,
     /// which is most of them early in the week, and none of it is today's work. Open by default on
     /// Saturday and Sunday, when whatever is left there is about to be settled.
@@ -236,6 +243,19 @@ struct TodayView: View {
                        randomSlots: todayContext?.randomSlots ?? 0, goal: goal)
     }
 
+    private var completedStack: CompletedStackState {
+        CompletedStackState(quests: allQuests, occurrences: occurrences, today: today, tier: tier, level: level,
+                            holding: settling) { routineState($0, .today) }
+    }
+
+    /// Done rows live in the Completed stack; one that has only just been completed stays put until
+    /// `settle` releases it.
+    private func staysInSection(_ id: UUID, isDone: Bool) -> Bool { !isDone || settling.contains(id) }
+
+    private var cardLeaves: AnyTransition {
+        reduceMotion ? .opacity : .opacity.combined(with: .scale(scale: 0.96))
+    }
+
     private var greeting: TodayGreeting {
         TodayGreeting(dayKey: today, hour: LifeCalendar.gregorian().component(.hour, from: Date()), streak: streak)
     }
@@ -252,6 +272,7 @@ struct TodayView: View {
                 epicBlock
                 routinesBlock
                 questsBlock
+                completedBlock
                 aheadBlock
                 backlogBlock
             }
@@ -295,10 +316,14 @@ struct TodayView: View {
     /// looked up by `Epic.current` rather than by today's `dayKey`. Done, it stays until Sunday.
     @ViewBuilder private var epicBlock: some View {
         if let epic = currentEpic {
-            SectionTitle(title: "Epic", count: "this week")
-            EpicCardView(state: EpicCardState(epic, today: today, tier: tier, level: level),
-                         actions: [rerollAction(epic), extendAction(epic), replaceEpicAction(epic)].compactMap { $0 },
-                         onComplete: { pending = .quest(epic) })
+            let state = EpicCardState(epic, today: today, tier: tier, level: level)
+            SectionTitle(title: "Epic", count: state.sectionLabel)
+            if staysInSection(epic.id, isDone: state.isDone) {
+                EpicCardView(state: state,
+                             actions: [rerollAction(epic), extendAction(epic), replaceEpicAction(epic)].compactMap { $0 },
+                             onComplete: { pending = .quest(epic) })
+                    .transition(cardLeaves)
+            }
         }
     }
 
@@ -309,9 +334,13 @@ struct TodayView: View {
             let rows = overdueRoutines.map { ($0, RoutineRowState.Placement.overdue) }
                 + todaysRoutines.map { ($0, RoutineRowState.Placement.today) }
             let states = rows.map { routineState($0.0, $0.1) }
-            SectionTitle(title: "Routines", count: "\(states.filter(\.isDone).count) / \(states.count) done")
+            SectionTitle(title: "Routines",
+                         count: SectionProgress(done: states.filter(\.isDone).count, total: states.count).handLabel)
             ForEach(Array(rows.enumerated()), id: \.element.0.id) { index, row in
-                routineCard(row.0, states[index], menu: [cancelRoutineAction(row.0), replaceRoutineAction(row.0)])
+                if staysInSection(row.0.id, isDone: states[index].isDone) {
+                    routineCard(row.0, states[index], menu: [cancelRoutineAction(row.0), replaceRoutineAction(row.0)])
+                        .transition(cardLeaves)
+                }
             }
         }
     }
@@ -331,7 +360,7 @@ struct TodayView: View {
         let groups = live.filter(\.isTrivialGroup)
         let counted = live.map(questState)
         SectionTitle(title: "Today's quests",
-                     count: counted.isEmpty ? nil : "\(counted.filter(\.isDone).count) / \(counted.count) done")
+                     count: SectionProgress(done: counted.filter(\.isDone).count, total: counted.count).handLabel)
         if randomQuests.isEmpty {
             Text("No quests today — the pool is empty or fully on cooldown. The day is yours.")
                 .lr(.bodyStrong).foregroundStyle(LR.Color.inkSecondary)
@@ -341,30 +370,51 @@ struct TodayView: View {
         if !tiles.isEmpty {
             TileGrid {
                 ForEach(tiles) { quest in
-                    QuestTileView(state: questState(quest),
-                                  actions: [rerollAction(quest), cancelQuestAction(quest), replaceAction(quest)]
-                                      .compactMap { $0 },
-                                  onComplete: { pending = .quest(quest) })
+                    let state = questState(quest)
+                    if staysInSection(quest.id, isDone: state.isDone) {
+                        QuestTileView(state: state,
+                                      actions: [rerollAction(quest), cancelQuestAction(quest), replaceAction(quest)]
+                                          .compactMap { $0 },
+                                      onComplete: { pending = .quest(quest) })
+                            .transition(cardLeaves)
+                    }
                 }
             }
         }
         ForEach(groups) { quest in
-            MicroGroupTileView(state: questState(quest),
-                               actions: [rerollAction(quest), replaceAction(quest)].compactMap { $0 },
-                               onTick: { index in
-                                   let done = quest.trivialDone.indices.contains(index) && quest.trivialDone[index]
-                                   guard quest.completedAt == nil, !done else { return }
-                                   pending = .trivialItem(quest, index)
-                               })
+            let state = questState(quest)
+            if staysInSection(quest.id, isDone: state.isDone) {
+                MicroGroupTileView(state: state,
+                                   actions: [rerollAction(quest), replaceAction(quest)].compactMap { $0 },
+                                   onTick: { index in
+                                       let done = quest.trivialDone.indices.contains(index) && quest.trivialDone[index]
+                                       guard quest.completedAt == nil, !done else { return }
+                                       pending = .trivialItem(quest, index)
+                                   })
+                    .transition(cardLeaves)
+            }
         }
         if let hiddenQuest {
-            SectionTitle(title: "Hidden")
-            QuestTileView(state: questState(hiddenQuest), onComplete: { pending = .quest(hiddenQuest) })
+            let state = questState(hiddenQuest)
+            SectionTitle(title: "Hidden", count: state.isDone ? SectionProgress.clearedLabel : nil)
+            if staysInSection(hiddenQuest.id, isDone: state.isDone) {
+                QuestTileView(state: state, onComplete: { pending = .quest(hiddenQuest) })
+                    .transition(cardLeaves)
+            }
         } else if !randomQuests.isEmpty {
             SectionTitle(title: "Hidden")
             HiddenGateTile(unlocked: hiddenUnlocked, onReveal: revealHidden)
         }
         ForEach(randomQuests.filter(\.replaced)) { ReplacedRowView(state: ReplacedRowState($0)) }
+    }
+
+    /// Everything finished today, gathered under one header after the open work.
+    @ViewBuilder private var completedBlock: some View {
+        let stack = completedStack
+        if !stack.isEmpty {
+            CompletedStackView(state: stack, expanded: $completedExpanded)
+                .transition(.opacity)
+        }
     }
 
     /// The rest of the week's flexible work, folded away: sessions from earlier days still open
@@ -629,15 +679,18 @@ struct TodayView: View {
             case .quest(let quest):
                 let points = try Completion.complete(quest, tier: tier, in: context, rng: &rng)
                 reveal(points, for: quest)
+                settle(quest.id)
             case .trivialItem(let quest, let index):
                 // Nil until the third tick: the group scores once, as a whole.
                 if let points = try Completion.tickTrivialItem(quest, at: index, tier: tier,
                                                                in: context, rng: &rng) {
                     reveal(points, for: quest)
+                    settle(quest.id)
                 }
             case .routine(let occurrence):
                 // A fixed payout, nothing rolled — the number lands on the row, no reveal.
                 try Completion.completeRoutine(occurrence, on: today, tier: tier, in: context)
+                settle(occurrence.id)
             case .ahead(let routine):
                 try Completion.completeAhead(routine, on: today, tier: tier, light: light, in: context)
             }
@@ -648,6 +701,17 @@ struct TodayView: View {
             actionError = "\(error)"
         }
         pending = nil
+    }
+
+    /// Lets a just-completed card finish its own completion before it moves into the stack.
+    private func settle(_ id: UUID) {
+        settling.insert(id)
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(900))
+            withAnimation(reduceMotion ? .easeInOut(duration: 0.2) : .easeInOut(duration: 0.3)) {
+                _ = settling.remove(id)
+            }
+        }
     }
 
     /// Shows what was already paid. The roll happened inside `Completion.complete` and is on disk
