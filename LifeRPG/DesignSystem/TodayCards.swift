@@ -557,3 +557,86 @@ struct BannerView: View {
         .accessibilityElement(children: .combine)
     }
 }
+
+// MARK: - history rows (day detail)
+
+/// The 44 pt mark at the trailing edge of a read-only row, where Today has the complete button:
+/// the filled check for done, an open ring for not done, a ring with a dash for skipped or
+/// replaced. Never the only signal: the row's status text says the same.
+struct HistoryMark: View {
+    enum Kind { case done, open, dropped }
+    let kind: Kind
+
+    @Environment(\.lrTint) private var tint
+
+    var body: some View {
+        let ring = tint.map(LR.Color.ink(on:)) ?? LR.Color.iconNeutral
+        ZStack {
+            Circle().strokeBorder(ring, lineWidth: 1.5).opacity(kind == .done ? 0 : 1)
+            Circle().fill(LR.Color.fill).opacity(kind == .done ? 1 : 0)
+            if kind == .done {
+                HandCheck()
+                    .stroke(LR.Color.onFill, style: StrokeStyle(lineWidth: 2.4, lineCap: .round, lineJoin: .round))
+                    .frame(width: 20, height: 20)
+            }
+            if kind == .dropped { Capsule().fill(ring).frame(width: 12, height: 2) }
+        }
+        .frame(width: 44, height: 44)
+        .accessibilityHidden(true)
+    }
+}
+
+/// A quest or a routine as it was on a past day: the same row frame as Today's, read-only. The
+/// pills carry the slot, what it paid and the ratings; a replaced row is struck through and quiet.
+struct HistoryRowView: View {
+    let doodle: DoodleKey
+    var fill: CardFill = .surface
+    let title: String
+    /// A replaced row: struck through in the secondary colour.
+    var dropped = false
+    /// The micro-action group's lines; when present they stand in for the title.
+    var items: [(text: String, isDone: Bool)] = []
+    let status: String
+    var pills: [PillState] = []
+    let mark: HistoryMark.Kind
+    let accessibilityLabel: String
+    let accessibilityValue: String
+
+    var body: some View {
+        RowLayout(doodle: doodle, fill: fill) {
+            details
+        } controls: {
+            HistoryMark(kind: mark)
+        } footer: {
+            EmptyView()
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(accessibilityLabel)
+        .accessibilityValue(accessibilityValue)
+    }
+
+    private var ink: Color { fill.tint.map(LR.Color.ink(on:)) ?? LR.Color.ink }
+
+    private var details: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            if items.isEmpty {
+                DoneTitle(text: title, isDone: dropped, color: dropped ? LR.Color.inkSecondary : nil)
+            } else {
+                ForEach(Array(items.enumerated()), id: \.offset) { _, item in
+                    HStack(alignment: .firstTextBaseline, spacing: 6) {
+                        Image(systemName: item.isDone ? "checkmark.circle.fill" : "circle")
+                            .foregroundStyle(ink)
+                            .accessibilityHidden(true)
+                        Text(item.text).lr(.bodyStrong).foregroundStyle(ink)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+            }
+            Text(status).lr(.caption)
+                .foregroundStyle(fill.tint == nil ? LR.Color.inkSecondary : ink)
+                .fixedSize(horizontal: false, vertical: true)
+            if !pills.isEmpty { PillRow(pills: pills, onTint: fill.tint != nil) }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}

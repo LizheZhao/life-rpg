@@ -77,7 +77,7 @@ enum LR {
 
     enum Typography: CaseIterable {
         case displayGreeting, displayGreetingEmphasis, displayLevel, levelInline
-        case titleCard, heading, bodyStrong, caption, pill, hand
+        case titleCard, heading, bodyStrong, caption, pill, hand, handTitle, handDisplay
 
         struct Spec {
             let family: LRFonts.Family
@@ -110,6 +110,10 @@ enum LR {
                 Spec(family: .jakarta, weight: 600, size: 12, textStyle: .caption1)
             case .hand:
                 Spec(family: .caveat, weight: 500, size: 22, textStyle: .title3)
+            case .handTitle:
+                Spec(family: .caveat, weight: 600, size: 34, textStyle: .title1, maximumSize: 52)
+            case .handDisplay:
+                Spec(family: .caveat, weight: 600, size: 52, textStyle: .largeTitle, maximumSize: 72)
             }
         }
 
@@ -137,6 +141,8 @@ enum LR {
             case .caption: "caption"
             case .pill: "pill"
             case .hand: "hand"
+            case .handTitle: "handTitle"
+            case .handDisplay: "handDisplay"
             }
         }
     }

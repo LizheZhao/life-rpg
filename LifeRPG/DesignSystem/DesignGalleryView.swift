@@ -97,6 +97,8 @@ struct DesignGalleryView: View {
         case .caption: "312 coins to level 9"
         case .pill: "5–15"
         case .hand: "day 3 · 4 day streak"
+        case .handTitle: "October 2026"
+        case .handDisplay: "+112"
         }
     }
 

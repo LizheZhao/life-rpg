@@ -92,8 +92,9 @@ extension View {
 
 struct PillLabel: View {
     /// `plain` sits on a white card or the canvas, `onTint` on a pastel tile; each has its own
-    /// fill so the pill keeps a visible shape on both (`Palette.pillFill`, `Palette.chip`).
-    enum Style { case plain, onTint, clay }
+    /// fill so the pill keeps a visible shape on both (`Palette.pillFill`, `Palette.chip`). `tint`
+    /// fills the pill itself with a difficulty tint (a positive average on the ratings page).
+    enum Style { case plain, onTint, clay, tint(QuestTint) }
 
     let text: String
     var style: Style = .plain
@@ -114,6 +115,7 @@ struct PillLabel: View {
         case .plain: LR.Color.ink
         case .onTint: LR.Color.ink
         case .clay: LR.Color.clay
+        case .tint(let tint): LR.Color.ink(on: tint)
         }
     }
 
@@ -122,6 +124,7 @@ struct PillLabel: View {
         case .plain: LR.Color.pillFill
         case .onTint: LR.Color.chip
         case .clay: LR.Color.clayBg
+        case .tint(let tint): tint.color
         }
     }
 }
