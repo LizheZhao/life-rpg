@@ -26,40 +26,38 @@ struct LibraryView: View {
     }
 
     var body: some View {
-        NavigationStack {
-            List {
-                Picker("Library", selection: $kind) {
-                    Text("Quests").tag(FeedbackTarget.quest)
-                    Text("Routines").tag(FeedbackTarget.routine)
-                }
-                .pickerStyle(.segmented)
-                .listRowBackground(Color.clear)
-                .listRowInsets(EdgeInsets())
+        List {
+            Picker("Library", selection: $kind) {
+                Text("Quests").tag(FeedbackTarget.quest)
+                Text("Routines").tag(FeedbackTarget.routine)
+            }
+            .pickerStyle(.segmented)
+            .listRowBackground(Color.clear)
+            .listRowInsets(EdgeInsets())
 
-                switch kind {
-                case .quest:
-                    // Easiest first, the way the today page and the composition table read.
-                    ForEach(Difficulty.allCases, id: \.self) { d in
-                        let rows = templates.filter { $0.difficulty == d && matches($0.text) }
-                        if !rows.isEmpty {
-                            Section(d.code) {
-                                ForEach(rows) { t in
-                                    link(LibraryEntry(template: t))
-                                }
+            switch kind {
+            case .quest:
+                // Easiest first, the way the today page and the composition table read.
+                ForEach(Difficulty.allCases, id: \.self) { d in
+                    let rows = templates.filter { $0.difficulty == d && matches($0.text) }
+                    if !rows.isEmpty {
+                        Section(d.code) {
+                            ForEach(rows) { t in
+                                link(LibraryEntry(template: t))
                             }
                         }
                     }
-                case .routine:
-                    Section {
-                        ForEach(routines.filter { matches($0.text) }) { r in
-                            link(LibraryEntry(routine: r))
-                        }
+                }
+            case .routine:
+                Section {
+                    ForEach(routines.filter { matches($0.text) }) { r in
+                        link(LibraryEntry(routine: r))
                     }
                 }
             }
-            .navigationTitle("Library")
-            .searchable(text: $search)
         }
+        .navigationTitle("Library")
+        .searchable(text: $search)
     }
 
     private func link(_ entry: LibraryEntry) -> some View {

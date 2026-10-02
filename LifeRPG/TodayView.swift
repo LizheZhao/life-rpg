@@ -1,7 +1,6 @@
 import LifeRPGCore
 import SwiftData
 import SwiftUI
-import UniformTypeIdentifiers
 
 /// The daily page: HUD, routines (overdue pinned on top), today's random slots, and the hidden
 /// quest once the day is cleared.
@@ -11,9 +10,6 @@ import UniformTypeIdentifiers
 struct TodayView: View {
     let today: String
     let generationError: String?
-    /// Re-runs the day after an import, so a backup that ends before today catches up at once
-    /// instead of on the next foreground.
-    var onImported: () -> Void = {}
 
     @Environment(\.modelContext) private var context
 
@@ -43,13 +39,6 @@ struct TodayView: View {
     @State private var adding = false
     @State private var roll: Roll?
     @State private var actionError: String?
-    /// One export at a time, through one `fileExporter` — the JSON dump and the CSV folder are
-    /// the same kind of thing to the save dialog, so they don't need a presentation each.
-    @State private var pendingExport: ExportDocument?
-    @State private var exporting = false
-    @State private var importing = false
-    /// A decoded backup waiting for the overwrite to be confirmed. Nothing is written until then.
-    @State private var importPlan: JSONImport.Plan?
     /// A purchase waiting for its confirmation. Spending is as final as completing, so it asks too.
     @State private var spending: Spend?
     /// A reroll that was refused only once it tried to draw (nothing else in the pool).
@@ -437,6 +426,7 @@ struct TodayView: View {
             }
         }
     }
+    .reservingTabBarSpace()
     }
 
     /// The page plus the level-up / milestone card and the level track — split off `body`, whose
@@ -462,33 +452,11 @@ struct TodayView: View {
     var body: some View {
         NavigationStack {
             page
-            // On the list, not beside the `fileExporter` below: two file presenters on one view
-            // and only the last one ever shows.
-            .fileImporter(isPresented: $importing, allowedContentTypes: [.json]) { result in
-                prepareImport(result)
-            }
             .navigationTitle("Today")
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button { adding = true } label: { Image(systemName: "plus") }
                         .accessibilityLabel("Add for today")
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Menu {
-                        Button { prepareJSONExport() } label: {
-                            Label("History (JSON)", systemImage: "clock.arrow.circlepath")
-                        }
-                        Button { prepareCSVExport() } label: {
-                            Label("Ratings & comments (CSV)", systemImage: "star.bubble")
-                        }
-                        Divider()
-                        Button { importing = true } label: {
-                            Label("Restore from JSON…", systemImage: "square.and.arrow.down")
-                        }
-                    } label: {
-                        Image(systemName: "square.and.arrow.up")
-                    }
-                    .accessibilityLabel("Export or restore")
                 }
             }
             // An alert rather than a sheet or an inline toggle: completion is irreversible, so it
@@ -554,21 +522,6 @@ struct TodayView: View {
             }
             .sheet(item: $replacingEpic) { epic in
                 EpicReplaceView(today: today, epic: epic)
-            }
-            .fileExporter(isPresented: $exporting,
-                          document: pendingExport,
-                          contentType: pendingExport?.contentType ?? .json,
-                          defaultFilename: pendingExport?.filename) { result in
-                if case .failure(let error) = result { actionError = "Export failed: \(error)" }
-                pendingExport = nil
-            }
-            .alert("Replace all history?", isPresented: Binding(
-                get: { importPlan != nil }, set: { if !$0 { importPlan = nil } }
-            ), presenting: importPlan) { plan in
-                Button("Replace", role: .destructive) { performImport(plan) }
-                Button("Cancel", role: .cancel) {}
-            } message: { plan in
-                Text(importMessage(plan.summary))
             }
         }
     }
@@ -1068,102 +1021,6 @@ struct TodayView: View {
             actionError = "\(error)"
         }
     }
-
-    private func prepareJSONExport() {
-        export { .json(try JSONExport.data(context), name: JSONExport.filename()) }
-    }
-
-    private func prepareCSVExport() {
-        export { .folder(try CSVExport.files(context), name: CSVExport.folderName()) }
-    }
-
-    /// Reads and maps the file; writes nothing — the alert asks first.
-    private func prepareImport(_ result: Result<URL, Error>) {
-        do {
-            let url = try result.get()
-            let scoped = url.startAccessingSecurityScopedResource()
-            defer { if scoped { url.stopAccessingSecurityScopedResource() } }
-            importPlan = try JSONImport.plan(try Data(contentsOf: url), against: context)
-            actionError = nil
-        } catch {
-            actionError = "Import failed: \(error)"
-        }
-    }
-
-    private func performImport(_ plan: JSONImport.Plan) {
-        do {
-            try JSONImport.apply(plan, to: context)
-            actionError = nil
-            onImported()
-        } catch {
-            actionError = "Import failed: \(error)"
-        }
-    }
-
-    private func importMessage(_ s: JSONImport.Summary) -> String {
-        let days = [s.firstDayKey, s.lastDayKey].compactMap { $0 }
-        var lines = [
-            "Backup exported \(s.exportedAt.formatted(date: .abbreviated, time: .shortened))"
-                + (days.isEmpty ? "" : ", covering \(days.joined(separator: " – "))") + ".",
-            "\(s.dailyQuests) quests, \(s.routineOccurrences) routines, \(s.ledgerEntries) ledger entries, "
-                + "\(s.ratings) ratings, \(s.comments) comments, \(s.rewards) rewards.",
-            "Balance after restoring: \(s.balance).",
-            "Everything in this app's history is replaced by the backup.",
-        ]
-        if !s.unmatchedLibrary.isEmpty {
-            lines.append("\(s.unmatchedLibrary.count) quest(s) or routine(s) in the backup aren't in this library; "
-                         + "their history is kept but won't link back.")
-        }
-        return lines.joined(separator: "\n\n")
-    }
-
-    /// Builds the document, then opens the system save dialog. The dialog is a separate process
-    /// and can take a second or two to come up the first time — it is not instant.
-    private func export(_ build: () throws -> ExportDocument) {
-        do {
-            pendingExport = try build()
-            exporting = true
-        } catch {
-            actionError = "Export failed: \(error)"
-        }
-    }
-}
-
-/// Anything the page exports: the JSON history dump, or the feedback logs as a folder of CSVs.
-/// One document type, because one `fileExporter` has to be able to present either.
-/// Export only — the JSON comes back in through `fileImporter` and `JSONImport`, not this type.
-struct ExportDocument: FileDocument {
-    static var readableContentTypes: [UTType] { [.json, .folder] }
-
-    let contentType: UTType
-    let filename: String
-    private let wrapper: FileWrapper
-
-    static func json(_ data: Data, name: String) -> ExportDocument {
-        ExportDocument(contentType: .json, filename: name,
-                       wrapper: FileWrapper(regularFileWithContents: data))
-    }
-
-    static func folder(_ files: [CSVExport.File], name: String) -> ExportDocument {
-        var children: [String: FileWrapper] = [:]
-        for file in files {
-            children[file.name] = FileWrapper(regularFileWithContents: Data(file.contents.utf8))
-        }
-        return ExportDocument(contentType: .folder, filename: name,
-                              wrapper: FileWrapper(directoryWithFileWrappers: children))
-    }
-
-    private init(contentType: UTType, filename: String, wrapper: FileWrapper) {
-        self.contentType = contentType
-        self.filename = filename
-        self.wrapper = wrapper
-    }
-
-    init(configuration: ReadConfiguration) throws {
-        throw CocoaError(.featureUnsupported)
-    }
-
-    func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper { wrapper }
 }
 
 #Preview {

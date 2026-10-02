@@ -40,96 +40,94 @@ struct DebugView: View {
     @Query private var dailyContexts: [DailyContext]
 
     var body: some View {
-        NavigationStack {
-            List {
-                Section("Seed") {
-                    Text(seedStatus)
-                }
-                bodySection
-                workoutSection
-                Section("Tables") {
-                    row("QuestTemplate", questTemplates.count,
-                        detail: "\(questTemplates.filter(\.isActive).count) active")
-                    row("RoutineTask", routineTasks.count,
-                        detail: "\(routineTasks.filter(\.isActive).count) active")
-                    row("DailyQuest", dailyQuests.count)
-                    row("RoutineOccurrence", routineOccurrences.count)
-                    row("Reward", rewards.count)
-                    row("LedgerEntry", ledgerEntries.count)
-                    row("DailyContext", dailyContexts.count)
-                }
-                // The enum getters fall back (`?? .easy`), so an unreadable raw value would
-                // otherwise be invisible. Nothing from the CSV can land here — the seed parser
-                // rejects it — but a JSON import or an enum rename could.
-                Section("Data audit") {
-                    if let auditError {
-                        Text(auditError).foregroundStyle(.red)
-                    } else if audit.isEmpty {
-                        Label("No unreadable values", systemImage: "checkmark.circle")
-                            .foregroundStyle(.secondary)
-                    } else {
-                        ForEach(audit, id: \.description) { issue in
-                            row("\(issue.model).\(issue.field) = '\(issue.value)'", issue.count)
-                                .foregroundStyle(.red)
-                        }
+        List {
+            Section("Seed") {
+                Text(seedStatus)
+            }
+            bodySection
+            workoutSection
+            Section("Tables") {
+                row("QuestTemplate", questTemplates.count,
+                    detail: "\(questTemplates.filter(\.isActive).count) active")
+                row("RoutineTask", routineTasks.count,
+                    detail: "\(routineTasks.filter(\.isActive).count) active")
+                row("DailyQuest", dailyQuests.count)
+                row("RoutineOccurrence", routineOccurrences.count)
+                row("Reward", rewards.count)
+                row("LedgerEntry", ledgerEntries.count)
+                row("DailyContext", dailyContexts.count)
+            }
+            // The enum getters fall back (`?? .easy`), so an unreadable raw value would
+            // otherwise be invisible. Nothing from the CSV can land here — the seed parser
+            // rejects it — but a JSON import or an enum rename could.
+            Section("Data audit") {
+                if let auditError {
+                    Text(auditError).foregroundStyle(.red)
+                } else if audit.isEmpty {
+                    Label("No unreadable values", systemImage: "checkmark.circle")
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(audit, id: \.description) { issue in
+                        row("\(issue.model).\(issue.field) = '\(issue.value)'", issue.count)
+                            .foregroundStyle(.red)
                     }
                 }
-                // Deliberately here and not on the today page: `PLAN.md` §3 makes completion
-                // final, and a reset button sitting next to the quests would undo that rule in
-                // practice whatever the doc says. This is for exercising the payout roll while
-                // it is being built, not for changing your mind.
-                Section {
-                    Button(role: .destructive) { confirmingReset = true } label: {
-                        Label("Reopen today", systemImage: "arrow.counterclockwise")
-                    }
-                    if let resetResult {
-                        Text(resetResult).font(.caption).foregroundStyle(.secondary)
-                    }
-                } header: {
-                    Text("Testing")
-                } footer: {
-                    Text("Marks today's quests undone, deletes the ledger entries that paid for them, and removes the hidden quest so it can be revealed again. The same quests come back — only the day's results are undone.")
+            }
+            // Deliberately here and not on the today page: `PLAN.md` §3 makes completion
+            // final, and a reset button sitting next to the quests would undo that rule in
+            // practice whatever the doc says. This is for exercising the payout roll while
+            // it is being built, not for changing your mind.
+            Section {
+                Button(role: .destructive) { confirmingReset = true } label: {
+                    Label("Reopen today", systemImage: "arrow.counterclockwise")
                 }
+                if let resetResult {
+                    Text(resetResult).font(.caption).foregroundStyle(.secondary)
+                }
+            } header: {
+                Text("Testing")
+            } footer: {
+                Text("Marks today's quests undone, deletes the ledger entries that paid for them, and removes the hidden quest so it can be revealed again. The same quests come back — only the day's results are undone.")
+            }
 
-                #if targetEnvironment(simulator)
-                Section {
-                    HStack {
-                        Text("App day")
-                        Spacer()
-                        Text(dayOffset == 0 ? today : "\(today)  (+\(dayOffset))").monospacedDigit()
-                    }
-                    Button { dayOffset += 1 } label: {
-                        Label("Advance one day", systemImage: "forward.frame")
-                    }
-                    Button { dayOffset = 0 } label: {
-                        Label("Back to the real date", systemImage: "calendar")
-                    }
-                    .disabled(dayOffset == 0)
-                } header: {
-                    Text("Time travel (simulator only)")
-                } footer: {
-                    Text("Each step is like opening the app the next morning: yesterday is judged, today is generated. Going back does not undo anything — future days stay generated. To start clean, delete the app from the simulator.")
+            #if targetEnvironment(simulator)
+            Section {
+                HStack {
+                    Text("App day")
+                    Spacer()
+                    Text(dayOffset == 0 ? today : "\(today)  (+\(dayOffset))").monospacedDigit()
                 }
-                #endif
+                Button { dayOffset += 1 } label: {
+                    Label("Advance one day", systemImage: "forward.frame")
+                }
+                Button { dayOffset = 0 } label: {
+                    Label("Back to the real date", systemImage: "calendar")
+                }
+                .disabled(dayOffset == 0)
+            } header: {
+                Text("Time travel (simulator only)")
+            } footer: {
+                Text("Each step is like opening the app the next morning: yesterday is judged, today is generated. Going back does not undo anything — future days stay generated. To start clean, delete the app from the simulator.")
+            }
+            #endif
 
-                Section("Quests by difficulty") {
-                    ForEach(Difficulty.allCases, id: \.self) { d in
-                        row(d.rawValue, questTemplates.filter { $0.difficulty == d }.count)
-                    }
+            Section("Quests by difficulty") {
+                ForEach(Difficulty.allCases, id: \.self) { d in
+                    row(d.rawValue, questTemplates.filter { $0.difficulty == d }.count)
                 }
             }
-            .navigationTitle("Debug")
-            .task {
-                do { audit = try StoreAudit.issues(modelContext) }
-                catch { auditError = "Audit failed: \(error)" }
-                loadCalendars()
-            }
-            .alert("Reopen today?", isPresented: $confirmingReset) {
-                Button("Reopen", role: .destructive) { reopenToday() }
-                Button("Cancel", role: .cancel) {}
-            } message: {
-                Text("Today's completions and the points they paid are deleted. Other days are untouched.")
-            }
+        }
+        .navigationTitle("Debug")
+        .task {
+            do { audit = try StoreAudit.issues(modelContext) }
+            catch { auditError = "Audit failed: \(error)" }
+            loadCalendars()
+        }
+        .alert("Reopen today?", isPresented: $confirmingReset) {
+            Button("Reopen", role: .destructive) { reopenToday() }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Today's completions and the points they paid are deleted. Other days are untouched.")
         }
     }
 
@@ -283,6 +281,6 @@ struct DebugView: View {
 }
 
 #Preview {
-    DebugView(seedStatus: "Preview", today: Date().dayKey)
+    NavigationStack { DebugView(seedStatus: "Preview", today: Date().dayKey) }
         .modelContainer(for: LifeRPGSchema.models, inMemory: true)
 }

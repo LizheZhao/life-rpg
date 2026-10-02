@@ -86,6 +86,7 @@ struct RewardsView: View {
                     }
                 }
             }
+            .reservingTabBarSpace()
             .navigationTitle("Rewards")
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {

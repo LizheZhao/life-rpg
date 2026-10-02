@@ -44,6 +44,7 @@ struct RatingSummaryView: View {
                 }
             }
         }
+        .reservingTabBarSpace()
         .navigationTitle("Ratings")
     }
 }

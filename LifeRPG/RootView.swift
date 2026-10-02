@@ -9,6 +9,7 @@ struct RootView: View {
 
     @Environment(\.modelContext) private var context
     @Environment(\.scenePhase) private var scenePhase
+    @State private var tab = RootTab.today
     @State private var today = Date().dayKey
     @State private var generationError: String?
     /// What the last refresh read from HealthKit and the calendar — shown on the debug page, since
@@ -31,20 +32,23 @@ struct RootView: View {
     #endif
 
     var body: some View {
-        TabView {
-            TodayView(today: today, generationError: generationError,
-                      onImported: { Task { await refresh() } })
-                .tabItem { Label("Today", systemImage: "checklist") }
+        TabView(selection: $tab) {
+            TodayView(today: today, generationError: generationError)
+                .toolbar(.hidden, for: .tabBar)
+                .tag(RootTab.today)
             CalendarView(today: today)
-                .tabItem { Label("Calendar", systemImage: "calendar") }
+                .toolbar(.hidden, for: .tabBar)
+                .tag(RootTab.calendar)
             RewardsView(today: today)
-                .tabItem { Label("Rewards", systemImage: "gift") }
-            LibraryView(today: today)
-                .tabItem { Label("Library", systemImage: "books.vertical") }
-            DebugView(seedStatus: seedStatus, today: today, sensorReport: sensorReport,
-                      refresh: { Task { await refresh() } })
-                .tabItem { Label("Debug", systemImage: "wrench.and.screwdriver") }
+                .toolbar(.hidden, for: .tabBar)
+                .tag(RootTab.rewards)
+            SettingsView(seedStatus: seedStatus, today: today, sensorReport: sensorReport,
+                         refresh: { Task { await refresh() } },
+                         onImported: { Task { await refresh() } })
+                .toolbar(.hidden, for: .tabBar)
+                .tag(RootTab.settings)
         }
+        .overlay(alignment: .bottom) { FloatingTabBar(selection: $tab) }
         .task { await refresh() }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { Task { await refresh() } }

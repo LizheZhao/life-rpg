@@ -36,6 +36,7 @@ struct CalendarView: View {
                 }
                 .padding(.horizontal, 16)
             }
+            .reservingTabBarSpace()
             .navigationTitle("Calendar")
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
