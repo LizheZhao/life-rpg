@@ -7,7 +7,9 @@ import SwiftUI
 /// refresh, so a change here is picked up the next time the app comes to the foreground, or at
 /// once through "Check for workouts now".
 struct WorkoutDetectionView: View {
-    let refresh: () -> Void
+    /// The last check `RootView` ran, from a foreground or from the button.
+    let check: WorkoutCheck?
+    let refresh: () async -> Void
 
     @AppStorage("workoutCalendarID") private var calendarSetting = ""
     @AppStorage("workoutKeywords") private var keywords = ""
@@ -15,6 +17,7 @@ struct WorkoutDetectionView: View {
     @State private var authorization = CalendarService.authorization
     @State private var calendars: [CalendarService.Info] = []
     @State private var requestError: String?
+    @State private var checking = false
 
     private var selection: CalendarSelection { CalendarSelection(setting: calendarSetting) }
 
@@ -26,23 +29,48 @@ struct WorkoutDetectionView: View {
             }
             keywordsSection
             Section {
-                Button { refresh() } label: {
-                    label("Check for workouts now", systemImage: "arrow.clockwise")
+                Button { Task { await runCheck() } } label: {
+                    HStack {
+                        label("Check for workouts now", systemImage: "arrow.clockwise")
+                        Spacer()
+                        if checking { ProgressView() }
+                    }
                 }
+                .disabled(checking)
             } footer: {
                 footer("Each workout verifies one thing. Also checked every time the app comes to the foreground.")
             }
             .listRowBackground(LR.Color.surface)
+            if let check {
+                Section {
+                    CheckResultCard(check: check)
+                        .listRowInsets(EdgeInsets())
+                        .listRowBackground(Color.clear)
+                } header: {
+                    header("Last check")
+                }
+            }
         }
         .listRowSeparatorTint(LR.Color.divider)
         .scrollContentBackground(.hidden)
         .background(LR.Color.canvas)
+        .reservingTabBarSpace()
         .navigationTitle("Workout detection")
         .navigationBarTitleDisplayMode(.inline)
         .task { reload() }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { reload() }
         }
+        .onChange(of: check) { _, new in
+            guard checking, let new else { return }
+            if new.verified.isEmpty { Haptics.selection() } else { Haptics.notify(.success) }
+        }
+    }
+
+    private func runCheck() async {
+        checking = true
+        await refresh()
+        checking = false
     }
 
     private var accessSection: some View {
@@ -175,6 +203,87 @@ struct WorkoutDetectionView: View {
     }
 }
 
+/// What the last check read and found, in plain words. All wording that depends on the outcome
+/// lives here; which outcome it was is `WorkoutCheck`'s call.
+private struct CheckResultCard: View {
+    let check: WorkoutCheck
+
+    private var verifiedSome: Bool { !check.verified.isEmpty }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .firstTextBaseline) {
+                Image(systemName: verifiedSome ? "checkmark.circle.fill" : "circle.dashed")
+                    .foregroundStyle(verifiedSome ? LR.Color.ink : LR.Color.inkSecondary)
+                Text(title).lr(.heading).foregroundStyle(LR.Color.ink)
+                Spacer(minLength: 8)
+                Text("Checked \(check.checkedAt.formatted(date: .omitted, time: .shortened))")
+                    .lr(.caption).monospacedDigit().foregroundStyle(LR.Color.inkSecondary)
+            }
+            if verifiedSome {
+                VStack(alignment: .leading, spacing: 2) {
+                    ForEach(Array(check.verified.enumerated()), id: \.offset) { _, title in
+                        Text(title).lr(.bodyStrong).foregroundStyle(LR.Color.ink)
+                    }
+                }
+            }
+            Text(reason).lr(.caption).foregroundStyle(LR.Color.inkSecondary)
+            Rectangle().fill(LR.Color.divider).frame(height: 1)
+            fact("Calendar events read", "\(check.eventsRead) since \(check.windowStart.formatted(.dateTime.month().day()))")
+            fact("Matched a keyword", "\(check.matched)")
+            fact("Workouts today", check.workoutMinutes.isEmpty
+                 ? "None" : check.workoutMinutes.map { "\($0) min" }.joined(separator: ", "))
+            fact("Mindful today", "\(check.mindfulMinutes) min")
+            if !check.unmatched.isEmpty {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Did not match").lr(.caption).foregroundStyle(LR.Color.inkSecondary)
+                    ForEach(Array(check.unmatched.enumerated()), id: \.offset) { _, event in
+                        Text(event.isAllDay ? "\(event.title) (all-day, never counts)" : event.title)
+                            .lr(.bodyStrong).foregroundStyle(LR.Color.ink)
+                    }
+                }
+            }
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .lrCard(.surface, radius: LR.Radius.row)
+        .padding(.vertical, 6)
+        .accessibilityElement(children: .combine)
+    }
+
+    private func fact(_ label: LocalizedStringKey, _ value: String) -> some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text(label).lr(.caption).foregroundStyle(LR.Color.inkSecondary)
+            Spacer(minLength: 8)
+            Text(value).lr(.bodyStrong).monospacedDigit().foregroundStyle(LR.Color.ink)
+        }
+    }
+
+    private var title: LocalizedStringKey {
+        if verifiedSome { return "Verified just now" }
+        return check.outcome == .matched ? "Nothing new verified" : "Nothing detected"
+    }
+
+    private var reason: LocalizedStringKey {
+        switch check.outcome {
+        case .noCalendarAccess:
+            "Calendar access is off, so no events could be read. Allow it under Access."
+        case .noCalendarsSelected:
+            "No calendar is selected. Turn on All calendars or check at least one."
+        case .noKeywords:
+            "No keywords are set. An event only counts when its title contains one."
+        case .noEventsInWindow:
+            "The selected calendars have no events in this window."
+        case .noneMatched:
+            "Events were found, but none has a keyword in its title or sits in a selected calendar."
+        case .matched:
+            verifiedSome
+                ? "Each workout verifies one open item whose rule it satisfies."
+                : "Matching events were found, but no open quest or routine took them. A workout must be long enough for an item's rule and fall on its day."
+        }
+    }
+}
+
 #Preview {
-    NavigationStack { WorkoutDetectionView(refresh: {}) }
+    NavigationStack { WorkoutDetectionView(check: nil, refresh: {}) }
 }

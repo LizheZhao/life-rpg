@@ -16,6 +16,8 @@ struct RootView: View {
     /// a denied permission otherwise looks exactly like a night with no data.
     @State private var sensorReport = "Not read yet"
     @State private var refreshing = false
+    /// What the last refresh found for workouts — the result card on the Workout detection page.
+    @State private var workoutCheck: WorkoutCheck?
     /// A re-read that disagrees with the day already on screen, waiting to be confirmed.
     @State private var replan: Replan.Change?
     @State private var replanInputs: DayInputs?
@@ -43,7 +45,8 @@ struct RootView: View {
                 .toolbar(.hidden, for: .tabBar)
                 .tag(RootTab.rewards)
             SettingsView(seedStatus: seedStatus, today: today, sensorReport: sensorReport,
-                         refresh: { Task { await refresh() } },
+                         check: workoutCheck,
+                         refresh: { await refresh(waitIfBusy: true) },
                          onImported: { Task { await refresh() } })
                 .toolbar(.hidden, for: .tabBar)
                 .tag(RootTab.settings)
@@ -93,8 +96,11 @@ struct RootView: View {
         replanInputs = nil
     }
 
-    private func refresh() async {
+    /// `waitIfBusy` is for a tap that must show a result: it runs after the pass in flight, which
+    /// may have read the settings before they changed. Automatic callers just skip.
+    private func refresh(waitIfBusy: Bool = false) async {
         // Foreground, time travel and the debug button can all land at once; one pass is enough.
+        while waitIfBusy && refreshing { try? await Task.sleep(for: .milliseconds(100)) }
         guard !refreshing else { return }
         refreshing = true
         defer { refreshing = false }
@@ -147,6 +153,7 @@ struct RootView: View {
             report.append("Workout filter not set — calendar auto-verify is off")
         }
 
+        let verifiedBefore = (try? AutoVerify.verifiedItems(on: todayKey, in: context)) ?? []
         var rng = SystemRandomNumberGenerator()
         do {
             // Routine load is not an input: `ensureToday` schedules today's routines and counts them.
@@ -163,6 +170,11 @@ struct RootView: View {
         } catch {
             generationError = "\(error)"
         }
+        let verifiedAfter = (try? AutoVerify.verifiedItems(on: todayKey, in: context)) ?? []
+        workoutCheck = WorkoutCheck.make(checkedAt: Date(), windowStart: from,
+                                         calendarAccess: CalendarService.hasAccess, filter: filter,
+                                         events: events, todayEvidence: todayEvidence,
+                                         before: verifiedBefore, after: verifiedAfter)
         sensorReport = report.joined(separator: "\n")
     }
 }

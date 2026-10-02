@@ -11,7 +11,7 @@ struct DebugView: View {
     /// What the last refresh read from HealthKit and the calendar.
     var sensorReport: String = ""
     /// Re-runs the root refresh: re-reads evidence and auto-verifies today.
-    var refresh: () -> Void = {}
+    var refresh: () async -> Void = {}
     #if targetEnvironment(simulator)
     @AppStorage("debugDayOffset") private var dayOffset = 0
     #endif
@@ -151,7 +151,7 @@ struct DebugView: View {
                         permissionError = "Health: \(error.localizedDescription)"
                         healthStatus = nil
                     }
-                    refresh()
+                    await refresh()
                 }
             } label: {
                 Label("Allow Health access", systemImage: "heart.text.square")
