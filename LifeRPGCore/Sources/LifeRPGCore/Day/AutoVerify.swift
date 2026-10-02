@@ -1,16 +1,16 @@
 import Foundation
 import SwiftData
 
-/// Which calendar events count as workouts. **Both halves are required**: the event must be in
-/// the chosen calendar (the one the Shortcut writes to) *and* its title must contain one of the
-/// keywords. An unset half matches nothing, so an unconfigured app never mistakes a long meeting
-/// for a workout.
+/// Which calendar events count as workouts. **Both halves are required**: the event must be in a
+/// selected calendar *and* its title must contain one of the keywords. An unset half matches
+/// nothing, so an unconfigured app never mistakes a long meeting for a workout, and selecting
+/// every calendar still doesn't let a meeting through without a keyword. All-day events never count.
 public struct WorkoutFilter: Equatable, Sendable {
-    public var calendarID: String
+    public var calendars: CalendarSelection
     public var keywords: [String]
 
-    public init(calendarID: String, keywords: [String]) {
-        self.calendarID = calendarID
+    public init(calendars: CalendarSelection, keywords: [String]) {
+        self.calendars = calendars
         self.keywords = keywords
     }
 
@@ -21,8 +21,7 @@ public struct WorkoutFilter: Equatable, Sendable {
 
     public func matches(_ event: CalendarEvent) -> Bool {
         let words = keywords.map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
-        guard !calendarID.isEmpty, !words.isEmpty, !event.isAllDay,
-              event.calendarID == calendarID else { return false }
+        guard !words.isEmpty, !event.isAllDay, calendars.contains(event.calendarID) else { return false }
         return words.contains { event.title.range(of: $0, options: [.caseInsensitive]) != nil }
     }
 }

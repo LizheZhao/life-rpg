@@ -21,7 +21,7 @@ struct RootView: View {
     @State private var replanInputs: DayInputs?
     @State private var health = HealthService()
     @State private var calendar = CalendarService()
-    @AppStorage("workoutCalendarID") private var workoutCalendarID = ""
+    @AppStorage("workoutCalendarID") private var workoutCalendarSetting = ""
     @AppStorage("workoutKeywords") private var workoutKeywords = ""
     #if targetEnvironment(simulator)
     // Debug time travel: days added to the real clock. Simulator only — it writes future-dated
@@ -129,20 +129,21 @@ struct RootView: View {
         let floor = DayKey.adding(-14, to: todayKey) ?? todayKey
         let firstKey = max((try? DayService.lastProcessedDayKey(context)) ?? todayKey, floor)
         let from = LifeCalendar.gregorian().startOfDay(for: DayKey.date(min(firstKey, todayKey)) ?? now)
-        let events = calendar.events(calendarID: workoutCalendarID, from: from, to: now)
+        let selection = CalendarSelection(setting: workoutCalendarSetting)
+        let events = calendar.events(selection: selection, from: from, to: now)
         var mindful: [MindfulSession] = []
         if HealthService.isAvailable {
             do { mindful = try await health.mindfulSessions(from: from, to: now) }
             catch { report.append("Mindful read failed: \(error.localizedDescription)") }
         }
-        let filter = WorkoutFilter(calendarID: workoutCalendarID,
+        let filter = WorkoutFilter(calendars: selection,
                                    keywords: WorkoutFilter.keywords(from: workoutKeywords))
         let evidence = AutoVerify.evidence(events: events, mindful: mindful, filter: filter)
         let todayEvidence = evidence[todayKey] ?? DayEvidence()
         report.append("Today: \(Int(todayEvidence.mindfulMinutes)) mindful min, workouts "
                       + (todayEvidence.workoutMinutes.isEmpty ? "none"
                          : todayEvidence.workoutMinutes.map { "\(Int($0))m" }.joined(separator: ", ")))
-        if workoutCalendarID.isEmpty || filter.keywords.isEmpty {
+        if selection == .none || filter.keywords.isEmpty {
             report.append("Workout filter not set — calendar auto-verify is off")
         }
 

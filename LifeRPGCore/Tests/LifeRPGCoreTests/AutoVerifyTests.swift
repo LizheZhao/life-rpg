@@ -9,7 +9,7 @@ import Testing
 struct AutoVerifyTests {
     private let tz = Fixtures.tokyo
     private let fri = "2026-09-18", sat = "2026-09-19", sun = "2026-09-20", mon = "2026-09-21"
-    private let filter = WorkoutFilter(calendarID: "cal-workouts", keywords: ["Workout", "运动"])
+    private let filter = WorkoutFilter(calendars: .some(["cal-workouts"]), keywords: ["Workout", "运动"])
 
     private func at(_ day: String, _ hour: Int, _ minute: Int = 0) -> Date {
         Fixtures.date(day, hour: hour, in: tz).addingTimeInterval(Double(minute) * 60)
@@ -67,14 +67,44 @@ struct AutoVerifyTests {
     }
 
     /// Both halves of the filter must be set — an unconfigured filter matches nothing rather than
-    /// letting every long meeting count as a workout.
+    /// letting every long meeting count as a workout. That holds for "all calendars" too.
     @Test func anUnconfiguredFilterMatchesNothing() {
         let events = [event(sat, minutes: 45)]
-        for f in [WorkoutFilter(calendarID: "", keywords: ["Workout"]),
-                  WorkoutFilter(calendarID: "cal-workouts", keywords: []),
-                  WorkoutFilter(calendarID: "cal-workouts", keywords: ["  "])] {
+        for f in [WorkoutFilter(calendars: .none, keywords: ["Workout"]),
+                  WorkoutFilter(calendars: .some([]), keywords: ["Workout"]),
+                  WorkoutFilter(calendars: .some(["cal-workouts"]), keywords: []),
+                  WorkoutFilter(calendars: .some(["cal-workouts"]), keywords: ["  "]),
+                  WorkoutFilter(calendars: .all, keywords: []),
+                  WorkoutFilter(calendars: .all, keywords: ["  "])] {
             #expect(AutoVerify.evidence(events: events, mindful: [], filter: f, in: tz)[sat] == nil)
         }
+    }
+
+    @Test func severalSelectedCalendarsAllCount() {
+        let events = [
+            event(sat, minutes: 45),
+            event(sat, minutes: 50, calendar: "cal-gym"),
+            event(sat, minutes: 55, calendar: "cal-work"),             // not selected
+        ]
+        let f = WorkoutFilter(calendars: .some(["cal-workouts", "cal-gym"]), keywords: ["Workout"])
+        let e = AutoVerify.evidence(events: events, mindful: [], filter: f, in: tz)
+        #expect(e[sat]?.workoutMinutes.sorted() == [45, 50])
+    }
+
+    /// Reading every calendar must not let a meeting pass for a workout: the title still has to
+    /// carry a keyword, and an all-day event never counts.
+    @Test func allCalendarsStillNeedAKeywordAndIgnoreAllDayEvents() {
+        let events = [
+            event(sat, minutes: 45, calendar: "cal-workouts"),
+            event(sat, minutes: 50, calendar: "cal-work"),
+            event(sat, minutes: 60, title: "morning 运动", calendar: "cal-family"),
+            event(sat, minutes: 90, title: "Team meeting", calendar: "cal-work"),
+            event(sat, minutes: 90, title: "Dentist", calendar: "cal-family"),
+            event(sat, minutes: 1440, calendar: "cal-family", allDay: true),
+        ]
+        let f = WorkoutFilter(calendars: .all, keywords: ["Workout", "运动"])
+        let e = AutoVerify.evidence(events: events, mindful: [], filter: f, in: tz)
+        #expect(e[sat]?.workoutMinutes.sorted() == [45, 50, 60])
     }
 
     @Test func keywordsParseFromACommaSeparatedSetting() {

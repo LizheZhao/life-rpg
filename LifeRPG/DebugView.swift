@@ -27,9 +27,6 @@ struct DebugView: View {
     /// Visible feedback for the two HealthKit buttons — without it, "denied", "no data" and
     /// "still running" all look like a button that did nothing.
     @State private var healthStatus: String?
-    @State private var calendars: [(id: String, title: String)] = []
-    @AppStorage("workoutCalendarID") private var workoutCalendarID = ""
-    @AppStorage("workoutKeywords") private var workoutKeywords = ""
 
     @Query private var questTemplates: [QuestTemplate]
     @Query private var routineTasks: [RoutineTask]
@@ -45,7 +42,6 @@ struct DebugView: View {
                 Text(seedStatus)
             }
             bodySection
-            workoutSection
             Section("Tables") {
                 row("QuestTemplate", questTemplates.count,
                     detail: "\(questTemplates.filter(\.isActive).count) active")
@@ -121,7 +117,6 @@ struct DebugView: View {
         .task {
             do { audit = try StoreAudit.issues(modelContext) }
             catch { auditError = "Audit failed: \(error)" }
-            loadCalendars()
         }
         .alert("Reopen today?", isPresented: $confirmingReset) {
             Button("Reopen", role: .destructive) { reopenToday() }
@@ -215,41 +210,6 @@ struct DebugView: View {
     private func pair(_ today: Double?, _ baseline: Double?, _ format: String) -> String {
         let f = { (v: Double?) in v.map { String(format: format, $0) } ?? "—" }
         return "\(f(today)) (\(f(baseline)))"
-    }
-
-    private var workoutSection: some View {
-        Section {
-            if CalendarService.hasAccess {
-                Picker("Calendar", selection: $workoutCalendarID) {
-                    Text("None").tag("")
-                    ForEach(calendars, id: \.id) { Text($0.title).tag($0.id) }
-                }
-            } else {
-                Button {
-                    Task {
-                        do { try await CalendarService().requestAccess(); permissionError = nil }
-                        catch { permissionError = "Calendar: \(error.localizedDescription)" }
-                        loadCalendars()
-                    }
-                } label: {
-                    Label("Allow Calendar access", systemImage: "calendar.badge.checkmark")
-                }
-            }
-            TextField("Title keywords, comma separated", text: $workoutKeywords)
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-            Button { refresh() } label: {
-                Label("Check for workouts now", systemImage: "arrow.clockwise")
-            }
-        } header: {
-            Text("Workout auto-verify")
-        } footer: {
-            Text("An event counts only if it is in this calendar and its title contains one of the keywords. Each workout verifies one thing. Also re-checked every time the app comes to the foreground.")
-        }
-    }
-
-    private func loadCalendars() {
-        calendars = CalendarService().calendars()
     }
 
     private func value(_ name: String, _ text: String) -> some View {
