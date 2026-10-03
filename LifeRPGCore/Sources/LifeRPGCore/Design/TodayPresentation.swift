@@ -75,6 +75,10 @@ public enum QuestTint: Hashable, Sendable, CaseIterable {
 
 // MARK: - quest tiles
 
+private extension String {
+    var nilIfEmpty: String? { isEmpty ? nil : self }
+}
+
 public struct QuestCardState: Equatable, Identifiable, Sendable {
     public enum Layout: Equatable, Sendable { case tile, hidden, trivialGroup }
 
@@ -108,7 +112,9 @@ public struct QuestCardState: Equatable, Identifiable, Sendable {
     /// What the pill says: the span it can pay, then what it did pay.
     public var pillText: String { awardedPoints.map { "+\($0)" } ?? rangeText }
 
-    public init(_ quest: DailyQuest, tier: Tier) {
+    /// - Parameter libraryActive: false when the library row it came from has been turned off since;
+    ///   the card stays (it can still be done) and says it won't be drawn again.
+    public init(_ quest: DailyQuest, tier: Tier, libraryActive: Bool = true) {
         let range = Scoring.payoutRange(quest, tier: tier)
         id = quest.id
         rangeText = PresentationText.range(range)
@@ -138,7 +144,9 @@ public struct QuestCardState: Equatable, Identifiable, Sendable {
         layout = quest.isHiddenSlot ? .hidden : .tile
         tint = quest.isHiddenSlot ? .hidden : QuestTint(quest.slot)
         title = quest.textSnapshot
-        subtitle = quest.variantSnapshot.flatMap { $0.isEmpty ? nil : $0 }
+        subtitle = [quest.variantSnapshot.flatMap { $0.isEmpty ? nil : $0 },
+                    libraryActive ? nil : "Turned off · won't be drawn again"]
+            .compactMap { $0 }.joined(separator: " · ").nilIfEmpty
         doodle = DoodleKey.forText(quest.textSnapshot)
         launchURL = quest.launchURLSnapshot.flatMap(URL.init(string:))
         let name = quest.isHiddenSlot ? "hidden quest" : quest.slot.rawValue
@@ -207,9 +215,12 @@ public struct RoutineRowState: Equatable, Identifiable, Sendable {
     ///   - quests, occurrences: the rows the page's queries hold, to name what an ad-hoc row replaced.
     ///   - sundayBill: what Sunday night's settlement charges against this occurrence if it is
     ///     still open then (`Overdue.Weekly.points(for:)`); only a flexible routine ever has one.
+    ///   - libraryActive: false when the routine it came from has been turned off since: today's
+    ///     card stays, and says the library won't bring it back.
     public init(_ o: RoutineOccurrence, placement: Placement, routine: RoutineTask?, flexible: Bool,
                 today: String, tier: Tier, level: Int,
-                quests: [DailyQuest], occurrences: [RoutineOccurrence], sundayBill: Int = 0) {
+                quests: [DailyQuest], occurrences: [RoutineOccurrence], sundayBill: Int = 0,
+                libraryActive: Bool = true) {
         let open = o.completedDayKey == nil && !o.skipped
         // The number `Completion.completeRoutine` will pay today (the late make-up for an overdue one).
         let pays = Completion.routinePayout(o, flexible: flexible, on: today, tier: tier, level: level)
@@ -239,6 +250,7 @@ public struct RoutineRowState: Equatable, Identifiable, Sendable {
         if let day = overdueDay { pills.append(PillState("overdue · day \(day)", .clay)) }
         let owes = open && sundayBill > 0 ? sundayBill : 0
         if owes > 0 { pills.append(PillState("−\(owes) Sun night", .clay)) }
+        if open, !libraryActive { pills.append(PillState("turned off", .plain)) }
         self.pills = pills
 
         if o.degradedTextSnapshot != nil {
@@ -264,7 +276,7 @@ public struct RoutineRowState: Equatable, Identifiable, Sendable {
             notes.append("\(added) · extra, no penalty")
         }
         // An extra (`AdHoc.add`) never gates by construction and says "extra" already.
-        let isExtra = o.routineID == nil && o.replacesQuestID == nil && !occurrences.contains { $0.replacedByID == o.id }
+        let isExtra = AdHoc.isExtra(o, among: occurrences)
         if !o.countsForClear, !isExtra { notes.append("Doesn't gate the hidden quest") }
         self.notes = notes
 

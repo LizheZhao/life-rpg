@@ -25,6 +25,8 @@ struct TodayView: View {
     @Query private var contexts: [DailyContext]
     @Query private var occurrences: [RoutineOccurrence]
     @Query private var routines: [RoutineTask]
+    /// For whether a card's library row has been turned off since the day was drawn.
+    @Query private var templates: [QuestTemplate]
     @Query private var rewards: [Reward]
 
     /// What the one card is showing, or nil when it is down. Everything that needs an answer or an
@@ -227,10 +229,23 @@ struct TodayView: View {
         RoutineRowState(o, placement: placement, routine: routines.first { $0.id == o.routineID },
                         flexible: isFlexible(o), today: today, tier: tier, level: level,
                         quests: allQuests, occurrences: occurrences,
-                        sundayBill: weeklyBill?.points(for: o) ?? 0)
+                        sundayBill: weeklyBill?.points(for: o) ?? 0,
+                        libraryActive: libraryActive(Feedback.subject(of: o)))
     }
 
-    private func questState(_ quest: DailyQuest) -> QuestCardState { QuestCardState(quest, tier: tier) }
+    private func questState(_ quest: DailyQuest) -> QuestCardState {
+        QuestCardState(quest, tier: tier, libraryActive: libraryActive(Feedback.subject(of: quest)))
+    }
+
+    /// Whether the library row a card came from is still on; a card with no row (a custom task)
+    /// has nothing to turn off, so it counts as on.
+    private func libraryActive(_ subject: Feedback.Subject?) -> Bool {
+        guard let subject else { return true }
+        switch subject.target {
+        case .quest: return templates.first { $0.id == subject.id }?.isActive ?? true
+        case .routine: return routines.first { $0.id == subject.id }?.isActive ?? true
+        }
+    }
 
     private var levelState: LevelCardState {
         LevelCardState(totalEarned: totalEarned, balance: balance, streak: streak, tier: tier,
@@ -319,7 +334,7 @@ struct TodayView: View {
             if staysInSection(epic.id, isDone: state.isDone) {
                 EpicCardView(state: state,
                              actions: [rerollAction(epic), extendAction(epic), replaceEpicAction(epic),
-                                       rateNoteAction(epic)].compactMap { $0 },
+                                       rateNoteAction(epic), turnOffAction(epic)].compactMap { $0 },
                              onComplete: { show(.ask(.quest(epic))) })
                     .transition(cardLeaves)
             }
@@ -338,7 +353,8 @@ struct TodayView: View {
             ForEach(Array(rows.enumerated()), id: \.element.0.id) { index, row in
                 if staysInSection(row.0.id, isDone: states[index].isDone) {
                     routineCard(row.0, states[index],
-                                menu: [cancelRoutineAction(row.0), replaceRoutineAction(row.0), rateNoteAction(row.0)])
+                                menu: [cancelRoutineAction(row.0), replaceRoutineAction(row.0),
+                                       removeExtraAction(row.0), rateNoteAction(row.0), turnOffAction(row.0)])
                         .transition(cardLeaves)
                 }
             }
@@ -372,7 +388,7 @@ struct TodayView: View {
             if staysInSection(quest.id, isDone: state.isDone) {
                 QuestRowView(state: state,
                              actions: [rerollAction(quest), cancelQuestAction(quest), replaceAction(quest),
-                                       rateNoteAction(quest)].compactMap { $0 },
+                                       rateNoteAction(quest), turnOffAction(quest)].compactMap { $0 },
                              onComplete: { show(.ask(.quest(quest))) })
                     .transition(cardLeaves)
             }
@@ -400,7 +416,7 @@ struct TodayView: View {
             let state = questState(hiddenQuest)
             SectionTitle(title: "Hidden", count: state.isDone ? SectionProgress.clearedLabel : nil)
             if staysInSection(hiddenQuest.id, isDone: state.isDone) {
-                QuestRowView(state: state, actions: [rateNoteAction(hiddenQuest)].compactMap { $0 },
+                QuestRowView(state: state, actions: [rateNoteAction(hiddenQuest), turnOffAction(hiddenQuest)].compactMap { $0 },
                              onComplete: { show(.ask(.quest(hiddenQuest))) })
                     .transition(cardLeaves)
             }
@@ -444,7 +460,7 @@ struct TodayView: View {
         case .routine(let state):
             let occurrence = occurrences.first { $0.id == state.id }
             RoutineRowView(state: state,
-                           actions: occurrence.map { [replaceRoutineAction($0), rateNoteAction($0)].compactMap { $0 } } ?? [],
+                           actions: occurrence.map { [replaceRoutineAction($0), rateNoteAction($0), turnOffAction($0)].compactMap { $0 } } ?? [],
                            onComplete: { if let occurrence { show(.ask(.routine(occurrence))) } },
                            onSwitchVersion: { if let occurrence { switchVersion(occurrence) } })
         case .candidate(let state):
@@ -813,6 +829,38 @@ struct TodayView: View {
 
     private func rateNoteAction(_ o: RoutineOccurrence) -> CardAction? {
         Feedback.subject(of: o).map(rateNoteAction)
+    }
+
+    /// `Turn off` stops the library bringing it back; today's card stays and can be done, replaced
+    /// or cancelled as usual. Reversible from the same menu (or the Library), so it doesn't ask.
+    /// Nothing for a card with no library row, or a micro group.
+    private func turnOffAction(_ quest: DailyQuest) -> CardAction? { Feedback.subject(of: quest).map(turnOffAction) }
+    private func turnOffAction(_ o: RoutineOccurrence) -> CardAction? { Feedback.subject(of: o).map(turnOffAction) }
+
+    private func turnOffAction(_ subject: Feedback.Subject) -> CardAction {
+        let on = libraryActive(subject)
+        return CardAction(title: on ? "Turn off" : "Turn on", systemImage: on ? "pause.circle" : "play.circle") {
+            do {
+                try LibraryEdit.setActive(!on, subject.target, id: subject.id, in: context)
+                actionError = nil
+            } catch {
+                actionError = "\(error)"
+            }
+        }
+    }
+
+    /// An extra added with + that is still open: free to take off again, and gone without a trace
+    /// (`AdHoc.removeExtra`). One already done has been paid and stays.
+    private func removeExtraAction(_ o: RoutineOccurrence) -> CardAction? {
+        guard AdHoc.isExtra(o, among: occurrences), Schedule.isOpen(o) else { return nil }
+        return CardAction(title: "Remove", systemImage: "trash") {
+            do {
+                try AdHoc.removeExtra(o, in: context)
+                actionError = nil
+            } catch {
+                actionError = "\(error)"
+            }
+        }
     }
 
     private func rateNoteAction(_ subject: Feedback.Subject) -> CardAction {

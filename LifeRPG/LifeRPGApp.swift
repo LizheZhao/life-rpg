@@ -52,7 +52,7 @@ import SwiftUI
         }
     }
 
-    private static func bundledCSV(_ name: String) throws -> String {
+    static func bundledCSV(_ name: String) throws -> String {
         guard let url = Bundle.main.url(forResource: name, withExtension: "csv") else {
             throw CocoaError(.fileNoSuchFile, userInfo: [NSFilePathErrorKey: "\(name).csv"])
         }

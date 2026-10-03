@@ -58,6 +58,8 @@ public enum JSONImport {
         /// are put back (never removed from it).
         public var userQuests: Int
         public var userRoutines: Int
+        /// Seed rows the backup says the user turned off / on or re-priced.
+        public var libraryChanges: Int
     }
 
     public struct Plan: Sendable {
@@ -109,7 +111,8 @@ public enum JSONImport {
             rewards: snapshot.rewards?.count ?? 0,
             balance: Economy.balance(snapshot.ledger),
             unmatchedLibrary: unmatched.sorted(),
-            userQuests: mine.quests.count, userRoutines: mine.routines.count)
+            userQuests: mine.quests.count, userRoutines: mine.routines.count,
+            libraryChanges: (snapshot.libraryChanges?.quests.count ?? 0) + (snapshot.libraryChanges?.routines.count ?? 0))
         return Plan(snapshot: snapshot, summary: summary, questIDs: questIDs, routineIDs: routineIDs)
     }
 
@@ -138,6 +141,7 @@ public enum JSONImport {
 
         let s = plan.snapshot
         try restoreUserLibrary(s.userLibrary, in: context)
+        try applyLibraryChanges(s.libraryChanges, in: context)
         let quest = { (id: UUID) in plan.questIDs[id] ?? id }
         let routine = { (id: UUID) in plan.routineIDs[id] ?? id }
         let target = { (kind: String, id: UUID) in
@@ -251,6 +255,20 @@ public enum JSONImport {
             row.countsForClear = r.countsForClear; row.downgradeIDs = r.downgradeIDs
             row.launchURLString = r.launchURL; row.autoVerifyRule = r.autoVerifyRule; row.isActive = r.isActive
             context.insert(row)
+        }
+    }
+
+    /// What the user changed on the seed rows, by text. A row this store doesn't have is skipped.
+    private static func applyLibraryChanges(_ changes: JSONExport.LibraryChanges?, in context: ModelContext) throws {
+        guard let changes else { return }
+        let quests = Dictionary(try context.fetch(FetchDescriptor<QuestTemplate>()).map { ($0.text, $0) },
+                                uniquingKeysWith: { a, _ in a })
+        let routines = Dictionary(try context.fetch(FetchDescriptor<RoutineTask>()).map { ($0.text, $0) },
+                                  uniquingKeysWith: { a, _ in a })
+        for c in changes.quests { quests[c.text]?.isActive = c.isActive }
+        for c in changes.routines {
+            routines[c.text]?.isActive = c.isActive
+            routines[c.text]?.basePoints = c.basePoints
         }
     }
 

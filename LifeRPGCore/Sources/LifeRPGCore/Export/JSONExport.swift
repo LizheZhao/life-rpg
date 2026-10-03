@@ -39,6 +39,36 @@ public enum JSONExport {
         /// The rows the user saved themselves (`LibraryOrigin.user`), in full: nothing else can give
         /// them back. Nil when there are none, which is most backups.
         public var userLibrary: UserLibrary?
+        /// What the user changed on the seed rows (turned off or on, a routine's points): only the
+        /// rows that differ from the CSV. Nil when nothing does, or when the CSVs weren't to hand.
+        public var libraryChanges: LibraryChanges?
+    }
+
+    /// The seed CSVs' text, to tell what the user changed from what they started with.
+    public struct Seeds: Sendable {
+        public var sideQuestsCSV: String
+        public var routinesCSV: String
+
+        public init(sideQuestsCSV: String, routinesCSV: String) {
+            self.sideQuestsCSV = sideQuestsCSV
+            self.routinesCSV = routinesCSV
+        }
+    }
+
+    public struct LibraryChanges: Codable, Equatable, Sendable {
+        public var quests: [QuestChange]
+        public var routines: [RoutineChange]
+    }
+
+    public struct QuestChange: Codable, Equatable, Sendable {
+        public var text: String
+        public var isActive: Bool
+    }
+
+    public struct RoutineChange: Codable, Equatable, Sendable {
+        public var text: String
+        public var isActive: Bool
+        public var basePoints: Int
     }
 
     public struct UserLibrary: Codable, Equatable, Sendable {
@@ -220,7 +250,30 @@ public enum JSONExport {
         return ids
     }
 
-    public static func snapshot(_ context: ModelContext, now: Date = Date()) throws -> Snapshot {
+    /// The seed rows whose on / off or points differ from the CSVs they came from. A row the
+    /// user never touched is exactly what a reseed brings back, so it is not listed.
+    static func libraryChanges(templates: [QuestTemplate], routines: [RoutineTask],
+                               seeds: Seeds) -> LibraryChanges? {
+        guard let quests = try? SeedParser.sideQuests(csv: seeds.sideQuestsCSV),
+              let routineSeeds = try? SeedParser.routines(csv: seeds.routinesCSV) else { return nil }
+        let questByText = Dictionary(quests.map { ($0.text, $0) }, uniquingKeysWith: { a, _ in a })
+        let routineByText = Dictionary(routineSeeds.map { ($0.text, $0) }, uniquingKeysWith: { a, _ in a })
+        let changedQuests = templates.filter { $0.origin == .seed }
+            .compactMap { t -> QuestChange? in
+                guard let seed = questByText[t.text], seed.isActive != t.isActive else { return nil }
+                return QuestChange(text: t.text, isActive: t.isActive)
+            }.sorted { $0.text < $1.text }
+        let changedRoutines = routines.filter { $0.origin == .seed }
+            .compactMap { r -> RoutineChange? in
+                guard let seed = routineByText[r.text],
+                      seed.isActive != r.isActive || seed.basePoints != r.basePoints else { return nil }
+                return RoutineChange(text: r.text, isActive: r.isActive, basePoints: r.basePoints)
+            }.sorted { $0.text < $1.text }
+        return changedQuests.isEmpty && changedRoutines.isEmpty
+            ? nil : LibraryChanges(quests: changedQuests, routines: changedRoutines)
+    }
+
+    public static func snapshot(_ context: ModelContext, seeds: Seeds? = nil, now: Date = Date()) throws -> Snapshot {
         let quests = try context.fetch(FetchDescriptor<DailyQuest>())
         let occurrences = try context.fetch(FetchDescriptor<RoutineOccurrence>())
         let ratings = try context.fetch(FetchDescriptor<QuestRating>())
@@ -309,11 +362,12 @@ public enum JSONExport {
                           virtualKind: $0.virtualKind, fixedCoins: $0.fixedCoins, isActive: $0.isActive,
                           isGoal: $0.isGoal)
             },
-            userLibrary: mine.quests.isEmpty && mine.routines.isEmpty ? nil : mine)
+            userLibrary: mine.quests.isEmpty && mine.routines.isEmpty ? nil : mine,
+            libraryChanges: seeds.flatMap { libraryChanges(templates: templates, routines: routines, seeds: $0) })
     }
 
-    public static func data(_ context: ModelContext, now: Date = Date()) throws -> Data {
-        try encode(snapshot(context, now: now))
+    public static func data(_ context: ModelContext, seeds: Seeds? = nil, now: Date = Date()) throws -> Data {
+        try encode(snapshot(context, seeds: seeds, now: now))
     }
 
     public static func encode(_ snapshot: Snapshot) throws -> Data {

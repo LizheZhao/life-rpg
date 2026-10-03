@@ -19,7 +19,10 @@ final class DataTransfer {
     var importPlan: JSONImport.Plan?
 
     func prepareJSONExport(_ context: ModelContext) {
-        export { .json(try JSONExport.data(context), name: JSONExport.filename()) }
+        // The bundled CSVs are what "unchanged" means: only what differs from them is written down.
+        let seeds = (try? JSONExport.Seeds(sideQuestsCSV: LifeRPGApp.bundledCSV("side_quests"),
+                                           routinesCSV: LifeRPGApp.bundledCSV("routine_quests")))
+        export { .json(try JSONExport.data(context, seeds: seeds), name: JSONExport.filename()) }
     }
 
     func prepareCSVExport(_ context: ModelContext) {
@@ -62,6 +65,14 @@ final class DataTransfer {
         if !s.unmatchedLibrary.isEmpty {
             lines.append("\(s.unmatchedLibrary.count) quest(s) or routine(s) in the backup aren't in this library; "
                          + "their history is kept but won't link back.")
+        }
+        // Never taken from the library by a restore: only put back.
+        let mine = s.userQuests + s.userRoutines
+        if mine > 0 || s.libraryChanges > 0 {
+            lines.append("Your library: " + [mine > 0 ? "\(s.userQuests) quest(s) and \(s.userRoutines) routine(s) of your own, "
+                                              + "put back if missing" : nil,
+                                              s.libraryChanges > 0 ? "\(s.libraryChanges) default(s) turned off or re-priced" : nil]
+                .compactMap { $0 }.joined(separator: "; ") + ".")
         }
         return lines.joined(separator: "\n\n")
     }

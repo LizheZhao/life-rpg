@@ -263,10 +263,22 @@ private struct LibraryDetailView: View {
     let entry: LibraryEntry
     let today: String
 
+    @Environment(\.modelContext) private var context
+    /// The live rows: `entry` is a snapshot taken when the list was drawn, and what is changed here
+    /// (on or off, a routine's points) has to show at once.
+    @Query private var templates: [QuestTemplate]
+    @Query private var routines: [RoutineTask]
+    @State private var editError: String?
+
+    private var template: QuestTemplate? { templates.first { $0.id == entry.id } }
+    private var routine: RoutineTask? { routines.first { $0.id == entry.id } }
+    private var isActive: Bool { template?.isActive ?? routine?.isActive ?? entry.isActive }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: LR.Spacing.sectionGap) {
                 summaryCard
+                settingsSection
                 if let schedule = entry.schedule { scheduleSection(schedule) }
                 FeedbackPanel(target: entry.target, id: entry.id, text: entry.text, today: today)
             }
@@ -312,14 +324,14 @@ private struct LibraryDetailView: View {
                 LibraryDisc(entry: entry)
                 VStack(alignment: .leading, spacing: 6) {
                     Text(entry.text).lr(.bodyStrong)
-                        .foregroundStyle(entry.isActive ? LR.Color.ink : LR.Color.inkSecondary)
+                        .foregroundStyle(isActive ? LR.Color.ink : LR.Color.inkSecondary)
                         .fixedSize(horizontal: false, vertical: true)
                     FlowRow(spacing: 6) {
                         LibraryTierPill(entry: entry)
                         if entry.isMine { PillLabel(text: "Mine") }
-                        if !entry.isActive { PillLabel(text: "inactive") }
+                        if !isActive { PillLabel(text: "inactive") }
                     }
-                    if !entry.isActive {
+                    if !isActive {
                         Text("Inactive — not drawn any more").lr(.caption)
                             .foregroundStyle(LR.Color.inkSecondary)
                             .fixedSize(horizontal: false, vertical: true)
@@ -330,8 +342,60 @@ private struct LibraryDetailView: View {
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(entry.text)
-        .accessibilityValue([entry.tierName, entry.isActive ? nil : "inactive, not drawn any more"]
+        .accessibilityValue([entry.tierName, isActive ? nil : "inactive, not drawn any more"]
             .compactMap { $0 }.joined(separator: ", "))
+    }
+
+    // MARK: settings
+
+    /// On or off, and a routine's points. Both reach forward only: what is already on the page
+    /// keeps its own state and its own points (`LibraryEdit`).
+    private var settingsSection: some View {
+        section("Settings") {
+            card {
+                VStack(alignment: .leading, spacing: 4) {
+                    Toggle(isOn: Binding(get: { isActive }, set: setActive)) {
+                        Text("On").lr(.bodyStrong).foregroundStyle(LR.Color.ink)
+                    }
+                    .tint(LR.Color.accent)
+                    .frame(minHeight: 44)
+                    caption(isActive ? "Comes up as usual."
+                                     : "Off: not drawn, scheduled or offered any more. What is already on today's page stays.")
+                    if let routine {
+                        Rectangle().fill(LR.Color.divider).frame(height: 1).padding(.vertical, 6)
+                        Stepper {
+                            Text("Pays \(routine.basePoints)").lr(.bodyStrong).foregroundStyle(LR.Color.ink)
+                                .monospacedDigit()
+                        } onIncrement: {
+                            setPoints(routine.basePoints + LibraryEdit.pointsStep)
+                        } onDecrement: {
+                            setPoints(max(routine.basePoints - LibraryEdit.pointsStep, LibraryEdit.minimumPoints))
+                        }
+                        .frame(minHeight: 44)
+                        caption("From the next time it comes due; one already on the page keeps what it was asked at.")
+                    }
+                    if let editError { Text(editError).lr(.caption).foregroundStyle(LR.Color.clay) }
+                }
+            }
+        }
+    }
+
+    private func setActive(_ on: Bool) {
+        do {
+            try LibraryEdit.setActive(on, entry.target, id: entry.id, in: context)
+            editError = nil
+        } catch {
+            editError = "\(error)"
+        }
+    }
+
+    private func setPoints(_ points: Int) {
+        do {
+            try LibraryEdit.setBasePoints(points, forRoutine: entry.id, in: context)
+            editError = nil
+        } catch {
+            editError = "\(error)"
+        }
     }
 
     // MARK: schedule

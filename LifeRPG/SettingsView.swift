@@ -53,9 +53,9 @@ struct SettingsView: View {
                     }
                     .accessibilityHint("Saves all your history as a JSON file")
                     Button { transfer.prepareCSVExport(context) } label: {
-                        row("Ratings & comments (CSV)", systemImage: "star.bubble", tint: .hidden)
+                        row("Tables (CSV)", systemImage: "tablecells", tint: .hidden)
                     }
-                    .accessibilityHint("Saves your ratings and comments as CSV files")
+                    .accessibilityHint("Saves the full history with its library rows joined, and your ratings and comments, as CSV files")
                     Button { transfer.importing = true } label: {
                         row("Restore from JSON…", systemImage: "square.and.arrow.down", tint: .hidden)
                     }

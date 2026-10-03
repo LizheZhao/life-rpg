@@ -29,10 +29,10 @@ struct TodayPresentationTests {
     private func row(_ o: RoutineOccurrence, _ placement: RoutineRowState.Placement = .today,
                      routine: RoutineTask? = nil, tier: Tier = .normal, level: Int = 1,
                      quests: [DailyQuest] = [], occurrences: [RoutineOccurrence] = [],
-                     sundayBill: Int = 0) -> RoutineRowState {
+                     sundayBill: Int = 0, libraryActive: Bool = true) -> RoutineRowState {
         RoutineRowState(o, placement: placement, routine: routine, flexible: routine?.flexibleWithinWeek ?? false,
                         today: friday, tier: tier, level: level, quests: quests, occurrences: occurrences,
-                        sundayBill: sundayBill)
+                        sundayBill: sundayBill, libraryActive: libraryActive)
     }
 
     // MARK: Sunday's bill on the row that owes it
@@ -53,6 +53,33 @@ struct TodayPresentationTests {
         let skipped = occurrence("Skipped")
         skipped.skipped = true
         #expect(!row(skipped, sundayBill: 5).pills.contains { $0.text.contains("Sun night") })
+    }
+
+    // MARK: turned off in the library
+
+    /// Turning a row off leaves today's card where it is (it can still be done, replaced or
+    /// cancelled); the card only says the library won't bring it back.
+    @Test func aRoutineTurnedOffInTheLibrarySaysSo() {
+        let o = occurrence("Grocery shopping")
+        #expect(row(o, libraryActive: false).pills.contains(.init("turned off", .plain)))
+        #expect(!row(o).pills.contains { $0.text == "turned off" })
+        let done = occurrence("Done")
+        done.completedDayKey = "2026-10-02"; done.awardedPoints = 10
+        #expect(!row(done, libraryActive: false).pills.contains { $0.text == "turned off" })
+    }
+
+    @Test func aQuestTurnedOffInTheLibrarySaysSoBesideItsDrawnValue() {
+        let q = DailyQuest()
+        q.textSnapshot = "Cook a meal"; q.slot = .easy
+        #expect(QuestCardState(q, tier: .normal).subtitle == nil)
+        #expect(QuestCardState(q, tier: .normal, libraryActive: false).subtitle == "Turned off · won't be drawn again")
+        q.variantSnapshot = "pasta"
+        #expect(QuestCardState(q, tier: .normal, libraryActive: false).subtitle
+                == "pasta · Turned off · won't be drawn again")
+        // A micro group is three templates in one card: no single row to say it about.
+        let group = DailyQuest()
+        group.trivialGroup = ["a", "b", "c"]; group.trivialDone = [false, false, false]
+        #expect(QuestCardState(group, tier: .normal, libraryActive: false).subtitle == "0 of 3 done")
     }
 
     // MARK: a routine row's doodle

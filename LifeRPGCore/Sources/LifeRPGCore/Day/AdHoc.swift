@@ -31,6 +31,8 @@ public enum AdHoc {
         case routineNotReplaceable
         /// Replacing a routine with something lighter would be a free cancel (a cancel costs 200).
         case tooLight(minimum: Int)
+        /// Only an extra that is still open can be taken off the day.
+        case notRemovable
 
         public var description: String {
             switch self {
@@ -40,6 +42,7 @@ public enum AdHoc {
             case .alreadyOnToday: "that routine is already on today's page"
             case .routineNotReplaceable: "this routine can't be replaced"
             case .tooLight(let minimum): "pick something worth at least \(minimum) points"
+            case .notRemovable: "only an extra that isn't done can be removed"
             }
         }
     }
@@ -191,6 +194,29 @@ public enum AdHoc {
             throw error
         }
         return occurrence
+    }
+
+    /// Whether `o` is an extra added with `+`: it replaces nothing, never gates the day and is
+    /// never charged. A routine's own occurrence, a swapped slot and what stood in for a swapped
+    /// routine are not.
+    public static func isExtra(_ o: RoutineOccurrence, among occurrences: [RoutineOccurrence]) -> Bool {
+        o.routineID == nil && o.replacesQuestID == nil && !o.countsForClear
+            && !occurrences.contains { $0.replacedByID == o.id }
+    }
+
+    /// Takes an open extra off the day again — free, because it costs nothing to leave undone, so
+    /// there is no charge to buy off (`Redemption.cancel` ends one, and costs coins for it). Gone
+    /// without a trace: nothing was earned, charged or rated. Done, it has been paid and stays.
+    public static func removeExtra(_ o: RoutineOccurrence, in context: ModelContext) throws {
+        let all = try context.fetch(FetchDescriptor<RoutineOccurrence>())
+        guard isExtra(o, among: all), Schedule.isOpen(o) else { throw Failure.notRemovable }
+        context.delete(o)
+        do {
+            try context.save()
+        } catch {
+            context.rollback()
+            throw error
+        }
     }
 
     // MARK: replacing a routine
