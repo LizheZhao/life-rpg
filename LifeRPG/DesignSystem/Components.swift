@@ -249,6 +249,51 @@ struct SheetPrimaryButtonStyle: ButtonStyle {
     }
 }
 
+/// A compact filled ink capsule for the one action on a card or beside a field (`Redeem`, `Add
+/// note`). Disabled it turns into the quiet pill, so a blocked action still reads as a button.
+struct InkPillButtonStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var isEnabled
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .lr(.bodyStrong)
+            .foregroundStyle(isEnabled ? LR.Color.onFill : LR.Color.inkSecondary)
+            .padding(.horizontal, 18)
+            .padding(.vertical, 7)
+            .frame(minHeight: 44)
+            .background(Capsule().fill(isEnabled ? LR.Color.fill : LR.Color.pillFill).padding(.vertical, 2))
+            .contentShape(Capsule())
+            .scaleEffect(configuration.isPressed && !reduceMotion ? 0.97 : 1)
+            .opacity(configuration.isPressed && reduceMotion ? 0.8 : 1)
+            .animation(reduceMotion ? .easeInOut(duration: 0.2) : .spring(response: 0.3, dampingFraction: 0.7),
+                       value: configuration.isPressed)
+    }
+}
+
+/// The one full-width ink pill at the bottom of the sheet.
+struct ConfirmBar: View {
+    let title: String
+    let enabled: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Text(title).lr(.bodyStrong).foregroundStyle(LR.Color.onFill)
+                .frame(maxWidth: .infinity, minHeight: 52)
+                .background(Capsule().fill(LR.Color.fill))
+                .contentShape(Capsule())
+        }
+        .buttonStyle(PressableCardStyle())
+        .disabled(!enabled)
+        .opacity(enabled ? 1 : 0.35)
+        .padding(.horizontal, 16)
+        .padding(.top, 10)
+        .padding(.bottom, 8)
+        .background(LR.Color.canvas)
+    }
+}
+
 private struct SheetHeightKey: PreferenceKey {
     static let defaultValue: CGFloat = 0
     static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = max(value, nextValue()) }

@@ -656,26 +656,3 @@ private struct DoodlePicker: View {
         .accessibilityLabel("Doodle")
     }
 }
-
-/// The one full-width ink pill at the bottom of the sheet.
-private struct ConfirmBar: View {
-    let title: String
-    let enabled: Bool
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            Text(title).lr(.bodyStrong).foregroundStyle(LR.Color.onFill)
-                .frame(maxWidth: .infinity, minHeight: 52)
-                .background(Capsule().fill(LR.Color.fill))
-                .contentShape(Capsule())
-        }
-        .buttonStyle(PressableCardStyle())
-        .disabled(!enabled)
-        .opacity(enabled ? 1 : 0.35)
-        .padding(.horizontal, 16)
-        .padding(.top, 10)
-        .padding(.bottom, 8)
-        .background(LR.Color.canvas)
-    }
-}
