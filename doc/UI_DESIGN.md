@@ -122,6 +122,8 @@ Each slice is built by one owner, verified on the simulator (light, dark, larges
 | 4a | **Today popups.** `ConfirmSheet` / `SheetFrame` / `CompleteSheet` replace the Mark as done, spend, Can't reroll and moment alerts; `CardMenuButton` is a card popover with price pills (`CardAction.label`, `.trailing`); `Settings → Design gallery → Popups` raises every one with sample rows, including the low-day light-version choice. | uncommitted |
 | 5 | **Add and Replace sheets.** Canvas pages in the card language with doodle discs, shared `PillSegmentedControl`, a doodle picker for custom tasks (`RoutineOccurrence.iconKey`, `SchemaV4`, export `schemaVersion` 4; v3 files still import) and `DoodleKey.resolve`. | uncommitted |
 | 6 | **Calendar, day detail, ratings.** Core `DayMarks.randomTiers` (dots by tier); month grid in one card with an epic-week band, legend chips and a Ratings row; day detail as cards with Today's row frame (`HistoryRowView`); ratings with a pill window picker. | uncommitted |
+| 7 | **Rewards.** Canvas page: a balance card (`handDisplay`, clay ground and the Core debt message while negative), a `Streak` card for a missed day, the savings goal as its own ink-ringed card with a progress bar and `N to go` / pace, ordinary rewards as cards (doodle disc from `DoodleKey.forText`, coin and `≈` pills, `⋯` popover for set or unpin goal / edit / archive, one ink `Redeem` pill, a blocked card dimmed with its Core reason in clay and the price still shown). Redeem and freeze confirm in `ConfirmSheet` (`Redeem?`, `Spend N`, `Not yet`, no "final" line). The editor is a canvas page of card fields with a `Saving for this` toggle (pins through `SavingsGoal`) and one `ConfirmBar` Save. Core: `Purchase.Blocked.shortfall`. Shared: `InkPillButtonStyle` and `ConfirmBar` now live in `Components.swift` (the Add sheet's private copy moved there). | uncommitted |
+| 8 | **Library.** Canvas page: `PillSegmentedControl` for Quests / Routines, section headers in Settings' style with a tier dot and a hand count, entries as cards (doodle disc with a tier dot, title, `N notes` and `inactive` pills, latest rating as a pill: sage positive, clay negative, plain zero), an inactive entry dimmed. Detail: summary card, five rating buttons in a card, note field card with `Add note`, Notes and Ratings as cards with dividers. Behaviour unchanged. | uncommitted |
 
 Built differently from the first draft of this document: the tab bar is an overlay on the `TabView` (a bottom safe-area inset did not reach scroll views inside navigation stacks), each scroll view reserves its own bottom margin through `reservingTabBarSpace()`, and the bar fades out while the keyboard is up.
 
@@ -134,8 +136,7 @@ Slices 1 to 3 were only checked on the simulator. Haptics, how the animations fe
 | # | Slice | Scope |
 |---|---|---|
 | 4 | **Payout reveal and moments.** Seen after every completion, so highest value. | Restyle `PointsRollView` (the roll and the rating card); the level-up and streak-milestone card is now a sheet (4a), the sparkle particles are still to do; restyle the Levels sheet. Tabular digits and a `CADisplayLink` number roll; `CAEmitterLayer`-style sparkle particles from the sparkle doodle (off with Reduce Motion, keep the number change and the haptic). |
-| 7 | **Rewards.** | Reward cards with price, the savings-goal bar, blocked and negative-balance states in clay. |
-| 8 | **Settings and Library.** | Restyle rows; Library rows with doodle and tint; surface the workout-calendar and keyword settings now buried in Debug as a real Settings section. |
+| 8b | **Settings.** | Surface the workout-calendar and keyword settings now buried in Debug as a real Settings section (Settings rows and Library are restyled). |
 | 9 | **Polish.** | Grow the keyword-to-doodle table so fewer quests fall back to the sparkle (and add more doodles if wanted); tune motion; VoiceOver, Reduce Motion and Bold Text passes on device; app icon and launch screen. |
 
 Later, not scheduled:
@@ -150,4 +151,5 @@ Optional, only if wanted after use: a Hero-style page for the level track, perks
 - Not verified so far: haptics, Reduce Motion, Bold Text, VoiceOver, the long-press context menu, the "+N" float and the dot stagger on a real level-up.
 - The trivial-group tile (three micro-actions) only appears on low days, which the simulator cannot produce; it is checked in the gallery and unit tests only.
 - Most quests currently show the generic sparkle doodle.
-- The payout card, Levels sheet, Add / Replace sheets, Rewards, Library and Debug still use the old plain look.
+- The payout card, Levels sheet and Debug still use the old plain look.
+- Rewards and Library (slices 7 and 8): the negative-balance card was only seen with the balance forced to -7 in a throwaway build, because a purchase cannot take the simulator's ledger below zero. A very long reward name truncates in the editor's one-line field. The library's quest ratings in the simulator store point at template ids that no longer exist, so only ratings made on this build show as row badges. Haptics on the rating buttons, VoiceOver (card actions, rating selection) and Bold Text were not checked.
