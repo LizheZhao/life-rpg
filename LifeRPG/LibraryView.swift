@@ -89,7 +89,7 @@ struct LibraryView: View {
                         let key = section.group.rawValue
                         let open = isOpen(openGroups, key)
                         VStack(alignment: .leading, spacing: 10) {
-                            LibrarySectionHeader(title: section.group.title, tint: nil,
+                            LibrarySectionHeader(title: section.group.title, tint: .routine,
                                                  count: section.rows.count, noun: "routine",
                                                  isOpen: open) { toggle($openGroups, key) }
                             if open {
@@ -248,7 +248,7 @@ private struct LibraryEntry {
 
     init(routine r: RoutineTask, schedule: RoutineSchedulePresentation) {
         id = r.id; target = .routine; text = r.text
-        tierName = r.difficulty.rawValue.capitalized; tint = QuestTint(r.difficulty); isActive = r.isActive
+        tierName = r.difficulty.rawValue.capitalized; tint = .routine; isActive = r.isActive
         self.schedule = schedule
     }
 }

@@ -30,6 +30,8 @@ enum LR {
         static let tintMedium = color(Palette.tintMedium)
         static let tintHard = color(Palette.tintHard)
         static let tintHidden = color(Palette.tintHidden)
+        static let tintRoutine = color(Palette.tintRoutine)
+        static let tintEpic = color(Palette.tintEpic)
         /// A tint at the opacity of the circle behind a Settings section icon.
         static func sectionCircle(_ tint: QuestTint) -> SwiftUI.Color {
             color(Palette.tint(tint)).opacity(Palette.sectionCircleOpacity)

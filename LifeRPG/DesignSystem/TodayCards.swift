@@ -12,6 +12,8 @@ extension QuestTint {
         case .medium: LR.Color.tintMedium
         case .hard: LR.Color.tintHard
         case .hidden: LR.Color.tintHidden
+        case .routine: LR.Color.tintRoutine
+        case .epic: LR.Color.tintEpic
         }
     }
 }
@@ -210,19 +212,19 @@ extension SheetSubject {
                   pill: state.pillText)
     }
 
-    /// The epic is the neutral routine-style card with the flag.
+    /// The epic is the routine-style card in the epic tint, with the flag.
     init(_ state: EpicCardState) {
-        self.init(doodle: .flag, title: state.title, pill: state.pills.first?.text)
+        self.init(doodle: .flag, fill: .tint(.epic), title: state.title, pill: state.pills.first?.text)
     }
 
     init(_ state: RoutineRowState) {
-        self.init(doodle: state.doodle, title: state.title,
+        self.init(doodle: state.doodle, fill: .tint(.routine), title: state.title,
                   pill: state.pills.first { $0.kind == .payout }?.text)
     }
 }
 
-/// A routine-style row without controls: a tinted one for a quest, the neutral one for a routine
-/// and the epic.
+/// A routine-style row without controls, in the tint of what it shows (a quest's difficulty, the
+/// routine's, the epic's); a neutral one for anything else.
 struct SheetSubjectRow: View {
     let subject: SheetSubject
 
@@ -293,8 +295,10 @@ struct EpicCardView: View {
     @Environment(\.openURL) private var openURL
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
+    private var ink: Color { LR.Color.ink(on: .epic) }
+
     var body: some View {
-        RowLayout(doodle: .flag) {
+        RowLayout(doodle: .flag, fill: .tint(.epic)) {
             details
         } controls: {
             HStack(spacing: 0) {
@@ -302,7 +306,8 @@ struct EpicCardView: View {
                 CompleteButton(isDone: state.isDone, action: onComplete)
             }
         } footer: {
-            SegmentedProgress(filled: state.segmentsFilled, total: state.segmentsTotal)
+            SegmentedProgress(filled: state.segmentsFilled, total: state.segmentsTotal,
+                              fill: ink, track: ink.opacity(0.3))
         }
         .contentShape(Rectangle())
         .onTapGesture(perform: toggle)
@@ -330,20 +335,20 @@ struct EpicCardView: View {
                 Spacer(minLength: 0)
                 Image(systemName: "chevron.right")
                     .font(.system(size: 12, weight: .bold))
-                    .foregroundStyle(LR.Color.iconNeutral)
+                    .foregroundStyle(ink)
                     .rotationEffect(.degrees(expanded ? 90 : 0))
                     .accessibilityHidden(true)
             }
-            PillRow(pills: state.pills)
+            PillRow(pills: state.pills, onTint: true)
                 .gainFloat(state.awardedPoints.map { "+\($0)" } ?? "", when: state.isDone)
             if expanded {
                 VStack(alignment: .leading, spacing: 2) {
                     ForEach(state.detailLines, id: \.self) { line in
-                        Text(line).lr(.caption).foregroundStyle(LR.Color.inkSecondary)
+                        Text(line).lr(.caption).foregroundStyle(ink)
                     }
                     if let url = state.launchURL {
                         Link("Open", destination: url)
-                            .lr(.caption).foregroundStyle(LR.Color.ink).underline()
+                            .lr(.caption).foregroundStyle(ink).underline()
                             .padding(.vertical, 12)
                             .contentShape(Rectangle())
                             .padding(.vertical, -12)
@@ -364,8 +369,10 @@ struct RoutineRowView: View {
     let onComplete: () -> Void
     var onSwitchVersion: () -> Void = {}
 
+    private var ink: Color { LR.Color.ink(on: .routine) }
+
     var body: some View {
-        RowLayout(doodle: state.doodle) {
+        RowLayout(doodle: state.doodle, fill: .tint(.routine)) {
             details
         } controls: {
             HStack(spacing: 0) {
@@ -390,13 +397,13 @@ struct RoutineRowView: View {
     private var details: some View {
         VStack(alignment: .leading, spacing: 6) {
             DoneTitle(text: state.title, isDone: state.isDone)
-            PillRow(pills: state.pills)
+            PillRow(pills: state.pills, onTint: true)
                 .gainFloat(state.awardedPoints.map { "+\($0)" } ?? "", when: state.isDone)
             if let version = state.version {
-                Text(version.note).lr(.caption).foregroundStyle(LR.Color.inkSecondary)
+                Text(version.note).lr(.caption).foregroundStyle(ink)
                 if let label = version.switchLabel {
                     Button(label, action: onSwitchVersion)
-                        .lr(.caption).foregroundStyle(LR.Color.ink)
+                        .lr(.caption).foregroundStyle(ink)
                         .underline()
                         .padding(.vertical, 12)
                         .contentShape(Rectangle())
@@ -404,7 +411,7 @@ struct RoutineRowView: View {
                 }
             }
             if let line = state.noteLine {
-                Text(line).lr(.caption).foregroundStyle(LR.Color.inkSecondary)
+                Text(line).lr(.caption).foregroundStyle(ink)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -420,10 +427,10 @@ struct AheadCandidateRowView: View {
     let onDoNow: () -> Void
 
     var body: some View {
-        RowLayout(doodle: state.doodle) {
+        RowLayout(doodle: state.doodle, fill: .tint(.routine)) {
             VStack(alignment: .leading, spacing: 6) {
                 DoneTitle(text: state.title, isDone: false)
-                PillRow(pills: state.pills)
+                PillRow(pills: state.pills, onTint: true)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         } controls: {

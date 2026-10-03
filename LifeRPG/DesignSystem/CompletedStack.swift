@@ -6,7 +6,8 @@ extension CompletedItem {
     var fill: Color {
         switch self {
         case .quest(let s): s.tint.color
-        case .routine, .epic: LR.Color.surface
+        case .routine: QuestTint.routine.color
+        case .epic: QuestTint.epic.color
         }
     }
 }

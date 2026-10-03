@@ -564,7 +564,8 @@ struct TodayView: View {
                 if case .candidate(let state) = item, state.id == routine.id { return state }
                 return nil
             }.first
-            return SheetSubject(doodle: candidate?.doodle ?? DoodleKey.forText(routine.text), title: routine.text,
+            return SheetSubject(doodle: candidate?.doodle ?? DoodleKey.forText(routine.text), fill: .tint(.routine),
+                                title: routine.text,
                                 caption: "Ahead of schedule",
                                 pill: offersLightVersion(routine) ? nil : candidate?.pills.first?.text)
         }

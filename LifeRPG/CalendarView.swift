@@ -24,7 +24,7 @@ struct CalendarView: View {
     private var currentMonth: MonthKey { MonthKey(dayKey: today) ?? MonthKey(year: 2026, month: 1)! }
     private var shownMonth: MonthKey { month ?? currentMonth }
 
-    /// The epic week's band: the epic's tint (`QuestTint` gives an epic the hardest one) at low opacity.
+    /// The epic week's band: the epic's own tint at low opacity.
     private static let epicTint = QuestTint(.epic)
     private static let epicBandOpacity = 0.14
 
@@ -247,6 +247,8 @@ struct CalendarView: View {
         case .medium: "Medium"
         case .hard: "Hard"
         case .hidden: "Hidden"
+        case .routine: "Routines"
+        case .epic: "Epic week"
         }
     }
 

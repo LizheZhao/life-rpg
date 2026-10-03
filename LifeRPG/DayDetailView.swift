@@ -181,7 +181,7 @@ struct DayDetailView: View {
 
     private func questRow(_ line: DayRecord.QuestLine) -> some View {
         let q = line.quest
-        let tint: QuestTint? = q.replaced || q.slot == .epic ? nil
+        let tint: QuestTint? = q.replaced ? nil
             : q.isHiddenSlot ? .hidden : q.isTrivialGroup ? .trivial : QuestTint(q.slot)
         let slotName = q.isHiddenSlot ? "hidden" : q.slot.rawValue
         let title = q.isTrivialGroup
@@ -251,6 +251,7 @@ struct DayDetailView: View {
 
         return HistoryRowView(
             doodle: o.doodle,
+            fill: line.status == .replaced ? .surface : .tint(.routine),
             title: o.displayText,
             dropped: line.status == .replaced,
             status: status,
