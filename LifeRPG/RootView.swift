@@ -10,6 +10,8 @@ struct RootView: View {
     @Environment(\.modelContext) private var context
     @Environment(\.scenePhase) private var scenePhase
     @State private var tab = RootTab.today
+    /// Set by Today while its card is up, so the bar fades out under the dim.
+    @State private var tabBarHidden = false
     @State private var today = Date().dayKey
     @State private var generationError: String?
     /// What the last refresh read from HealthKit and the calendar — shown on the debug page, since
@@ -35,7 +37,7 @@ struct RootView: View {
 
     var body: some View {
         TabView(selection: $tab) {
-            TodayView(today: today, generationError: generationError)
+            TodayView(today: today, generationError: generationError, hidesTabBar: $tabBarHidden)
                 .toolbar(.hidden, for: .tabBar)
                 .tag(RootTab.today)
             CalendarView(today: today)
@@ -51,7 +53,7 @@ struct RootView: View {
                 .toolbar(.hidden, for: .tabBar)
                 .tag(RootTab.settings)
         }
-        .overlay(alignment: .bottom) { FloatingTabBar(selection: $tab) }
+        .overlay(alignment: .bottom) { FloatingTabBar(selection: $tab, hidden: tabBarHidden) }
         .task { await refresh() }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { Task { await refresh() } }

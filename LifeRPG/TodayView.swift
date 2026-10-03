@@ -6,10 +6,15 @@ import SwiftUI
 /// the hidden quest once the day is cleared.
 ///
 /// There is no undo anywhere on this page — completion writes a ledger entry and starts the
-/// template's cooldown, both final. That is why every tap goes through a confirmation.
+/// template's cooldown, both final. That is why every completion and every purchase asks first.
+/// It asks once, in one centered card (`MomentCard`), and that same card then shows the payout,
+/// so nothing is stacked after the confirmation.
 struct TodayView: View {
     let today: String
     let generationError: String?
+    /// Set while the card is up, so the floating tab bar (which sits above this page) fades out
+    /// under the dim.
+    var hidesTabBar: Binding<Bool> = .constant(false)
 
     @Environment(\.modelContext) private var context
 
@@ -22,7 +27,9 @@ struct TodayView: View {
     @Query private var routines: [RoutineTask]
     @Query private var rewards: [Reward]
 
-    @State private var pending: PendingAction?
+    /// What the one card is showing, or nil when it is down. Everything that needs an answer or an
+    /// announcement goes through here, so two cards can never stack.
+    @State private var overlay: Overlay?
     /// Local on purpose: collapsed on every launch, however it was left.
     @State private var completedExpanded = false
     /// Rows that have just been completed and still sit in their own section for a moment, so the
@@ -44,15 +51,7 @@ struct TodayView: View {
     @State private var replacingEpic: DailyQuest?
     /// The + button: a routine added on top of the day, replacing nothing.
     @State private var adding = false
-    @State private var roll: Roll?
     @State private var actionError: String?
-    /// A purchase waiting for its confirmation. Spending is as final as completing, so it asks too.
-    @State private var spending: Spend?
-    /// A reroll that was refused only once it tried to draw (nothing else in the pool). Shown in
-    /// the spend sheet itself, which stays up and swaps its content.
-    @State private var rerollRefusal: RerollRefusal?
-    /// A level-up or streak milestone waiting to be shown, once the payout reveal is out of the way.
-    @State private var moment: Moment?
     @State private var showingTrack = false
     /// What has already been announced. A UI convenience, not data: losing it only shows a card
     /// once more. 0 = never announced, which on the first launch after an update lists the perks
@@ -60,24 +59,34 @@ struct TodayView: View {
     @AppStorage("announcedLevel") private var announcedLevel = 0
     @AppStorage("announcedStreakBonusAt") private var announcedStreakBonusAt: Double = 0
 
+    /// A reroll that was refused only once it tried to draw (nothing else in the pool). It replaces
+    /// the spend card's content in place.
     private struct RerollRefusal {
-        let subject: SheetSubject
+        let header: MomentHeader
         let reason: String
     }
 
-    private struct Moment: Identifiable {
-        let id = UUID()
+    /// The card's one state. `ask` becomes `reveal` in place once the completion is written.
+    private enum Overlay {
+        case ask(PendingAction)
+        case spend(Spend)
+        case refusal(RerollRefusal)
+        /// A level-up or streak milestone, shown once nothing else is up.
+        case moment(Moment)
+        case reveal(Roll)
+    }
+
+    private struct Moment {
         var title: String
         var message: String
         var level: Int
         var streakBonusAt: Double
     }
 
-    /// A payout that has already happened and is already in the ledger, waiting to be shown.
+    /// A payout that has already happened and is already in the ledger, waiting to be described.
     private struct Roll: Identifiable {
         let id = UUID()
-        var title: String
-        var slotLabel: String
+        var header: MomentHeader
         var breakdown: Scoring.Breakdown
         /// Carried so the rating can be filed against the exact completion that prompted it,
         /// not just against the template.
@@ -87,22 +96,13 @@ struct TodayView: View {
         var dayKey: String
     }
 
-    /// Everything bought from a row's swipe actions. The rules and prices are Core's; this only
-    /// says what the confirmation reads.
-    private enum Spend: Identifiable {
+    /// Everything bought from a row's `⋯` menu. The rules and prices are Core's; this only says
+    /// what the confirmation reads.
+    private enum Spend {
         case reroll(DailyQuest)
         case extend(DailyQuest)
         case cancelQuest(DailyQuest)
         case cancelRoutine(RoutineOccurrence)
-
-        var id: String {
-            switch self {
-            case .reroll(let q): "reroll-\(q.id)"
-            case .extend(let q): "extend-\(q.id)"
-            case .cancelQuest(let q): "cancel-\(q.id)"
-            case .cancelRoutine(let o): "cancel-\(o.id)"
-            }
-        }
 
         var title: String {
             switch self {
@@ -128,30 +128,11 @@ struct TodayView: View {
         return c == 0 ? "free" : "\(c) coins"
     }
 
-    private enum PendingAction: Identifiable {
+    private enum PendingAction {
         case quest(DailyQuest)
         case trivialItem(DailyQuest, Int)
         case routine(RoutineOccurrence)
         case ahead(RoutineTask)
-
-        var id: String {
-            switch self {
-            case .quest(let q): "quest-\(q.id)"
-            case .trivialItem(let q, let i): "tick-\(q.id)-\(i)"
-            case .routine(let o): "routine-\(o.id)"
-            case .ahead(let r): "ahead-\(r.id)"
-            }
-        }
-
-        var label: String {
-            switch self {
-            case .quest(let q): [q.textSnapshot, q.variantSnapshot]
-                    .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " — ")
-            case .trivialItem(let q, let i): q.trivialGroup.indices.contains(i) ? q.trivialGroup[i] : ""
-            case .routine(let o): o.displayText
-            case .ahead(let r): "\(r.text) (ahead of schedule)"
-            }
-        }
     }
 
     private var todayContext: DailyContext? { contexts.first { $0.dayKey == today } }
@@ -324,7 +305,7 @@ struct TodayView: View {
             if staysInSection(epic.id, isDone: state.isDone) {
                 EpicCardView(state: state,
                              actions: [rerollAction(epic), extendAction(epic), replaceEpicAction(epic)].compactMap { $0 },
-                             onComplete: { pending = .quest(epic) })
+                             onComplete: { show(.ask(.quest(epic))) })
                     .transition(cardLeaves)
             }
         }
@@ -350,7 +331,7 @@ struct TodayView: View {
 
     private func routineCard(_ o: RoutineOccurrence, _ state: RoutineRowState, menu: [CardAction?]) -> some View {
         RoutineRowView(state: state, actions: menu.compactMap { $0 },
-                       onComplete: { pending = .routine(o) },
+                       onComplete: { show(.ask(.routine(o))) },
                        onSwitchVersion: { switchVersion(o) })
     }
 
@@ -376,7 +357,7 @@ struct TodayView: View {
                 QuestRowView(state: state,
                              actions: [rerollAction(quest), cancelQuestAction(quest), replaceAction(quest)]
                                  .compactMap { $0 },
-                             onComplete: { pending = .quest(quest) })
+                             onComplete: { show(.ask(.quest(quest))) })
                     .transition(cardLeaves)
             }
         }
@@ -388,7 +369,7 @@ struct TodayView: View {
                                    onTick: { index in
                                        let done = quest.trivialDone.indices.contains(index) && quest.trivialDone[index]
                                        guard quest.completedAt == nil, !done else { return }
-                                       pending = .trivialItem(quest, index)
+                                       show(.ask(.trivialItem(quest, index)))
                                    })
                     .transition(cardLeaves)
             }
@@ -397,7 +378,7 @@ struct TodayView: View {
             let state = questState(hiddenQuest)
             SectionTitle(title: "Hidden", count: state.isDone ? SectionProgress.clearedLabel : nil)
             if staysInSection(hiddenQuest.id, isDone: state.isDone) {
-                QuestRowView(state: state, onComplete: { pending = .quest(hiddenQuest) })
+                QuestRowView(state: state, onComplete: { show(.ask(.quest(hiddenQuest))) })
                     .transition(cardLeaves)
             }
         } else if !randomQuests.isEmpty {
@@ -441,11 +422,11 @@ struct TodayView: View {
             let occurrence = occurrences.first { $0.id == state.id }
             RoutineRowView(state: state,
                            actions: occurrence.flatMap(replaceRoutineAction).map { [$0] } ?? [],
-                           onComplete: { if let occurrence { pending = .routine(occurrence) } },
+                           onComplete: { if let occurrence { show(.ask(.routine(occurrence))) } },
                            onSwitchVersion: { if let occurrence { switchVersion(occurrence) } })
         case .candidate(let state):
             AheadCandidateRowView(state: state) {
-                if let routine = routines.first(where: { $0.id == state.id }) { pending = .ahead(routine) }
+                if let routine = routines.first(where: { $0.id == state.id }) { show(.ask(.ahead(routine))) }
             }
         }
     }
@@ -476,42 +457,32 @@ struct TodayView: View {
     }
 
 
-    /// The page plus the level-up / milestone card and the level track — split off `body`, whose
-    /// modifier chain is already past what the type checker handles in one expression.
+    /// The page plus the one card and the level track — split off `body`, whose modifier chain is
+    /// already past what the type checker handles in one expression.
     private var page: some View {
         questList
-            .sheet(item: momentBinding) { m in
-                ConfirmSheet(title: m.title,
-                             subject: SheetSubject(doodle: .sparkle, title: m.message),
-                             choices: [SheetChoice(title: "Nice", dismisses: true) {}],
-                             quietTitle: nil)
+            // Behind the card the page is not reachable, for VoiceOver either.
+            .accessibilityHidden(overlay != nil)
+            .overlay {
+                if let overlay {
+                    MomentCard(header: header(for: overlay), content: content(for: overlay),
+                               noticeKey: noticeKey(for: overlay))
+                }
             }
             .sheet(isPresented: $showingTrack) { trackSheet }
             .onAppear { checkMoments() }
             .onChange(of: ledger.count) { checkMoments() }
-            .onChange(of: roll == nil) { checkMoments() }
+            .onChange(of: overlay == nil) {
+                hidesTabBar.wrappedValue = overlay != nil
+                checkMoments()
+            }
+            .onDisappear { hidesTabBar.wrappedValue = false }
     }
 
     var body: some View {
         NavigationStack {
             page
             .navigationTitle("Today")
-            // A sheet rather than an inline toggle: completion is irreversible, so it asks once,
-            // every time. `.sheet(item:)` hands the action to its content, so the Complete button
-            // never reads it back out of `pending` while the dismissal is clearing it.
-            .sheet(item: $pending) { action in completeSheet(action) }
-            // Only reachable when the purchase can go through: its `⋯` row is greyed out otherwise.
-            .sheet(item: $spending, onDismiss: { rerollRefusal = nil }) { spend in spendSheet(spend) }
-            .overlay {
-                if let roll {
-                    PointsRollView(title: roll.title, slotLabel: roll.slotLabel,
-                                   breakdown: roll.breakdown) { value in
-                        if let value { record(rating: value, for: roll) }
-                        withAnimation(.easeOut(duration: 0.18)) { self.roll = nil }
-                    }
-                    .transition(.opacity)
-                }
-            }
             .sheet(isPresented: $adding) {
                 AdHocView(today: today, tier: tier, target: .add)
             }
@@ -527,54 +498,88 @@ struct TodayView: View {
         }
     }
 
-    /// A swipe-down counts as "Nice" too, so a card is announced once however it was closed.
-    private var momentBinding: Binding<Moment?> {
-        Binding(get: { moment }, set: { new in
-            if new == nil, let m = moment {
-                announcedLevel = m.level
-                announcedStreakBonusAt = m.streakBonusAt
-            }
-            moment = new
-        })
+    // MARK: the card
+    // What the card shows is drawn from the same Core state the page's card uses, so the doodle and
+    // tint are the card's own.
+
+    /// Fades the card (and the dim) in and out; Reduce Motion keeps the fade and drops the movement.
+    private func show(_ next: Overlay?) {
+        withAnimation(.easeOut(duration: reduceMotion ? 0.2 : 0.22)) { overlay = next }
     }
 
-    // MARK: popups
-    // The card each popup is about is drawn from the same Core state the page's card uses, so the
-    // doodle, tint and pill are the card's own.
-
-    private func subject(for quest: DailyQuest) -> SheetSubject {
+    private func header(for quest: DailyQuest) -> MomentHeader {
         quest.slot == .epic && !quest.isHiddenSlot
-            ? SheetSubject(EpicCardState(quest, today: today, tier: tier, level: level))
-            : SheetSubject(questState(quest))
+            ? MomentHeader(EpicCardState(quest, today: today, tier: tier, level: level))
+            : MomentHeader(questState(quest))
     }
 
-    private func subject(for occurrence: RoutineOccurrence) -> SheetSubject {
-        SheetSubject(routineState(occurrence, .today))
-    }
-
-    private func subject(for action: PendingAction) -> SheetSubject {
+    private func header(for action: PendingAction) -> MomentHeader {
         switch action {
-        case .quest(let quest): return subject(for: quest)
-        case .trivialItem:
-            return SheetSubject(doodle: .sparkle, fill: .tint(.trivial), title: action.label,
-                                caption: "Micro-actions pay once all three are ticked")
-        case .routine(let occurrence): return subject(for: occurrence)
+        case .quest(let quest): return header(for: quest)
+        case .trivialItem(let quest, let index):
+            return MomentHeader(doodle: .sparkle, tint: .trivial,
+                                title: quest.trivialGroup.indices.contains(index) ? quest.trivialGroup[index] : "",
+                                subtitle: "Micro-actions pay once all three are ticked")
+        case .routine(let occurrence): return MomentHeader(routineState(occurrence, .today))
         case .ahead(let routine):
             let candidate = aheadState.items.lazy.compactMap { item -> AheadCandidateState? in
                 if case .candidate(let state) = item, state.id == routine.id { return state }
                 return nil
             }.first
-            return SheetSubject(doodle: candidate?.doodle ?? DoodleKey.forText(routine.text), fill: .tint(.routine),
-                                title: routine.text,
-                                caption: "Ahead of schedule",
-                                pill: offersLightVersion(routine) ? nil : candidate?.pills.first?.text)
+            return MomentHeader(doodle: candidate?.doodle ?? DoodleKey.forText(routine.text), tint: .routine,
+                                title: routine.text, subtitle: "Ahead of schedule")
         }
     }
 
-    private func subject(for spend: Spend) -> SheetSubject {
+    private func header(for spend: Spend, title: String? = nil) -> MomentHeader {
+        var header: MomentHeader
         switch spend {
-        case .reroll(let q), .extend(let q), .cancelQuest(let q): subject(for: q)
-        case .cancelRoutine(let o): subject(for: o)
+        case .reroll(let q), .extend(let q), .cancelQuest(let q): header = self.header(for: q)
+        case .cancelRoutine(let o): header = MomentHeader(routineState(o, .today))
+        }
+        // The card says what is being bought and, under it, what it is bought for.
+        header.subtitle = header.title
+        header.title = title ?? spend.title
+        return header
+    }
+
+    private func header(for overlay: Overlay) -> MomentHeader {
+        switch overlay {
+        case .ask(let action): header(for: action)
+        case .spend(let spend): header(for: spend)
+        case .refusal(let refusal): refusal.header
+        case .moment(let moment): MomentHeader(doodle: .sparkle, tint: nil, title: moment.title)
+        case .reveal(let roll): roll.header
+        }
+    }
+
+    private func noticeKey(for overlay: Overlay) -> String {
+        switch overlay {
+        case .refusal: "refusal"
+        default: "notice"
+        }
+    }
+
+    private func content(for overlay: Overlay) -> MomentContent {
+        switch overlay {
+        case .ask(let action): .ask(ask(for: action))
+        case .spend(let spend):
+            .notice(MomentNotice(message: message(for: spend),
+                                 primary: cost(of: spend) == 0 ? "Use free reroll" : "Spend \(cost(of: spend))",
+                                 quiet: "Not yet",
+                                 confirm: { buy(spend) },
+                                 dismiss: { show(nil) }))
+        case .refusal(let refusal):
+            .notice(MomentNotice(message: refusal.reason, primary: "OK",
+                                 confirm: { show(nil) }, dismiss: { show(nil) }))
+        case .moment(let moment):
+            .notice(MomentNotice(message: moment.message, primary: "Nice",
+                                 confirm: { dismiss(moment) }, dismiss: { dismiss(moment) }))
+        case .reveal(let roll):
+            .payout(MomentPayout(id: roll.id, breakdown: roll.breakdown) { value in
+                if let value { record(rating: value, for: roll) }
+                show(nil)
+            })
         }
     }
 
@@ -584,32 +589,25 @@ struct TodayView: View {
         return "+" + PresentationText.range((points.min() ?? 0)...(points.max() ?? 0))
     }
 
-    @ViewBuilder private func completeSheet(_ action: PendingAction) -> some View {
+    private func ask(for action: PendingAction) -> MomentAsk {
         // Done ahead there is no row to switch versions on afterwards, so on a low day the version
         // is picked here, and a lighter version pays its own points.
         if case .ahead(let routine) = action, offersLightVersion(routine) {
-            CompleteSheet(subject: subject(for: action),
-                          light: .init(versions: lightVersionList(routine),
-                                       originalPill: aheadPill([routine.basePoints]),
-                                       lighterPill: aheadPill(Degrade.versions(of: routine, in: routines).map(\.basePoints)))) {
-                perform(action, light: $0 ?? true)
-            }
-        } else {
-            CompleteSheet(subject: subject(for: action)) { _ in perform(action) }
+            return MomentAsk(
+                choices: [
+                    .init(title: "Did the original", pill: aheadPill([routine.basePoints])) {
+                        perform(action, light: false)
+                    },
+                    .init(title: "Did a lighter version",
+                          pill: aheadPill(Degrade.versions(of: routine, in: routines).map(\.basePoints)),
+                          outlined: true) {
+                        perform(action, light: true)
+                    },
+                ],
+                footnote: "Lighter: \(lightVersionList(routine))",
+                notYet: { show(nil) })
         }
-    }
-
-    @ViewBuilder private func spendSheet(_ spend: Spend) -> some View {
-        if let refusal = rerollRefusal {
-            ConfirmSheet(title: "Can't reroll", subject: refusal.subject, notes: [refusal.reason],
-                         choices: [SheetChoice(title: "OK") { spending = nil }], quietTitle: nil)
-        } else {
-            let free = cost(of: spend) == 0
-            ConfirmSheet(title: spend.title, subject: subject(for: spend), notes: [message(for: spend)],
-                         choices: [SheetChoice(title: free ? "Use free reroll" : "Spend \(cost(of: spend))") {
-                             buy(spend)
-                         }])
-        }
+        return MomentAsk(choices: [.init(title: "Complete") { perform(action) }], notYet: { show(nil) })
     }
 
     /// The whole level track, unlocked and still ahead (`Perks.track`).
@@ -647,10 +645,10 @@ struct TodayView: View {
     // MARK: level-ups and streak milestones
 
     /// Whatever hasn't been announced yet, as one card: a level reached since the last one shown
-    /// and streak bonuses booked since then. Held back while the payout reveal is up, so the two
-    /// don't stack — the reveal's dismissal calls this again.
+    /// and streak bonuses booked since then. Held back while any other card is up, so the two
+    /// don't stack — the card going down calls this again.
     private func checkMoments() {
-        guard roll == nil, moment == nil else { return }
+        guard overlay == nil else { return }
         let from = max(1, announcedLevel)
         let bonuses = ledger
             .filter { $0.kind == Economy.Kind.streak.rawValue
@@ -674,27 +672,38 @@ struct TodayView: View {
             lines.append(perks.isEmpty ? "Reached level \(level)."
                                        : "Unlocked:\n" + perks.map { "· \($0.summary)" }.joined(separator: "\n"))
         }
-        moment = Moment(title: titles.joined(separator: " · "),
-                        message: lines.joined(separator: "\n\n"),
-                        level: level,
-                        streakBonusAt: bonuses.last.map { $0.timestamp.timeIntervalSince1970 } ?? announcedStreakBonusAt)
+        show(.moment(Moment(title: titles.joined(separator: " · "),
+                            message: lines.joined(separator: "\n\n"),
+                            level: level,
+                            streakBonusAt: bonuses.last.map { $0.timestamp.timeIntervalSince1970 }
+                                ?? announcedStreakBonusAt)))
+    }
+
+    /// However the card is closed (its pill, the dim, VoiceOver's escape), it was announced once.
+    private func dismiss(_ moment: Moment) {
+        announcedLevel = moment.level
+        announcedStreakBonusAt = moment.streakBonusAt
+        show(nil)
     }
 
     // MARK: actions
 
+    /// The confirmation was the only step: this writes the completion, and the card then turns into
+    /// the payout where it stands (`reveal`), or goes down when there is nothing to roll.
     private func perform(_ action: PendingAction, light: Bool = true) {
         var rng = SystemRandomNumberGenerator()
+        var next: Overlay?
         do {
             switch action {
             case .quest(let quest):
                 let points = try Completion.complete(quest, tier: tier, in: context, rng: &rng)
-                reveal(points, for: quest)
+                next = reveal(points, for: quest)
                 settle(quest.id)
             case .trivialItem(let quest, let index):
                 // Nil until the third tick: the group scores once, as a whole.
                 if let points = try Completion.tickTrivialItem(quest, at: index, tier: tier,
                                                                in: context, rng: &rng) {
-                    reveal(points, for: quest)
+                    next = reveal(points, for: quest)
                     settle(quest.id)
                 }
             case .routine(let occurrence):
@@ -710,7 +719,7 @@ struct TodayView: View {
         } catch {
             actionError = "\(error)"
         }
-        pending = nil
+        show(next)
     }
 
     /// Lets a just-completed card finish its own completion before it moves into the stack.
@@ -724,21 +733,17 @@ struct TodayView: View {
         }
     }
 
-    /// Shows what was already paid. The roll happened inside `Completion.complete` and is on disk
-    /// by the time this runs — `Scoring.breakdown` only describes it.
-    private func reveal(_ points: Int, for quest: DailyQuest) {
-        withAnimation(.easeOut(duration: 0.2)) {
-            roll = Roll(title: quest.isTrivialGroup ? quest.trivialGroup.joined(separator: " · ")
-                                                    : quest.textSnapshot,
-                        slotLabel: quest.isTrivialGroup ? "T×3"
-                                 : quest.isHiddenSlot ? "★" : quest.slot.code,
-                        breakdown: Scoring.breakdown(quest, tier: tier, awarded: points),
-                        questID: quest.id,
-                        templateID: quest.templateID,
-                        text: quest.textSnapshot,
-                        // The epic lives all week; it was done (and rated) today, not on Monday.
-                        dayKey: quest.slot == .epic ? today : quest.dayKey)
-        }
+    /// Describes what was already paid. The roll happened inside `Completion.complete` and is on
+    /// disk by the time this runs — `Scoring.breakdown` only describes it, and the card never
+    /// decides the number it shows.
+    private func reveal(_ points: Int, for quest: DailyQuest) -> Overlay {
+        .reveal(Roll(header: header(for: quest),
+                     breakdown: Scoring.breakdown(quest, tier: tier, awarded: points),
+                     questID: quest.id,
+                     templateID: quest.templateID,
+                     text: quest.textSnapshot,
+                     // The epic lives all week; it was done (and rated) today, not on Monday.
+                     dayKey: quest.slot == .epic ? today : quest.dayKey))
     }
 
     /// Rating is never required, so a failure here must not interrupt anything — the points are
@@ -801,7 +806,7 @@ struct TodayView: View {
 
     private func spendAction(_ spend: Spend, _ name: String, _ icon: String, open: Bool) -> CardAction {
         CardAction(title: open ? "\(name) · \(cost(of: spend) == 0 ? "free" : "\(cost(of: spend))")" : name,
-                   systemImage: icon, isEnabled: open, label: name, trailing: price(spend)) { spending = spend }
+                   systemImage: icon, isEnabled: open, label: name, trailing: price(spend)) { show(.spend(spend)) }
     }
 
 
@@ -834,15 +839,15 @@ struct TodayView: View {
         } catch let refused as Purchase.Blocked {
             // Only a reroll can be refused this late (nothing left to draw); nothing was charged.
             if case .reroll = spend {
-                rerollRefusal = RerollRefusal(subject: subject(for: spend),
-                                              reason: "\(refused.description). Nothing was charged.")
+                show(.refusal(RerollRefusal(header: header(for: spend, title: "Can't reroll"),
+                                            reason: "\(refused.description). Nothing was charged.")))
                 return
             }
             actionError = refused.description
         } catch {
             actionError = "\(error)"
         }
-        spending = nil
+        show(nil)
     }
 
     private func revealHidden() {

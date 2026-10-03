@@ -194,33 +194,14 @@ private struct RowLayout<Details: View, Controls: View, Footer: View>: View {
 
 // MARK: - the card a popup is about
 
-/// What a popup shows of the card it was raised from: the same doodle, fill, title and pill the
-/// card itself draws, so the sheet reads as that card lifted off the page.
+/// What a `ConfirmSheet` shows of the thing it is about: a doodle, a fill, a title and a pill.
+/// (Today's confirmations use `MomentCard` and its `MomentHeader` instead.)
 struct SheetSubject {
     var doodle: DoodleKey
     var fill: CardFill = .surface
     var title: String
     var caption: String?
     var pill: String?
-}
-
-extension SheetSubject {
-    /// A quest keeps its tint, doodle and caption (the drawn value, or the three micro-actions).
-    init(_ state: QuestCardState) {
-        self.init(doodle: state.doodle, fill: .tint(state.tint), title: state.title,
-                  caption: state.layout == .trivialGroup ? state.items.map(\.text).joined(separator: " · ") : state.subtitle,
-                  pill: state.pillText)
-    }
-
-    /// The epic is the routine-style card in the epic tint, with the flag.
-    init(_ state: EpicCardState) {
-        self.init(doodle: .flag, fill: .tint(.epic), title: state.title, pill: state.pills.first?.text)
-    }
-
-    init(_ state: RoutineRowState) {
-        self.init(doodle: state.doodle, fill: .tint(.routine), title: state.title,
-                  pill: state.pills.first { $0.kind == .payout }?.text)
-    }
 }
 
 /// A routine-style row without controls, in the tint of what it shows (a quest's difficulty, the
@@ -249,35 +230,6 @@ struct SheetSubjectRow: View {
             EmptyView()
         }
         .accessibilityElement(children: .combine)
-    }
-}
-
-/// "Mark as done?": the card, one Complete pill and "Not yet". Completion is final, but the sheet
-/// does not say so; it asks once and that is the whole confirmation. A routine done ahead on a low
-/// day with lighter versions on offer asks which one was done instead.
-struct CompleteSheet: View {
-    struct Light {
-        /// The lighter versions' texts, as one line.
-        let versions: String
-        let originalPill: String
-        let lighterPill: String
-    }
-
-    let subject: SheetSubject
-    var light: Light?
-    /// `nil` for a plain completion, otherwise whether the lighter version was the one done.
-    let onComplete: (Bool?) -> Void
-
-    var body: some View {
-        if let light {
-            ConfirmSheet(subject: subject,
-                         notes: ["Lighter: \(light.versions)",
-                                 "A lighter version pays its own points, and one of them is drawn when you pick it."],
-                         choices: [SheetChoice(title: "Did the original", pill: light.originalPill) { onComplete(false) },
-                                   SheetChoice(title: "Did a lighter version", pill: light.lighterPill) { onComplete(true) }])
-        } else {
-            ConfirmSheet(subject: subject, choices: [SheetChoice(title: "Complete") { onComplete(nil) }])
-        }
     }
 }
 
@@ -669,10 +621,10 @@ struct HistoryMark: View {
         let ring = tint.map(LR.Color.ink(on:)) ?? LR.Color.iconNeutral
         ZStack {
             Circle().strokeBorder(ring, lineWidth: 1.5).opacity(kind == .done ? 0 : 1)
-            Circle().fill(LR.Color.fill).opacity(kind == .done ? 1 : 0)
+            Circle().fill(DoneMark.fill(on: tint)).opacity(kind == .done ? 1 : 0)
             if kind == .done {
                 HandCheck()
-                    .stroke(LR.Color.onFill, style: StrokeStyle(lineWidth: 2.4, lineCap: .round, lineJoin: .round))
+                    .stroke(DoneMark.check(on: tint), style: StrokeStyle(lineWidth: 2.4, lineCap: .round, lineJoin: .round))
                     .frame(width: 20, height: 20)
             }
             if kind == .dropped { Capsule().fill(ring).frame(width: 12, height: 2) }

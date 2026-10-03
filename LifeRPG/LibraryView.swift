@@ -404,7 +404,7 @@ private struct LibraryDetailView: View {
     }
 
     private var ratingButtons: some View {
-        ForEach(PointsRollView.scale, id: \.value) { step in
+        ForEach(RatingScale.steps, id: \.value) { step in
             let selected = history.first?.rating == step.value
             Button {
                 Haptics.selection()
@@ -495,7 +495,7 @@ private struct LibraryDetailView: View {
     // MARK: actions
 
     private func label(_ value: Int) -> String {
-        PointsRollView.scale.first { $0.value == value }?.label ?? "\(value)"
+        RatingScale.label(for: value)
     }
 
     private func rate(_ value: Int) {

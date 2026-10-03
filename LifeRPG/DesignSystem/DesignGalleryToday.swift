@@ -419,27 +419,56 @@ struct AheadStackGallery: View {
     }
 }
 
-/// The Today page's popups, each one a button that raises the real sheet with sample rows, plus a
-/// `⋯` button with the priced rows (one blocked) that raises the real popover.
+/// The Today page's one card, drawn statically at every phase, plus a button that plays the real
+/// overlay with sample rows and a `⋯` button with the priced rows (one blocked) that raises the
+/// real popover.
 struct PopupsGallery: View {
     private static let friday = "2026-10-02"
+    private static let breakdown = Scoring.breakdown(slot: .medium, isTrivialGroup: false, isHidden: false,
+                                                     tier: .normal, awarded: 18)
 
-    private enum Popup: String, Identifiable {
-        case completeQuest, completeRoutine, completeEpic, completeLight, spend, refusal, moment
-        var id: String { rawValue }
-    }
-
-    @State private var popup: Popup?
+    @State private var playing = false
+    @State private var lastRating: Int?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: LR.Spacing.gridGap) {
-            button("Complete: quest", .completeQuest)
-            button("Complete: routine", .completeRoutine)
-            button("Complete: epic", .completeEpic)
-            button("Complete: low day, light version", .completeLight)
-            button("Spend: reroll", .spend)
-            button("Can't reroll", .refusal)
-            button("Level-up moment", .moment)
+        VStack(alignment: .leading, spacing: 20) {
+            Button("Play the flow on a quest") { playing = true }
+                .lr(.bodyStrong).foregroundStyle(LR.Color.ink)
+                .frame(maxWidth: .infinity, minHeight: 44)
+                .lrCard(.surface, radius: LR.Radius.row)
+            if let lastRating {
+                Text("Last rating: \(RatingScale.label(for: lastRating))")
+                    .lr(.caption).foregroundStyle(LR.Color.inkSecondary)
+            }
+            phase("Ask: a quest", Self.quest, .ask(ask))
+            phase("Ask: a routine", MomentHeader(Self.routine("Incline walk, 30 minutes", base: 20)), .ask(ask))
+            phase("Ask: the epic", MomentHeader(Self.epic), .ask(ask))
+            phase("Rolling", Self.quest, .payout(payout), stage: .rolling, clock: .frozen(0.55))
+            phase("Landed", Self.quest, .payout(payout), stage: .landed)
+            phase("Landed: a fixed group, nothing rolled", MomentHeader(doodle: .sparkle, tint: .trivial,
+                                                                       title: "Micro-actions",
+                                                                       subtitle: "Floss · Eye drops · Old song"),
+                  .payout(MomentPayout(id: UUID(),
+                                       breakdown: Scoring.breakdown(slot: .easy, isTrivialGroup: true,
+                                                                    isHidden: false, tier: .normal, awarded: 12)) { _ in }),
+                  stage: .landed)
+            phase("Rate, one picked", Self.quest, .payout(payout), stage: .rate, picked: 1)
+            phase("Ask: low day, light version",
+                  MomentHeader(doodle: .forText("Workout: weight training"), tint: .routine,
+                               title: "Workout: weight training", subtitle: "Ahead of schedule"),
+                  .ask(MomentAsk(choices: [.init(title: "Did the original", pill: "+20") {},
+                                           .init(title: "Did a lighter version", pill: "+10–14", outlined: true) {}],
+                                 footnote: "Lighter: Stretch 15 min / Walk 20 min", notYet: {})))
+            phase("Spend: reroll", Self.spendHeader,
+                  .notice(MomentNotice(message: "Swap it for a different M for 30 coins. The next reroll of this slot today costs more.",
+                                       primary: "Spend 30", quiet: "Not yet", confirm: {}, dismiss: {})))
+            phase("Can't reroll", MomentHeader(doodle: .forText("Walk by the river"), tint: .medium,
+                                               title: "Can't reroll", subtitle: "Walk by the river"),
+                  .notice(MomentNotice(message: "Nothing else in the pool. Nothing was charged.",
+                                       primary: "OK", confirm: {}, dismiss: {})))
+            phase("Level-up moment", MomentHeader(doodle: .sparkle, tint: nil, title: "Level 7"),
+                  .notice(MomentNotice(message: "Unlocked:\n· A third free reroll each day",
+                                       primary: "Nice", confirm: {}, dismiss: {})))
             HStack {
                 Text("The ⋯ popover, a blocked row").lr(.bodyStrong).foregroundStyle(LR.Color.ink)
                 Spacer()
@@ -449,42 +478,60 @@ struct PopupsGallery: View {
             .frame(minHeight: 44)
             .lrCard(.surface, radius: LR.Radius.row)
         }
-        .sheet(item: $popup) { popup in sheet(popup) }
+        .fullScreenCover(isPresented: $playing) { PlayDemo(lastRating: $lastRating) }
     }
 
-    private func button(_ title: String, _ popup: Popup) -> some View {
-        Button(title) { self.popup = popup }
-            .lr(.bodyStrong).foregroundStyle(LR.Color.ink)
-            .frame(maxWidth: .infinity, minHeight: 44)
-            .lrCard(.surface, radius: LR.Radius.row)
-    }
+    private var ask: MomentAsk { MomentAsk(choices: [.init(title: "Complete") {}], notYet: {}) }
 
-    @ViewBuilder private func sheet(_ popup: Popup) -> some View {
-        switch popup {
-        case .completeQuest:
-            CompleteSheet(subject: SheetSubject(Self.quest("Walk by the river", .medium, variant: "20 minutes"))) { _ in }
-        case .completeRoutine:
-            CompleteSheet(subject: SheetSubject(Self.routine("Incline walk, 30 minutes", base: 20))) { _ in }
-        case .completeEpic:
-            CompleteSheet(subject: SheetSubject(Self.epic)) { _ in }
-        case .completeLight:
-            CompleteSheet(subject: SheetSubject(doodle: .forText("Workout: weight training"),
-                                                title: "Workout: weight training", caption: "Ahead of schedule"),
-                          light: .init(versions: "Stretch 15 min / Walk 20 min",
-                                       originalPill: "+20", lighterPill: "+10–14")) { _ in }
-        case .spend:
-            ConfirmSheet(title: "Reroll?", subject: SheetSubject(Self.quest("Walk by the river", .medium, variant: nil)),
-                         notes: ["Swap it for a different M for 30 coins. The next reroll of this slot today costs more."],
-                         choices: [SheetChoice(title: "Spend 30") {}])
-        case .refusal:
-            ConfirmSheet(title: "Can't reroll", subject: SheetSubject(Self.quest("Walk by the river", .medium, variant: nil)),
-                         notes: ["Nothing else in the pool. Nothing was charged."],
-                         choices: [SheetChoice(title: "OK", dismisses: true) {}], quietTitle: nil)
-        case .moment:
-            ConfirmSheet(title: "Level 7",
-                         subject: SheetSubject(doodle: .sparkle, title: "Unlocked:\n· A third free reroll each day"),
-                         choices: [SheetChoice(title: "Nice", dismisses: true) {}], quietTitle: nil)
+    private var payout: MomentPayout { MomentPayout(id: UUID(), breakdown: Self.breakdown) { _ in } }
+
+    private func phase(_ title: String, _ header: MomentHeader, _ content: MomentContent,
+                       stage: MomentStage = .rolling, clock: ReelClock = .frozen(0),
+                       picked: Int? = nil) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title).lr(.caption).foregroundStyle(LR.Color.inkSecondary)
+            MomentCardFace(header: header, content: content, stage: stage,
+                           frames: [14, 27, 12, 22, 30, 16, 25, 13, 21, 28, 15, 23, 29, 17, 24, 20],
+                           clock: clock, picked: picked)
+                .frame(maxWidth: 320)
+                .frame(maxWidth: .infinity)
         }
+    }
+
+    /// The real overlay on a throwaway page: Complete turns the card into the payout in place.
+    private struct PlayDemo: View {
+        @Binding var lastRating: Int?
+        @Environment(\.dismiss) private var dismiss
+        @State private var completed = false
+        @State private var payoutID = UUID()
+
+        var body: some View {
+            ZStack {
+                LR.Color.canvas.ignoresSafeArea()
+                Text("The page behind").lr(.hand).foregroundStyle(LR.Color.accent)
+                MomentCard(header: PopupsGallery.quest, content: content)
+            }
+        }
+
+        private var content: MomentContent {
+            completed
+                ? .payout(MomentPayout(id: payoutID, breakdown: PopupsGallery.breakdown) { rating in
+                    lastRating = rating
+                    dismiss()
+                })
+                : .ask(MomentAsk(choices: [.init(title: "Complete") {
+                    withAnimation(.easeOut(duration: 0.2)) { completed = true }
+                }], notYet: { dismiss() }))
+        }
+    }
+
+    private static var quest: MomentHeader {
+        MomentHeader(questState("Walk by the river", .medium, variant: "20 minutes"))
+    }
+
+    private static var spendHeader: MomentHeader {
+        MomentHeader(doodle: .forText("Walk by the river"), tint: .medium, title: "Reroll?",
+                     subtitle: "Walk by the river")
     }
 
     private static var menu: [CardAction] {
@@ -493,7 +540,7 @@ struct PopupsGallery: View {
          CardAction(title: "Replace", systemImage: "arrow.triangle.swap") {}]
     }
 
-    private static func quest(_ text: String, _ slot: Difficulty, variant: String?) -> QuestCardState {
+    private static func questState(_ text: String, _ slot: Difficulty, variant: String?) -> QuestCardState {
         let q = DailyQuest()
         q.dayKey = friday
         q.slot = slot

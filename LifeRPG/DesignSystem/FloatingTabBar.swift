@@ -32,9 +32,12 @@ enum RootTab: CaseIterable, Identifiable {
 /// a safe-area inset or safe-area padding outside a page's `NavigationStack` never reaches the
 /// list inside it, so each scroll view reserves the space itself with `reservingTabBarSpace()`,
 /// a content margin. Apply it to the scroll view, not to something that also presents sheets: the
-/// margin is inherited by whatever the view presents. The bar hides while the keyboard is up (an overlay otherwise rides on top of it).
+/// margin is inherited by whatever the view presents. The bar hides while the keyboard is up (an overlay otherwise rides on top of it)
+/// and while Today's card is, so the dim covers the whole screen.
 struct FloatingTabBar: View {
     @Binding var selection: RootTab
+    /// Hidden by the page (a card is up), like the keyboard hides it.
+    var hidden = false
 
     @Namespace private var indicator
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -62,9 +65,10 @@ struct FloatingTabBar: View {
         .shadow(color: .black.opacity(0.10), radius: 15, y: 10)
         .frame(maxWidth: .infinity)
         .padding(.bottom, Self.bottomGap)
-        .opacity(keyboardShown ? 0 : 1)
-        .allowsHitTesting(!keyboardShown)
-        .accessibilityHidden(keyboardShown)
+        .opacity(keyboardShown || hidden ? 0 : 1)
+        .animation(.easeOut(duration: 0.2), value: hidden)
+        .allowsHitTesting(!keyboardShown && !hidden)
+        .accessibilityHidden(keyboardShown || hidden)
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in
             keyboardShown = true
         }
