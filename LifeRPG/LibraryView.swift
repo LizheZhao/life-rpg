@@ -18,6 +18,12 @@ struct LibraryView: View {
 
     @State private var kind: FeedbackTarget = .quest
     @State private var search = ""
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    // Which sections are open, as comma-joined keys: quests by tier name (none open by default),
+    // routines by group key (all open by default).
+    @AppStorage("library.openQuestTiers") private var openTiers = ""
+    @AppStorage("library.openRoutineGroups") private var openGroups =
+        RoutineSchedulePresentation.Group.allCases.map(\.rawValue).joined(separator: ",")
 
     private var latest: [UUID: QuestRating] { Feedback.latestRatings(ratings) }
 
@@ -33,12 +39,28 @@ struct LibraryView: View {
         }
     }
 
-    private var routineRows: [RoutineTask] { routines.filter { matches($0.text) } }
+    private var routineSections: [RoutineSchedulePresentation.Section] {
+        RoutineSchedulePresentation.grouped(routines.filter { matches($0.text) },
+                                            lightIDs: Degrade.versionIDs(in: routines))
+    }
 
     private var isEmpty: Bool {
         switch kind {
         case .quest: questGroups.isEmpty
-        case .routine: routineRows.isEmpty
+        case .routine: routineSections.isEmpty
+        }
+    }
+
+    /// A search shows every section that has a match, open, and leaves the remembered state alone.
+    private func isOpen(_ stored: String, _ key: String) -> Bool {
+        !search.isEmpty || OpenSections.contains(stored, key)
+    }
+
+    private func toggle(_ stored: Binding<String>, _ key: String) {
+        guard search.isEmpty else { return }
+        Haptics.selection()
+        withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) {
+            stored.wrappedValue = OpenSections.toggled(stored.wrappedValue, key)
         }
     }
 
@@ -50,15 +72,33 @@ struct LibraryView: View {
                 switch kind {
                 case .quest:
                     ForEach(questGroups, id: \.difficulty) { group in
+                        let key = group.difficulty.rawValue
+                        let open = isOpen(openTiers, key)
                         VStack(alignment: .leading, spacing: 10) {
-                            header(group.difficulty.rawValue.capitalized, tint: QuestTint(group.difficulty),
-                                   count: group.rows.count)
-                            ForEach(group.rows) { link(LibraryEntry(template: $0)) }
+                            LibrarySectionHeader(title: group.difficulty.rawValue.capitalized,
+                                                 tint: QuestTint(group.difficulty), count: group.rows.count,
+                                                 noun: "quest", isOpen: open) { toggle($openTiers, key) }
+                            if open {
+                                ForEach(group.rows) { link(LibraryEntry(template: $0)) }
+                                    .transition(.opacity)
+                            }
                         }
                     }
                 case .routine:
-                    VStack(alignment: .leading, spacing: 10) {
-                        ForEach(routineRows) { link(LibraryEntry(routine: $0)) }
+                    ForEach(routineSections, id: \.group) { section in
+                        let key = section.group.rawValue
+                        let open = isOpen(openGroups, key)
+                        VStack(alignment: .leading, spacing: 10) {
+                            LibrarySectionHeader(title: section.group.title, tint: nil,
+                                                 count: section.rows.count, noun: "routine",
+                                                 isOpen: open) { toggle($openGroups, key) }
+                            if open {
+                                ForEach(section.rows, id: \.routine.id) {
+                                    link(LibraryEntry(routine: $0.routine, schedule: $0.schedule))
+                                }
+                                .transition(.opacity)
+                            }
+                        }
                     }
                 }
                 if isEmpty {
@@ -74,19 +114,6 @@ struct LibraryView: View {
         .background(LR.Color.canvas.ignoresSafeArea())
         .navigationTitle("Library")
         .searchable(text: $search)
-    }
-
-    /// A section header in Settings' own style, with the tier's colour as a dot and a hand count.
-    private func header(_ title: String, tint: QuestTint, count: Int) -> some View {
-        HStack(alignment: .center, spacing: 8) {
-            Circle().fill(tint.color).frame(width: 10, height: 10)
-                .accessibilityHidden(true)
-            Text(title).lr(.heading).foregroundStyle(LR.Color.sectionTitle)
-                .accessibilityAddTraits(.isHeader)
-            Spacer(minLength: 8)
-            Text("\(count)").lr(.hand).monospacedDigit().foregroundStyle(LR.Color.accent)
-        }
-        .padding(.top, 6)
     }
 
     private func link(_ entry: LibraryEntry) -> some View {
@@ -144,11 +171,15 @@ private struct LibraryRow: View {
             Text(entry.text).lr(.bodyStrong)
                 .foregroundStyle(entry.isActive ? LR.Color.ink : LR.Color.inkSecondary)
                 .fixedSize(horizontal: false, vertical: true)
-            if !entry.isActive || notes > 0 {
+            if entry.schedule != nil || !entry.isActive || notes > 0 {
                 FlowRow(spacing: 6) {
+                    if let schedule = entry.schedule { PillLabel(text: schedule.summary) }
                     if !entry.isActive { PillLabel(text: "inactive") }
                     if notes > 0 { PillLabel(text: "\(notes) note\(notes == 1 ? "" : "s")") }
                 }
+            }
+            if let schedule = entry.schedule, schedule.strip != .none {
+                WeekStrip(schedule: schedule, dimmed: !entry.isActive)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -162,44 +193,35 @@ private struct LibraryRow: View {
     }
 
     private var spoken: String {
-        [entry.tierName, entry.isActive ? nil : "inactive",
+        [entry.tierName, entry.schedule?.summary, entry.isActive ? nil : "inactive",
          notes > 0 ? "\(notes) note\(notes == 1 ? "" : "s")" : nil,
          rating.map { "latest rating \($0 > 0 ? "+\($0)" : "\($0)")" }]
             .compactMap { $0 }.joined(separator: ", ")
     }
 }
 
-/// The entry's doodle (from its text, like every other row) in the neutral disc. A quest wears its
-/// tier as a dot on the disc's edge; the section header and VoiceOver name the tier in words.
+/// The entry's doodle (from its text, like every other row) on a disc in its tier's colour, the
+/// way Today's rows wear theirs. The section header and VoiceOver name the tier in words.
 private struct LibraryDisc: View {
     let entry: LibraryEntry
 
     var body: some View {
-        Circle().fill(LR.Color.pillFill)
+        Circle().fill(entry.tint.color)
             .frame(width: 52, height: 52)
             .overlay {
-                DoodleView(key: DoodleKey.forText(entry.text), size: 28,
-                           tint: entry.isActive ? LR.Color.ink : LR.Color.iconNeutral)
+                DoodleView(key: DoodleKey.forText(entry.text), size: 28, tint: LR.Color.ink(on: entry.tint))
             }
-            .overlay(alignment: .bottomTrailing) {
-                if let tint = entry.tint {
-                    Circle().fill(tint.color)
-                        .frame(width: 14, height: 14)
-                        .overlay(Circle().strokeBorder(LR.Color.surface, lineWidth: 2))
-                        .opacity(entry.isActive ? 1 : 0.4)
-                        .accessibilityHidden(true)
-                }
-            }
+            .opacity(entry.isActive ? 1 : 0.4)
     }
 }
 
-/// The tier by name in its colour, or `Routine`; plain when the entry is inactive.
+/// The tier by name in its colour; plain when the entry is inactive.
 private struct LibraryTierPill: View {
     let entry: LibraryEntry
 
     var body: some View {
-        if let tint = entry.tint, entry.isActive {
-            PillLabel(text: entry.tierName, style: .tint(tint))
+        if entry.isActive {
+            PillLabel(text: entry.tierName, style: .tint(entry.tint))
         } else {
             PillLabel(text: entry.tierName)
         }
@@ -213,18 +235,21 @@ private struct LibraryEntry {
     let target: FeedbackTarget
     let text: String
     let tierName: String
-    /// Nil for a routine, which has no tier.
-    let tint: QuestTint?
+    let tint: QuestTint
     let isActive: Bool
+    /// Nil for a quest.
+    let schedule: RoutineSchedulePresentation?
 
     init(template t: QuestTemplate) {
         id = t.id; target = .quest; text = t.text
         tierName = t.difficulty.rawValue.capitalized; tint = QuestTint(t.difficulty); isActive = t.isActive
+        schedule = nil
     }
 
-    init(routine r: RoutineTask) {
+    init(routine r: RoutineTask, schedule: RoutineSchedulePresentation) {
         id = r.id; target = .routine; text = r.text
-        tierName = "Routine"; tint = nil; isActive = r.isActive
+        tierName = r.difficulty.rawValue.capitalized; tint = QuestTint(r.difficulty); isActive = r.isActive
+        self.schedule = schedule
     }
 }
 
@@ -248,6 +273,7 @@ private struct LibraryDetailView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: LR.Spacing.sectionGap) {
                 summaryCard
+                if let schedule = entry.schedule { scheduleSection(schedule) }
                 ratingSection
                 noteSection
                 if let error { BannerView(message: error) }
@@ -315,6 +341,46 @@ private struct LibraryDetailView: View {
         .accessibilityLabel(entry.text)
         .accessibilityValue([entry.tierName, entry.isActive ? nil : "inactive, not drawn any more"]
             .compactMap { $0 }.joined(separator: ", "))
+    }
+
+    // MARK: schedule
+
+    private func scheduleSection(_ s: RoutineSchedulePresentation) -> some View {
+        section("Schedule") {
+            card {
+                VStack(alignment: .leading, spacing: 12) {
+                    PillLabel(text: s.summary)
+                    if s.strip != .none { WeekStrip(schedule: s, large: true, dimmed: !entry.isActive) }
+                    Text(s.sentence).lr(.bodyStrong).foregroundStyle(LR.Color.ink)
+                        .fixedSize(horizontal: false, vertical: true)
+                    if let miss = s.missRule {
+                        Text(miss).lr(.caption).foregroundStyle(LR.Color.inkSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    if s.weeklyTarget != nil || s.usesAnchorWeek {
+                        divider
+                        if let target = s.weeklyTarget {
+                            fact("Weekly target", "\(target)")
+                            fact("Counts toward clearing the day", s.countsForClear ? "Yes" : "No")
+                        }
+                        if s.usesAnchorWeek {
+                            fact("Anchor week", s.anchorWeekKey ?? "Set by the first time you do it")
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func fact(_ label: String, _ value: String) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
+            Text(label).lr(.caption).foregroundStyle(LR.Color.inkSecondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            Text(value).lr(.bodyStrong).monospacedDigit().foregroundStyle(LR.Color.ink)
+                .multilineTextAlignment(.trailing)
+        }
+        .fixedSize(horizontal: false, vertical: true)
+        .accessibilityElement(children: .combine)
     }
 
     // MARK: rating
@@ -467,5 +533,111 @@ private struct RatingBadge: View {
                   style: value > 0 ? .tint(.trivial) : value < 0 ? .clay : .plain)
             .monospacedDigit()
             .accessibilityHidden(true)
+    }
+}
+
+/// Which sections of a list are open, kept as a comma-joined string so `@AppStorage` can hold it.
+/// A key nobody asks about any more is simply never looked up.
+private enum OpenSections {
+    private static func keys(_ stored: String) -> [String] {
+        stored.split(separator: ",").map(String.init)
+    }
+
+    static func contains(_ stored: String, _ key: String) -> Bool { keys(stored).contains(key) }
+
+    static func toggled(_ stored: String, _ key: String) -> String {
+        var open = keys(stored)
+        if let index = open.firstIndex(of: key) { open.remove(at: index) } else { open.append(key) }
+        return open.joined(separator: ",")
+    }
+}
+
+/// A section header in Settings' own style that opens and closes its list: a chevron that turns, the
+/// tier's colour as a dot (routine groups have none), the title and a hand count.
+private struct LibrarySectionHeader: View {
+    let title: String
+    let tint: QuestTint?
+    let count: Int
+    let noun: String
+    let isOpen: Bool
+    let action: () -> Void
+
+    @ScaledMetric(relativeTo: .headline) private var dot: CGFloat = 10
+    @ScaledMetric(relativeTo: .headline) private var chevronWidth: CGFloat = 16
+
+    var body: some View {
+        Button(action: action) {
+            HStack(alignment: .center, spacing: 8) {
+                Image(systemName: "chevron.right")
+                    .font(.system(.footnote, weight: .semibold))
+                    .foregroundStyle(LR.Color.iconNeutral)
+                    .rotationEffect(.degrees(isOpen ? 90 : 0))
+                    .frame(width: chevronWidth)
+                    .accessibilityHidden(true)
+                if let tint {
+                    Circle().fill(tint.color).frame(width: dot, height: dot)
+                        .accessibilityHidden(true)
+                }
+                Text(title).lr(.heading).foregroundStyle(LR.Color.sectionTitle)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 8)
+                Text("\(count)").lr(.hand).monospacedDigit().foregroundStyle(LR.Color.accent)
+            }
+            .frame(minHeight: 44)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(title), \(count) \(noun)\(count == 1 ? "" : "s")")
+        .accessibilityValue(isOpen ? "expanded" : "collapsed")
+        .accessibilityHint(isOpen ? "Hides the list" : "Shows the list")
+        .accessibilityAddTraits(.isHeader)
+    }
+}
+
+/// Monday to Sunday as seven small circles. A fixed-day routine fills the days it comes up on; a
+/// flexible one outlines all seven softly, since any day of the week counts. Decorative: the pill
+/// and the sentence say the same in words, so VoiceOver skips it.
+private struct WeekStrip: View {
+    let schedule: RoutineSchedulePresentation
+    var large = false
+    var dimmed = false
+
+    @ScaledMetric(relativeTo: .caption) private var largeLetter: CGFloat = 15
+    @ScaledMetric(relativeTo: .caption) private var rowCell: CGFloat = 24
+    @ScaledMetric(relativeTo: .caption) private var rowLetter: CGFloat = 11
+
+    private static let letters = ["M", "T", "W", "T", "F", "S", "S"]
+
+    var body: some View {
+        let cell: CGFloat = large ? 44 : rowCell
+        let gap: CGFloat = large ? 6 : 4
+        HStack(spacing: gap) {
+            ForEach(0..<7, id: \.self) { day in
+                self.cell(day)
+                    .aspectRatio(1, contentMode: .fit)
+                    .frame(maxWidth: cell)
+            }
+        }
+        .frame(maxWidth: cell * 7 + gap * 6, alignment: .leading)
+        .accessibilityHidden(true)
+    }
+
+    private func cell(_ day: Int) -> some View {
+        let filled = schedule.strip == .days && schedule.weekdays[day]
+        return ZStack {
+            if filled {
+                Circle().fill(dimmed ? LR.Color.iconNeutral : LR.Color.ink)
+            } else if schedule.strip == .anyDay {
+                Circle().strokeBorder(LR.Color.iconNeutral.opacity(0.5), lineWidth: 1.5)
+            } else {
+                Circle().strokeBorder(LR.Color.hairline, lineWidth: 1.5)
+            }
+            Text(Self.letters[day])
+                .font(.system(size: large ? min(largeLetter, 20) : min(rowLetter, 15), weight: .semibold))
+                .minimumScaleFactor(0.5)
+                .lineLimit(1)
+                .foregroundStyle(filled ? LR.Color.onFill : LR.Color.inkSecondary)
+        }
     }
 }

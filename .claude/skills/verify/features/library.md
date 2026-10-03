@@ -17,7 +17,7 @@ Settings → Library lists quest and routine templates, grouped by difficulty, w
 
 Preconditions: `V up --fresh`, then complete and rate one quest so it has a rating.
 
-- **List.** Tap the Settings tab (x=309, y=880), then Library (y=236). The quest list shows with difficulty section headers; the segmented picker is at the top.
+- **List.** Tap the Settings tab (x=309, y=880), then Library (y=236). The quest list shows its tier headers collapsed (tap one to expand; the open set survives a relaunch, `library.openQuestTiers`); the segmented picker is at the top. Routines (picker, x=320) shows Set days / Flexible / Monthly or longer / Lighter versions open, each row with a summary pill and a week strip; the detail page has a `Schedule` card. Search text opens every section with a match without changing what is remembered.
 - **Detail (not yet driven).** Tap the rated quest's row. `Ratings` lists the +2 you logged.
 - **Note (not yet driven).** Type in `What worked, what didn't`, tap `Add note`. `V sql "select ZCOMMENT, ZTEXTSNAPSHOT from ZQUESTCOMMENT"` returns it, and a second note adds a second row.
 
