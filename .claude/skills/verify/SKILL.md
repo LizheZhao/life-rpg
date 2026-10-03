@@ -13,7 +13,7 @@ Everything runs through `.claude/skills/verify/scripts/verify.sh` (below: `V`). 
 
 - **Use only the `LifeRPG-Verify` simulator**, never another booted device. The user's other simulators may hold data they care about, and the real phone is out of reach. `V up` creates and owns this one.
 - **Never write to the store** with `sqlite3`. The app holds it open (WAL). Read only (`V sql`).
-- No Health or Calendar sheet appears unless a Debug button asks for one. The simulator has no health data, so a fresh day is `tier normal`, readiness `75`, energy `1.000`, and HRV/Sleep/Resting HR show `—`. A test of a *bad night* or a cycle day can't be driven here; that is a device check (`doc/DEV_PLAN.md`).
+- No Health or Calendar permission sheet appears unless a button asks for one (Debug → *Allow Health access*, Settings → Workout detection → *Allow Calendar access*). The simulator has no health data, so a fresh day is `tier normal`, readiness `75`, energy `1.000`, and HRV/Sleep/Resting HR show `—`. A test of a *bad night* or a cycle day can't be driven here; that is a device check (`doc/DEV_PLAN.md`).
 - Don't `rm -rf` anything; the project denies it.
 
 ## Launch
@@ -33,7 +33,7 @@ Pass the UDID from `V udid` as `device` to every `mcp__Claude_Code_iOS_Simulator
 .claude/skills/verify/scripts/verify.sh doctor
 ```
 
-Read-only. Shows sim state, whether the built app is **stale** relative to `LifeRPG/` and `LifeRPGCore/Sources` (rebuild with `V up` if so), whether the app is running, the time-travel offset, row counts, and the app's current day against the host clock. Run it first, and again whenever a screen disagrees with what you expect.
+Read-only. Shows sim state, whether the built app is **stale** relative to `LifeRPG/` and `LifeRPGCore/Sources` (rebuild with `V up` if so), whether the app is running, the time-travel offset (read from the app's preferences file), row counts, the app's current day (host clock, the 05:00 rule and the offset) and, separately, the latest generated day. Run it first, and again whenever a screen disagrees with what you expect.
 
 ## Drive
 
@@ -41,7 +41,7 @@ There are no `accessibilityIdentifier`s and no UI-test target (adding one means 
 
 1. `control` action `screenshot` (device = the UDID). The image is 1320×2868 px; the control tool takes **points** = px ÷ 3. A screenshot shown at 921 px wide: points = shown px ÷ 2.093.
 2. Locate the control by its text, convert to points, `control` action `tap`.
-3. Screenshot again. Never chain taps blind.
+3. Screenshot again. Never chain taps blind, except the timed sequences a feature file spells out (the payout card's rating window is 8 s, shorter than a screenshot round trip).
 
 Stable points on iPhone 17 Pro Max (440×956 pt):
 
@@ -52,17 +52,17 @@ Stable points on iPhone 17 Pro Max (440×956 pt):
 | Pushed page back button (Library, Debug, Design) | 40, 84 |
 | Sheet `Done` button (day detail) | 383, 104 |
 
-Settings is the fourth tab. It lists Library, History (JSON), Ratings & comments (CSV), Restore from JSON…, Design gallery and Debug; Library, Design and Debug are pushed onto the Settings stack, so the floating bar stays visible on them. At the default text size the rows sit at about y = 236 (Library), 348 / 400 / 452 (the three Data rows), 562 (Design gallery), 674 (Debug). The bar hides while the keyboard is up, and a tap issued right after an alert, sheet or file panel closes is swallowed.
+Settings is the fourth tab. It lists Library, Workout detection, Output records to JSON, Ratings & comments (CSV), Restore from JSON…, Design gallery and Debug; Library, Workout detection, Design and Debug are pushed onto the Settings stack, so the floating bar stays visible on them. At the default text size, with Settings scrolled to the top, the rows sit at about y = 247 (Library), 381 (Workout detection), 514 / 588 / 662 (the three Data rows), 795 (Design gallery); Debug is behind the floating bar there, and after scrolling to the bottom the rows sit at about 175 / 309 / 383 / 456 / 590 and Debug at 722. The bar hides while the keyboard is up, and a tap issued right after an alert, sheet, card or file panel closes is swallowed.
 
 Everything else moves with content: find it from a screenshot. Time travel is scripted rather than tapped: `V day <N>`.
 
-Text entry: tap the field, then `control` action `text`.
+Text entry: tap the field, then `control` action `text`. The tool returns before every character has landed, so wait a second (or screenshot) before tapping a button that depends on the text.
 
 ### Scripted handles
 
 | Command | Does |
 | --- | --- |
-| `V day <N>` | Sets `debugDayOffset` to N days (simulator-only time travel), relaunches. `V day 0` returns to the real date. Same effect as Settings → Debug → Advance one day |
+| `V day <N>` | Sets `debugDayOffset` to the absolute value N (simulator-only time travel) and relaunches; `V day 2` is two days ahead, `V day 0` returns to the real date. Same effect as Settings → Debug → Advance one day, and it works after that button too. Prints `offset=N; latest generated day <date>` |
 | `V ledger` | Every ledger row and the balance (sum). The coin count on Today's level card must equal this |
 | `V sql "<query>"` | Read-only SQL. Tables: `ZLEDGERENTRY`, `ZDAILYQUEST`, `ZROUTINEOCCURRENCE`, `ZDAILYCONTEXT`, `ZQUESTRATING`, `ZQUESTCOMMENT`, `ZREWARD`, `ZQUESTTEMPLATE`, `ZROUTINETASK`. Enums are `Z…RAW` strings; a rating is `-2…+2` in `ZRATING` |
 | `V relaunch` | Terminate + launch; re-runs the foreground refresh (`ensureToday`, re-plan check) |
@@ -82,8 +82,9 @@ A proof is: the **action** (screenshot before + after, or the dialog), the **res
 - On a freshly booted simulator the first day generation can take 10s+, and Today briefly shows `0 random slots` / "No quests today — the pool is empty". That is not an empty pool: `V up` waits until quests exist (60s cap); if you launch by hand, run `V doctor` until `dailyQuest` is above 0 before judging the screen.
 - A tap issued right after a sheet or alert dismisses is swallowed. Screenshot first and re-tap.
 - Time travel writes future-dated rows that never go away (going back doesn't undo). It is simulator-only on purpose. After a time-travel proof, `V up --fresh` to start clean.
-- `Mark as done?` is a bottom sheet (the card, a full-width `Complete` pill, a quiet `Not yet`), not an inline toggle. Tap `Complete`.
-- After a completion the payout card also asks "How did that feel?" (five thumbs → ratings −2…+2). Tap one to dismiss and log a rating, or the card stays up.
+- Completing a quest or routine opens one centered card (disc and title, a `?` box for quests or a `+N` pill for routines, a full-width `Complete` pill, a quiet `Not yet`), not an alert or inline toggle. After `Complete` the same card rolls, lands on `+N`, then asks `how did that feel?` (five thumbs → ratings −2…+2, then `Done`). It closes by itself 8 s after the rate phase appears or the last pick, and the rating is written only if one was picked: a screenshot read between `Complete` and the thumb is slower than that. Feature files give the blind sequence.
+- System file panels remember what is already there. A second export on the same day collides with `LifeRPG-<day>.json` (`Replace Existing Item`: choose `Keep Both`), and the restore picker opens on Browse → On My iPhone, not Recents.
+- Time travel works through the app's container preferences: `V day` writes them with the app stopped and restarts the simulator's `cfprefsd`. Don't set the offset with `simctl spawn … defaults write`; once the app has written the key itself (any tap on Advance one day) that value is ignored.
 - HealthKit and EventKit auto-verify can't be exercised: no data and no calendar on a fresh sim. Debug → *Allow Health access* shows the real system sheet; don't confuse a dismissed sheet with an app failure.
 - Fixed day keys in a feature recipe will go stale. Read today's from `V doctor` (`app day`).
 

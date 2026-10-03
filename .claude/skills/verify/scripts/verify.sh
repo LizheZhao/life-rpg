@@ -25,6 +25,19 @@ STATE="$ROOT/build/verify-state"          # holds "we-booted" when `up` booted t
 udid() { xcrun simctl list devices | awk -v n="$NAME" '$0 ~ n" \\(" { match($0, /[0-9A-F-]{36}/); print substr($0, RSTART, RLENGTH); exit }'; }
 sim_state() { xcrun simctl list devices | grep "$NAME (" | grep -o -E "\((Booted|Shutdown|Booting)\)" | tr -d '()' | head -1; }
 store() { echo "$(xcrun simctl get_app_container "$(udid)" "$BUNDLE" data)/Library/Application Support/default.store"; }
+# The app's own writes (Debug → Advance one day) land in its container plist, and that value beats
+# anything `simctl spawn … defaults write` sets (a device-level layer). So read and write the
+# container plist itself, with the app terminated, then restart the sim's cfprefsd, which otherwise
+# keeps serving the value the app last wrote from its memory.
+prefs() { echo "$(xcrun simctl get_app_container "$(udid)" "$BUNDLE" data)/Library/Preferences/$BUNDLE.plist"; }
+# A fresh install has no preferences file yet, and PlistBuddy prints a notice to stdout for a missing one.
+offset() { local f; f="$(prefs)"; { [ -f "$f" ] && /usr/libexec/PlistBuddy -c "Print :debugDayOffset" "$f" 2>/dev/null; } || echo 0; }
+set_offset() {
+  local f; f="$(prefs)"
+  [ -f "$f" ] || { mkdir -p "$(dirname "$f")"; /usr/libexec/PlistBuddy -c "Save" "$f" >/dev/null 2>&1 || true; }
+  /usr/libexec/PlistBuddy -c "Set :debugDayOffset $1" "$f" >/dev/null 2>&1 \
+    || /usr/libexec/PlistBuddy -c "Add :debugDayOffset integer $1" "$f" >/dev/null
+}
 need_sim() { [ -n "$(udid)" ] || { echo "no $NAME simulator — run: verify.sh up" >&2; exit 1; }; }
 
 # Day generation runs after launch and can take 10s+ on a freshly booted sim; ready means today's quests exist.
@@ -68,11 +81,13 @@ cmd_doctor() {
   built=$(stat -f '%m' "$APP/LifeRPG" 2>/dev/null || echo 0)
   if [ "$newest" -gt "$built" ]; then echo "STALE: sources are newer than the built app — run: verify.sh up"; else echo "build:     up to date"; fi
   echo "running:   $(xcrun simctl spawn "$u" launchctl list | grep -c "UIKitApplication:$BUNDLE" | sed 's/0/no/;s/1/yes/')"
-  echo "offset:    $(xcrun simctl spawn "$u" defaults read "$BUNDLE" debugDayOffset 2>/dev/null || echo 0) day(s)"
+  echo "offset:    $(offset) day(s)"
   local s; s="$(store)"
   [ -f "$s" ] || { echo "FAIL: no store at $s"; exit 1; }
   sqlite3 -readonly "$s" "select 'rows:      ledger='||(select count(*) from ZLEDGERENTRY)||' dailyQuest='||(select count(*) from ZDAILYQUEST)||' templates='||(select count(*) from ZQUESTTEMPLATE)||' routines='||(select count(*) from ZROUTINETASK)"
-  echo "app day:   $(sqlite3 -readonly "$s" 'select max(ZDAYKEY) from ZDAILYCONTEXT')  (host: $(date '+%Y-%m-%d %H:%M'); the app's day ends at 05:00)"
+  local off; off="$(offset)"
+  echo "app day:   $(date -v-5H -v+"${off}"d '+%Y-%m-%d')  (host: $(date '+%Y-%m-%d %H:%M'); the app's day ends at 05:00; offset applied)"
+  echo "generated: up to $(sqlite3 -readonly "$s" 'select max(ZDAYKEY) from ZDAILYCONTEXT')  (time travel leaves future days behind)"
 }
 
 cmd_sql() { need_sim; sqlite3 -readonly -header -column "$(store)" "$1"; }
@@ -80,10 +95,12 @@ cmd_ledger() { need_sim; cmd_sql "select ZDAYKEY day, ZKIND kind, ZPOINTS points
 
 cmd_day() {
   need_sim; local u before i cur; u="$(udid)"
-  cur="$(xcrun simctl spawn "$u" defaults read "$BUNDLE" debugDayOffset 2>/dev/null || echo 0)"
+  cur="$(offset)"
   before="$(sqlite3 -readonly "$(store)" 'select count(*) from ZDAILYCONTEXT')"
   xcrun simctl terminate "$u" "$BUNDLE" 2>/dev/null || true
-  xcrun simctl spawn "$u" defaults write "$BUNDLE" debugDayOffset -int "$1"
+  set_offset "$1"
+  xcrun simctl spawn "$u" launchctl kickstart -k system/com.apple.cfprefsd.xpc.daemon >/dev/null 2>&1 || true
+  sleep 1
   xcrun simctl launch "$u" "$BUNDLE" >/dev/null
   # Only going forward generates a new day (a new DailyContext row); otherwise just let the refresh settle.
   for i in $(seq 1 120); do
