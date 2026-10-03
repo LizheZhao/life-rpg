@@ -152,7 +152,7 @@ Slices 1 to 3 were only checked on the simulator. Haptics, how the animations fe
 
 | # | Slice | Scope |
 |---|---|---|
-| 9 | **Polish.** | Grow the keyword-to-doodle table so fewer quests fall back to the sparkle (and add more doodles if wanted); tune motion; VoiceOver, Reduce Motion and Bold Text passes on device; app icon and launch screen. |
+| 9 | **Polish.** | **App icon and launch screen: assets done (2026-10-03), two Xcode settings still to make by hand.** The icon is the sparkle doodle (ink on the `canvas` cream, a faint dot grid; dark and tinted variants) in `Assets.xcassets/AppIcon.appiconset`; the launch screen is the canvas colour (`LaunchBackground`, light and dark) with the sparkle alone (`LaunchLogo`). Neither is used until the target says so (`project.pbxproj` is never edited by hand): in Xcode, Target → General → App Icons → App Icon = `AppIcon`; and a `UILaunchScreen` dictionary with `UIColorName` = `LaunchBackground` and `UIImageName` = `LaunchLogo` (Info tab, or a plist like `doc/launch-screen.plist` set as the target's `INFOPLIST_FILE` — merged with the generated keys, checked by building with it). Checked in the simulator by building with `ASSETCATALOG_COMPILER_APPICON_NAME=AppIcon INFOPLIST_FILE=doc/launch-screen.plist`: the light and dark launch screens (dark on a fresh device, the system caches a launch snapshot per appearance); the icon compiled into `Assets.car`; not looked at on the home screen or on a device. Remaining: grow the keyword-to-doodle table so fewer quests fall back to the sparkle (and add more doodles if wanted); tune motion; VoiceOver, Reduce Motion and Bold Text passes on device; app icon and launch screen. |
 
 Later, not scheduled:
 
