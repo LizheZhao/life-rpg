@@ -16,8 +16,9 @@ import SwiftData
 /// backup a day, the list is copied into every file, so it is kept to what is needed.
 public enum JSONExport {
     /// Bumped when the model changes shape, independently of the GitHub tag. Import reads this
-    /// and nothing else. 4 added `Occurrence.iconKey`; an older file simply lacks it.
-    public static let schemaVersion = 4
+    /// and nothing else. 4 added `Occurrence.iconKey`, 5 the user's own library rows
+    /// (`userLibrary`); an older file simply lacks them.
+    public static let schemaVersion = 5
 
     /// The oldest export import still reads. Anything between this and `schemaVersion` decodes into
     /// the current shape, the fields added since being optional.
@@ -35,6 +36,44 @@ public enum JSONExport {
         /// Nil in exports written before import existed; `JSONImport` refuses those.
         public var library: Library?
         public var rewards: [RewardRow]?
+        /// The rows the user saved themselves (`LibraryOrigin.user`), in full: nothing else can give
+        /// them back. Nil when there are none, which is most backups.
+        public var userLibrary: UserLibrary?
+    }
+
+    public struct UserLibrary: Codable, Equatable, Sendable {
+        public var quests: [UserQuest]
+        public var routines: [UserRoutine]
+    }
+
+    public struct UserQuest: Codable, Equatable, Sendable {
+        public var id: UUID
+        public var text: String
+        public var difficulty: String
+        public var hiddenEligible: Bool
+        public var weekendOnly: Bool
+        public var cooldownDaysOverride: Int?
+        public var variants: [String]
+        public var launchURL: String?
+        public var autoVerifyRule: String?
+        public var isActive: Bool
+    }
+
+    public struct UserRoutine: Codable, Equatable, Sendable {
+        public var id: UUID
+        public var text: String
+        public var difficulty: String
+        public var basePoints: Int
+        public var kind: String
+        public var spec: String
+        public var anchorWeekKey: String?
+        public var weeklyTarget: Int
+        public var flexibleWithinWeek: Bool
+        public var countsForClear: Bool
+        public var downgradeIDs: [UUID]
+        public var launchURL: String?
+        public var autoVerifyRule: String?
+        public var isActive: Bool
     }
 
     /// Not the library itself — the seed CSVs are — but the per-row state the history leans on.
@@ -188,6 +227,22 @@ public enum JSONExport {
         let comments = try context.fetch(FetchDescriptor<QuestComment>())
         let referenced = referencedLibraryIDs(quests: quests, occurrences: occurrences,
                                               ratings: ratings, comments: comments)
+        let templates = try context.fetch(FetchDescriptor<QuestTemplate>())
+        let routines = try context.fetch(FetchDescriptor<RoutineTask>())
+        let mine = UserLibrary(
+            quests: templates.filter { $0.origin == .user }.sorted { $0.text < $1.text }.map {
+                UserQuest(id: $0.id, text: $0.text, difficulty: $0.difficultyRaw,
+                          hiddenEligible: $0.hiddenEligible, weekendOnly: $0.weekendOnly,
+                          cooldownDaysOverride: $0.cooldownDaysOverride, variants: $0.variants,
+                          launchURL: $0.launchURLString, autoVerifyRule: $0.autoVerifyRule, isActive: $0.isActive)
+            },
+            routines: routines.filter { $0.origin == .user }.sorted { $0.text < $1.text }.map {
+                UserRoutine(id: $0.id, text: $0.text, difficulty: $0.difficultyRaw, basePoints: $0.basePoints,
+                            kind: $0.kindRaw, spec: $0.spec, anchorWeekKey: $0.anchorWeekKey,
+                            weeklyTarget: $0.weeklyTarget, flexibleWithinWeek: $0.flexibleWithinWeek,
+                            countsForClear: $0.countsForClear, downgradeIDs: $0.downgradeIDs,
+                            launchURL: $0.launchURLString, autoVerifyRule: $0.autoVerifyRule, isActive: $0.isActive)
+            })
         return Snapshot(
             schemaVersion: schemaVersion,
             exportedAt: now,
@@ -238,13 +293,13 @@ public enum JSONExport {
                         timestamp: $0.timestamp)
             },
             library: Library(
-                quests: try context.fetch(FetchDescriptor<QuestTemplate>())
+                quests: templates
                     .filter { referenced.contains($0.id) || $0.lastServedDayKey != nil || $0.lastCompletedDayKey != nil }
                     .sorted { $0.text < $1.text }.map {
                         LibraryQuest(id: $0.id, text: $0.text, lastServedDayKey: $0.lastServedDayKey,
                                      lastCompletedDayKey: $0.lastCompletedDayKey)
                     },
-                routines: try context.fetch(FetchDescriptor<RoutineTask>())
+                routines: routines
                     .filter { referenced.contains($0.id) || $0.lastCompletedDayKey != nil }
                     .sorted { $0.text < $1.text }.map {
                         LibraryRoutine(id: $0.id, text: $0.text, lastCompletedDayKey: $0.lastCompletedDayKey)
@@ -253,7 +308,8 @@ public enum JSONExport {
                 RewardRow(id: $0.id, name: $0.name, estimatedCost: $0.estimatedCost,
                           virtualKind: $0.virtualKind, fixedCoins: $0.fixedCoins, isActive: $0.isActive,
                           isGoal: $0.isGoal)
-            })
+            },
+            userLibrary: mine.quests.isEmpty && mine.routines.isEmpty ? nil : mine)
     }
 
     public static func data(_ context: ModelContext, now: Date = Date()) throws -> Data {

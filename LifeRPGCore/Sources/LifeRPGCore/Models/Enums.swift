@@ -93,6 +93,13 @@ public enum ReplacedReason: String, Codable, CaseIterable, Sendable {
     case cancelled
 }
 
+/// Which layer of the library a row belongs to: what the seed CSVs brought (and a reinstall brings
+/// back on its own), or what the user saved (`LibrarySave`), which exists nowhere else and so
+/// travels in the backup.
+public enum LibraryOrigin: String, Codable, CaseIterable, Sendable {
+    case seed, user
+}
+
 public enum RecurrenceKind: String, Codable, CaseIterable, Sendable {
     case weekly, everyNDays, monthly, nthWeekdayOfMonth, everyNWeeksOnWeekday
 }

@@ -54,6 +54,10 @@ public enum JSONImport {
         /// Library texts in the backup that this store doesn't have; their history stays but
         /// points at nothing.
         public var unmatchedLibrary: [String]
+        /// How many quests and routines of the user's own the backup carries; any this store lacks
+        /// are put back (never removed from it).
+        public var userQuests: Int
+        public var userRoutines: Int
     }
 
     public struct Plan: Sendable {
@@ -77,12 +81,20 @@ public enum JSONImport {
                                 uniquingKeysWith: { a, _ in a })
         let routines = Dictionary(try context.fetch(FetchDescriptor<RoutineTask>()).map { ($0.text, $0.id) },
                                   uniquingKeysWith: { a, _ in a })
+        // The user's own rows are put back under the id they had, so history needs no re-pointing
+        // for them; one this store already has (same text) is the row its id is re-pointed at.
+        let mine = snapshot.userLibrary ?? JSONExport.UserLibrary(quests: [], routines: [])
+        let myQuests = Set(mine.quests.map(\.text)), myRoutines = Set(mine.routines.map(\.text))
         var questIDs: [UUID: UUID] = [:], routineIDs: [UUID: UUID] = [:], unmatched: [String] = []
         for q in library.quests {
-            if let id = quests[q.text] { questIDs[q.id] = id } else { unmatched.append(q.text) }
+            if let id = quests[q.text] { questIDs[q.id] = id }
+            else if myQuests.contains(q.text) { questIDs[q.id] = q.id }
+            else { unmatched.append(q.text) }
         }
         for r in library.routines {
-            if let id = routines[r.text] { routineIDs[r.id] = id } else { unmatched.append(r.text) }
+            if let id = routines[r.text] { routineIDs[r.id] = id }
+            else if myRoutines.contains(r.text) { routineIDs[r.id] = r.id }
+            else { unmatched.append(r.text) }
         }
 
         let days = snapshot.dailyContexts.map(\.dayKey)
@@ -96,7 +108,8 @@ public enum JSONImport {
             comments: snapshot.comments.count,
             rewards: snapshot.rewards?.count ?? 0,
             balance: Economy.balance(snapshot.ledger),
-            unmatchedLibrary: unmatched.sorted())
+            unmatchedLibrary: unmatched.sorted(),
+            userQuests: mine.quests.count, userRoutines: mine.routines.count)
         return Plan(snapshot: snapshot, summary: summary, questIDs: questIDs, routineIDs: routineIDs)
     }
 
@@ -124,6 +137,7 @@ public enum JSONImport {
         try deleteAll(Reward.self, in: context)
 
         let s = plan.snapshot
+        try restoreUserLibrary(s.userLibrary, in: context)
         let quest = { (id: UUID) in plan.questIDs[id] ?? id }
         let routine = { (id: UUID) in plan.routineIDs[id] ?? id }
         let target = { (kind: String, id: UUID) in
@@ -213,6 +227,31 @@ public enum JSONImport {
         }
 
         try Affinity.sync(context)
+    }
+
+    /// Puts back the user's own rows the store lacks, under their old ids. A row already there
+    /// (same text) is left exactly as it is: restoring adds to the library, it never takes from it.
+    private static func restoreUserLibrary(_ mine: JSONExport.UserLibrary?, in context: ModelContext) throws {
+        guard let mine else { return }
+        let quests = Set(try context.fetch(FetchDescriptor<QuestTemplate>()).map(\.text))
+        let routines = Set(try context.fetch(FetchDescriptor<RoutineTask>()).map(\.text))
+        for q in mine.quests where !quests.contains(q.text) {
+            let row = QuestTemplate()
+            row.id = q.id; row.text = q.text; row.difficultyRaw = q.difficulty; row.origin = .user
+            row.hiddenEligible = q.hiddenEligible; row.weekendOnly = q.weekendOnly
+            row.cooldownDaysOverride = q.cooldownDaysOverride; row.variants = q.variants
+            row.launchURLString = q.launchURL; row.autoVerifyRule = q.autoVerifyRule; row.isActive = q.isActive
+            context.insert(row)
+        }
+        for r in mine.routines where !routines.contains(r.text) {
+            let row = RoutineTask()
+            row.id = r.id; row.text = r.text; row.difficultyRaw = r.difficulty; row.basePoints = r.basePoints
+            row.origin = .user; row.kindRaw = r.kind; row.spec = r.spec; row.anchorWeekKey = r.anchorWeekKey
+            row.weeklyTarget = r.weeklyTarget; row.flexibleWithinWeek = r.flexibleWithinWeek
+            row.countsForClear = r.countsForClear; row.downgradeIDs = r.downgradeIDs
+            row.launchURLString = r.launchURL; row.autoVerifyRule = r.autoVerifyRule; row.isActive = r.isActive
+            context.insert(row)
+        }
     }
 
     private static func deleteAll<T: PersistentModel>(_ type: T.Type, in context: ModelContext) throws {

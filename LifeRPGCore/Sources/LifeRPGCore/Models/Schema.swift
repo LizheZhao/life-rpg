@@ -17,9 +17,11 @@ import SwiftData
 /// `Reward.isGoal`. V4 added `RoutineOccurrence.iconKey`, the doodle chosen for a custom ad-hoc
 /// routine. Both are optional or defaulted, so lightweight migration fills them in. V4 is the first
 /// to bump the export's `schemaVersion` (to 4); import still reads v3 files, whose occurrences
-/// simply carry no `iconKey`.
-public enum SchemaV4: VersionedSchema {
-    public static var versionIdentifier = Schema.Version(4, 0, 0)
+/// simply carry no `iconKey`. V5 added `originRaw` to both libraries (seed or the user's own),
+/// defaulted to seed, so every existing row stays what it was; the export's `schemaVersion` goes to
+/// 5 with the user's rows in a block of their own, and import still reads v3 and v4.
+public enum SchemaV5: VersionedSchema {
+    public static var versionIdentifier = Schema.Version(5, 0, 0)
 
     public static var models: [any PersistentModel.Type] = [
         QuestTemplate.self,
@@ -35,13 +37,13 @@ public enum SchemaV4: VersionedSchema {
 }
 
 public enum LifeRPGMigrationPlan: SchemaMigrationPlan {
-    public static var schemas: [any VersionedSchema.Type] = [SchemaV4.self]
+    public static var schemas: [any VersionedSchema.Type] = [SchemaV5.self]
     public static var stages: [MigrationStage] = []
 }
 
 public enum LifeRPGSchema {
-    public static let current = Schema(versionedSchema: SchemaV4.self)
+    public static let current = Schema(versionedSchema: SchemaV5.self)
 
     /// For `#Preview` and tests that just need the model list.
-    public static let models = SchemaV4.models
+    public static let models = SchemaV5.models
 }

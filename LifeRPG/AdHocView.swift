@@ -37,6 +37,9 @@ struct AdHocView: View {
     @State private var difficulty: Difficulty = .easy
     /// The doodle picked by hand; nil follows what the typed text suggests.
     @State private var pickedDoodle: DoodleKey?
+    /// "Save to library" under a custom task: whether to, and as what (`LibrarySave.Draft`).
+    @State private var saving = false
+    @State private var draft = LibrarySave.Draft()
     @State private var error: String?
     /// An occurrence already on today's page, about to be marked done from here instead of retyped.
     @State private var markingDone: RoutineOccurrence?
@@ -111,8 +114,9 @@ struct AdHocView: View {
 
     /// What the one confirmation (the bar) is about to do. It replaces the alert that used to follow.
     private var confirmNote: String {
-        isAdding ? "\(sourceText) · final, it stays on today's page"
-                 : "\(slotText) → \(sourceText) · final, it can't be brought back"
+        let kept = savesToLibrary ? " · saved to your library" : ""
+        return isAdding ? "\(sourceText) · final, it stays on today's page\(kept)"
+                        : "\(slotText) → \(sourceText) · final, it can't be brought back\(kept)"
     }
 
     var body: some View {
@@ -139,7 +143,8 @@ struct AdHocView: View {
             }
             .scrollDismissesKeyboard(.interactively)
             .safeAreaInset(edge: .bottom) {
-                ConfirmBar(title: actionTitle, enabled: source != nil, note: confirmNote) { commit() }
+                ConfirmBar(title: actionTitle, enabled: source != nil && !(savesToLibrary && draft.problem != nil),
+                           note: confirmNote) { commit() }
             }
             .background(LR.Color.canvas.ignoresSafeArea())
             .navigationTitle(isAdding ? "Add for today" : "Replace")
@@ -263,6 +268,8 @@ struct AdHocView: View {
                 .padding(.horizontal, 6)
         }
 
+        SaveToLibraryCard(isOn: $saving, draft: $draft, difficulty: difficulty)
+
         SectionTitle(title: "Doodle", count: pickedDoodle == nil ? "suggested" : "picked")
         DoodlePicker(selection: doodle) { pickedDoodle = $0 }
 
@@ -350,9 +357,20 @@ struct AdHocView: View {
         markingDone = nil
     }
 
+    /// Typed on the Custom tab and asked to be kept.
+    private var savesToLibrary: Bool { tab == .custom && saving }
+
     private func commit() {
-        guard let source else { return }
+        guard var source else { return }
         do {
+            // The library row first: a saved routine is what goes onto today's page, so it counts
+            // toward its own weekly target and its ratings land on it. A saved quest only joins
+            // the pool; today's task stays the custom one that was typed.
+            if savesToLibrary, case .custom(let text, let difficulty, _) = source {
+                if case .routine(let saved) = try draft.save(text: text, difficulty: difficulty, in: context) {
+                    source = .routine(saved)
+                }
+            }
             switch target {
             case .slot(let slot): try AdHoc.replace(slot, with: source, in: context)
             case .routine(let o, let flexible):

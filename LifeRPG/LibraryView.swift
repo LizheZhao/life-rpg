@@ -171,8 +171,9 @@ private struct LibraryRow: View {
             Text(entry.text).lr(.bodyStrong)
                 .foregroundStyle(entry.isActive ? LR.Color.ink : LR.Color.inkSecondary)
                 .fixedSize(horizontal: false, vertical: true)
-            if entry.schedule != nil || !entry.isActive || notes > 0 {
+            if entry.schedule != nil || !entry.isActive || notes > 0 || entry.isMine {
                 FlowRow(spacing: 6) {
+                    if entry.isMine { PillLabel(text: "Mine") }
                     if let schedule = entry.schedule { PillLabel(text: schedule.summary) }
                     if !entry.isActive { PillLabel(text: "inactive") }
                     if notes > 0 { PillLabel(text: "\(notes) note\(notes == 1 ? "" : "s")") }
@@ -237,18 +238,22 @@ private struct LibraryEntry {
     let tierName: String
     let tint: QuestTint
     let isActive: Bool
+    /// Saved by the user (`LibraryOrigin.user`) rather than brought by the seed CSVs.
+    let isMine: Bool
     /// Nil for a quest.
     let schedule: RoutineSchedulePresentation?
 
     init(template t: QuestTemplate) {
         id = t.id; target = .quest; text = t.text
         tierName = t.difficulty.rawValue.capitalized; tint = QuestTint(t.difficulty); isActive = t.isActive
+        isMine = t.origin == .user
         schedule = nil
     }
 
     init(routine r: RoutineTask, schedule: RoutineSchedulePresentation) {
         id = r.id; target = .routine; text = r.text
         tierName = r.difficulty.rawValue.capitalized; tint = .routine; isActive = r.isActive
+        isMine = r.origin == .user
         self.schedule = schedule
     }
 }
@@ -311,6 +316,7 @@ private struct LibraryDetailView: View {
                         .fixedSize(horizontal: false, vertical: true)
                     FlowRow(spacing: 6) {
                         LibraryTierPill(entry: entry)
+                        if entry.isMine { PillLabel(text: "Mine") }
                         if !entry.isActive { PillLabel(text: "inactive") }
                     }
                     if !entry.isActive {

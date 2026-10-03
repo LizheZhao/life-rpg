@@ -20,8 +20,15 @@ import SwiftData
     public var autoVerifyRule: String?
     public var lastCompletedDayKey: String?
     public var isActive: Bool = true
+    /// `LibraryOrigin` raw value. Every row that existed before the field is a seed row.
+    public var originRaw: String = LibraryOrigin.seed.rawValue
 
     public init() {}
+
+    public var origin: LibraryOrigin {
+        get { LibraryOrigin(rawValue: originRaw) ?? .seed }
+        set { originRaw = newValue.rawValue }
+    }
 
     public var difficulty: Difficulty {
         get { Difficulty(rawValue: difficultyRaw) ?? .easy }
