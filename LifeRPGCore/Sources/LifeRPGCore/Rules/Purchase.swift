@@ -19,6 +19,13 @@ public enum Purchase {
         /// No single missed day right behind the current streak for a freeze to cover.
         case nothingToRepair
 
+        /// Coins still missing for a price the balance can't reach yet; nil for every other reason
+        /// (in debt is cleared by earning, not by saving up to a price).
+        public var shortfall: Int? {
+            if case .tooExpensive(let cost, let balance) = self { return cost - balance }
+            return nil
+        }
+
         public var description: String {
             switch self {
             case .inDebt(let balance):

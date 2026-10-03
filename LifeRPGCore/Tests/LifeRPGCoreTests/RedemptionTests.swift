@@ -230,4 +230,15 @@ struct RedemptionTests {
         meal.isActive = false
         #expect(Redemption.blocked(redeeming: meal, balance: 5000) == .notAvailable)
     }
+
+    // MARK: how far off a blocked purchase is
+
+    @Test func shortfallIsHowManyCoinsAreMissingAndNothingElse() {
+        #expect(Purchase.Blocked.tooExpensive(cost: 320, balance: 100).shortfall == 220)
+        #expect(Purchase.Blocked.tooExpensive(cost: 10, balance: 0).shortfall == 10)
+        // Debt is cleared by earning, not by saving up to a price, so no "to go" is offered.
+        #expect(Purchase.Blocked.inDebt(balance: -5).shortfall == nil)
+        #expect(Purchase.Blocked.notAvailable.shortfall == nil)
+        #expect(Purchase.Blocked.nothingToRepair.shortfall == nil)
+    }
 }
