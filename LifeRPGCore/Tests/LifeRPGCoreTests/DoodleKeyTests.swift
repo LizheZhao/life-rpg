@@ -37,14 +37,14 @@ struct DoodleKeyTests {
         ("Thank someone who recently helped you", .paperPlane),
         ("Review bills/statements", .trendLine),
         ("Check the credit card statement only, skip the full reconciliation", .trendLine),
-        ("Clean and tidy the apartment (vacuum, dishes, dust, litter box, water fountain)", .sparkle),
-        ("Take out the trash", .sparkle),
-        ("Grocery shopping and cleaning out the fridge", .sparkle),
+        ("Clean and tidy the apartment (vacuum, dishes, dust, litter box, water fountain)", .broom),
+        ("Take out the trash", .broom),
+        ("Grocery shopping and cleaning out the fridge", .broom),
         ("Cook a dish you've never made", .potion),
-        ("Name three of your strengths", .sparkle),
+        ("Name three of your strengths", .speechBubble),
         ("Strength training at home", .dumbbell),
-        ("Declutter the wardrobe and donate or sell what you don't wear", .sparkle),
-        ("Compliment a stranger", .sparkle),
+        ("Declutter the wardrobe and donate or sell what you don't wear", .broom),
+        ("Compliment a stranger", .heart),
     ])
     func realLibraryTextsMapAsExpected(text: String, expected: DoodleKey) {
         #expect(DoodleKey.forText(text) == expected)
@@ -56,17 +56,17 @@ struct DoodleKeyTests {
         // "tea" is a word of its own; it must not fire inside "team" or "teaching".
         #expect(DoodleKey.forText("Plan the team offsite") == .sparkle)
         // "Apply" alone is not a send: only "apply to" and "applications" are.
-        #expect(DoodleKey.forText("Apply hand cream") == .sparkle)
+        #expect(DoodleKey.forText("Apply hand cream") == .heart)
         #expect(DoodleKey.forText("Apply to three jobs") == .paperPlane)
     }
 
     @Test func unknownAndEmptyTextFallBackToSparkle() {
         #expect(DoodleKey.forText("") == .sparkle)
-        #expect(DoodleKey.forText("Say no to something") == .sparkle)
+        #expect(DoodleKey.forText("Change your phone wallpaper") == .sparkle)
     }
 
     @Test func cleaningBeatsTheWaterInAWaterFountain() {
-        #expect(DoodleKey.forText("Clean the water fountain") == .sparkle)
+        #expect(DoodleKey.forText("Clean the water fountain") == .broom)
         #expect(DoodleKey.forText("Drink water") == .potion)
     }
 
@@ -86,10 +86,88 @@ struct DoodleKeyTests {
         }
     }
 
-    @Test func onlyAvatarAndFlagAreOutsideTheTable() {
-        // The avatar and the epic flag are placed by the layout, not chosen from a quest's text.
+    @Test func onlyAvatarFlagAndTheDefaultSparkleAreOutsideTheTable() {
+        // The avatar and the epic flag are placed by the layout, not chosen from a quest's text; the
+        // sparkle is what no keyword claims.
         let inTable = Set(DoodleKey.table.map(\.key))
-        #expect(Set(DoodleKey.allCases).subtracting(inTable) == [.avatar, .flag])
+        #expect(Set(DoodleKey.allCases).subtracting(inTable) == [.avatar, .flag, .sparkle])
+    }
+
+    // MARK: the ten later doodles
+
+    @Test(arguments: [
+        ("Listen to an album start to finish", DoodleKey.headphones),
+        ("Sing a song out loud", .headphones),
+        ("Listen to a podcast", .headphones),
+        ("Take a photo of something small", .camera),
+        ("Draw a quick sketch", .camera),
+        ("Take a selfie", .camera),
+        ("Feed the cat", .paw),
+        ("Walk the dog", .sneaker),
+        ("Scoop the litter", .paw),
+        ("Cook dinner", .potion),
+        ("Have lunch away from your desk", .forkKnife),
+        ("Eat a snack without your phone", .forkKnife),
+        ("Meditate for ten minutes", .moon),
+        ("Take a nap", .moon),
+        ("Breathe slowly", .moon),
+        ("Put on a face mask", .heart),
+        ("Floss", .heart),
+        ("Take a bath", .heart),
+        ("Chat with a neighbour", .speechBubble),
+        ("Ask a question in a meeting", .speechBubble),
+        ("Visit a museum", .mapPin),
+        ("Go to a new part of town", .mapPin),
+        ("Watch a movie", .screen),
+        ("Stream a live concert", .headphones),
+        ("Stream a documentary", .screen),
+        ("Vacuum the floor", .broom),
+        ("Do the laundry", .broom),
+    ])
+    func eachLaterDoodleIsSuggestedByItsOwnWords(text: String, expected: DoodleKey) {
+        #expect(DoodleKey.forText(text) == expected)
+    }
+
+    /// Where two entries could both claim a text, the table order decides; each of these is a real
+    /// seed text or a close cousin of one.
+    @Test(arguments: [
+        ("Take photos of today's three meals", DoodleKey.camera),
+        ("Eat a meal slowly and mindfully", .forkKnife),
+        ("Enjoy a meal without watching videos", .forkKnife),
+        ("Watch a sunset", .moon),
+        ("Play with the cat for 10 minutes", .paw),
+        ("Clean and tidy the apartment (vacuum, dishes, dust, litter box, water fountain)", .broom),
+        ("Cat grooming (brushing, nail trim, playtime)", .paw),
+        ("Visit a coffee shop you've never been to", .mapPin),
+        ("Listen to a stand-up comedy clip", .headphones),
+        ("Watch a saved long video all the way through", .screen),
+        ("Say no to something", .speechBubble),
+        ("Do a face mask", .heart),
+        ("Fluff your pillow", .moon),
+        ("Just brushing and playtime", .paw),
+        ("Put your phone away and focus deeply for 90 minutes", .sparkle),
+    ])
+    func conflictsResolveByTableOrder(text: String, expected: DoodleKey) {
+        #expect(DoodleKey.forText(text) == expected)
+    }
+
+    @Test func theSparkleIsOnlyTheDefaultNotATableEntry() {
+        #expect(!DoodleKey.table.map(\.key).contains(.sparkle))
+        #expect(DoodleKey.table.map(\.key) == [
+            .braces, .trendLine, .paperPlane, .sneaker, .dumbbell, .notebook, .broom, .potion,
+            .headphones, .camera, .paw, .forkKnife, .moon, .heart, .speechBubble, .mapPin, .screen,
+        ])
+    }
+
+    /// The point of the longer table: the seed libraries rarely land on the generic sparkle. Before the
+    /// ten new doodles 46 of these 96 texts did; the four left are the ones with no single object to draw.
+    @Test func fewSeedTextsFallBackToTheSparkle() throws {
+        let side = try SeedParser.sideQuests(csv: Fixtures.csv("side_quests.csv")).map(\.text)
+        let routines = try SeedParser.routines(csv: Fixtures.csv("routine_quests.csv")).map(\.text)
+        let texts = side + routines
+        #expect(texts.count >= 96)
+        let generic = texts.filter { DoodleKey.forText($0) == .sparkle }
+        #expect(generic.count <= 4, "fell back to the sparkle: \(generic)")
     }
 
     // MARK: a chosen doodle
@@ -101,7 +179,7 @@ struct DoodleKeyTests {
 
     @Test func noKeyFallsBackToTheText() {
         #expect(DoodleKey.resolve(iconKey: nil, text: "Walk the dog") == .sneaker)
-        #expect(DoodleKey.resolve(iconKey: nil, text: "Say no to something") == .sparkle)
+        #expect(DoodleKey.resolve(iconKey: nil, text: "Change your phone wallpaper") == .sparkle)
     }
 
     /// A key written by a newer build, or damaged on the way through a backup, must not crash or
@@ -115,7 +193,8 @@ struct DoodleKeyTests {
     @Test func everyKeyHasAShortSpokenName() {
         #expect(DoodleKey.allCases.map(\.title) == [
             "Person", "Sneaker", "Potion", "Braces", "Notebook", "Dumbbell", "Paper plane", "Trend line",
-            "Flag", "Sparkle",
+            "Flag", "Sparkle", "Headphones", "Camera", "Paw", "Fork and knife", "Moon", "Heart",
+            "Speech bubble", "Map pin", "Screen", "Broom",
         ])
     }
 }

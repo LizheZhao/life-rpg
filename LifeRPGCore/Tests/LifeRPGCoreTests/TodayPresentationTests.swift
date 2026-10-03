@@ -58,7 +58,7 @@ struct TodayPresentationTests {
     // MARK: a routine row's doodle
 
     @Test func aRoutineRowWearsItsChosenDoodle() {
-        let o = occurrence("Say no to something")
+        let o = occurrence("Change your phone wallpaper")
         #expect(row(o).doodle == .sparkle)
         o.iconKey = "dumbbell"
         #expect(row(o).doodle == .dumbbell)

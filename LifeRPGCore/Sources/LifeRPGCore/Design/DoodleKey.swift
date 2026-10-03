@@ -5,11 +5,13 @@ import Foundation
 /// place that reads it back.
 public enum DoodleKey: String, CaseIterable, Sendable {
     case avatar, sneaker, potion, braces, notebook, dumbbell, paperPlane, trendLine, flag, sparkle
+    case headphones, camera, paw, forkKnife, moon, heart, speechBubble, mapPin, screen, broom
 
     /// A plain keyword matches a whole word (or its plural); a trailing `*` matches any word that
     /// starts with it; several words in one keyword (`"apply to"`) must follow each other. The
     /// first entry that matches wins, so the narrow, specific ones come before the broad ones.
-    /// `avatar` and `flag` are placed by the layout and have no keywords.
+    /// `avatar` and `flag` are placed by the layout and have no keywords, and `sparkle` is not an
+    /// entry at all: it is what a text gets when nothing here matches.
     static let table: [(key: DoodleKey, keywords: [String])] = [
         (.braces, ["code", "coding", "leetcode", "debug*", "ship", "problem", "interview", "algorithm*"]),
         (.trendLine, ["trade", "trading", "chart", "stock", "bill", "statement", "budget", "numbers",
@@ -21,8 +23,23 @@ public enum DoodleKey: String, CaseIterable, Sendable {
                      "mobility", "exercise*", "massage"]),
         (.notebook, ["journal", "write", "writing", "reflect*", "note", "dream", "read", "reading",
                      "book", "paper", "summary", "draft", "diary", "learn", "study"]),
-        (.sparkle, ["clean*", "tidy", "tidying", "declutter", "trash", "sort"]),
+        (.broom, ["clean*", "tidy", "tidying", "declutter", "trash", "sort", "laundry", "dishes", "vacuum",
+                  "clothes", "chore*"]),
         (.potion, ["project", "experiment", "water", "drink", "tea", "cocktail", "cook*", "soak", "brew"]),
+        (.headphones, ["listen*", "song", "songs", "sing", "singing", "album", "playlist", "music", "concert",
+                       "podcast"]),
+        (.camera, ["photo*", "picture", "pictures", "camera", "selfie", "draw", "drawing", "sketch*"]),
+        (.paw, ["cat", "cats", "dog", "pet", "litter", "groom*", "playtime"]),
+        (.forkKnife, ["meal", "meals", "eat*", "food", "snack*", "supermarket", "restaurant", "lunch",
+                      "dinner", "breakfast"]),
+        (.moon, ["meditat*", "mindful*", "sleep*", "nap", "rest", "relax*", "sunset", "sunrise", "sky",
+                 "window", "stare", "pillow", "bedsheet*", "bed", "calm", "breath*"]),
+        (.heart, ["mask", "cream", "lotion", "floss", "eye drops", "nail", "nails", "skincare", "shower",
+                  "bath", "forgive*", "compliment*", "kind*", "gratitude", "grateful"]),
+        (.speechBubble, ["say", "speak*", "talk*", "chat", "conversation", "opinion", "ask", "name"]),
+        (.mapPin, ["trip", "visit", "event", "show", "exhibition", "class", "travel", "museum", "go to",
+                   "town", "city"]),
+        (.screen, ["watch*", "video*", "movie*", "film*", "comedy", "tv", "stream*"]),
     ]
 
     /// A short name for the picker's VoiceOver label.
@@ -38,6 +55,16 @@ public enum DoodleKey: String, CaseIterable, Sendable {
         case .trendLine: "Trend line"
         case .flag: "Flag"
         case .sparkle: "Sparkle"
+        case .headphones: "Headphones"
+        case .camera: "Camera"
+        case .paw: "Paw"
+        case .forkKnife: "Fork and knife"
+        case .moon: "Moon"
+        case .heart: "Heart"
+        case .speechBubble: "Speech bubble"
+        case .mapPin: "Map pin"
+        case .screen: "Screen"
+        case .broom: "Broom"
         }
     }
 
