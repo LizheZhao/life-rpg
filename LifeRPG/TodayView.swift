@@ -462,7 +462,9 @@ struct TodayView: View {
                                noticeKey: noticeKey(for: overlay))
                 }
             }
-            .sheet(isPresented: $showingTrack) { trackSheet }
+            .sheet(isPresented: $showingTrack) {
+                LevelTrackSheet(level: level, totalEarned: totalEarned) { showingTrack = false }
+            }
             .onAppear { checkMoments() }
             .onChange(of: ledger.count) { checkMoments() }
             .onChange(of: overlay == nil) {
@@ -613,38 +615,6 @@ struct TodayView: View {
         case .routine(let occurrence):
             .fixed(pill: routineState(occurrence, .today).pills.first { $0.kind == .payout }?.text)
         case .ahead(let routine): .fixed(pill: aheadPill([routine.basePoints]))
-        }
-    }
-
-    /// The whole level track, unlocked and still ahead (`Perks.track`).
-    private var trackSheet: some View {
-        NavigationStack {
-            List {
-                Section {
-                    Text("Lv \(level) · \(totalEarned) earned · \(Economy.pointsToNextLevel(totalEarned: totalEarned)) to the next level")
-                        .font(.subheadline)
-                }
-                Section("Perks") {
-                    ForEach(Perks.track, id: \.self) { perk in
-                        let open = Perks.has(perk, at: level)
-                        HStack(alignment: .firstTextBaseline) {
-                            Image(systemName: open ? "checkmark.circle.fill" : "lock")
-                                .foregroundStyle(open ? .green : .secondary)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(perk.summary)
-                                Text("Lv \(perk.level) · \(Economy.earnedNeeded(forLevel: perk.level)) earned")
-                                    .font(.caption).foregroundStyle(.secondary)
-                            }
-                        }
-                        .foregroundStyle(open ? .primary : .secondary)
-                    }
-                }
-            }
-            .navigationTitle("Levels")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) { Button("Done") { showingTrack = false } }
-            }
         }
     }
 

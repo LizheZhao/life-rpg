@@ -149,6 +149,120 @@ struct LevelCardView: View {
     }
 }
 
+// MARK: - levels sheet
+
+/// The level card's sheet: where the level stands and the whole perk track. The numbers are
+/// Core's (`Economy`, `Perks.track`); this only draws them. Opened from the level card and the avatar.
+struct LevelTrackSheet: View {
+    let level: Int
+    let totalEarned: Int
+    let onDone: () -> Void
+
+    @Environment(\.dynamicTypeSize) private var typeSize
+
+    private var toNext: Int { Economy.pointsToNextLevel(totalEarned: totalEarned) }
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: LR.Spacing.sectionGap) {
+                    standingCard
+                    Text("Perks").lr(.heading).foregroundStyle(LR.Color.sectionTitle)
+                        .accessibilityAddTraits(.isHeader)
+                        .padding(.top, 6)
+                    perksCard
+                }
+                .padding(.horizontal, 16)
+                .padding(.bottom, 8)
+            }
+            .background(LR.Color.canvas.ignoresSafeArea())
+            .navigationTitle("Levels")
+            .navigationBarTitleDisplayMode(.inline)
+            .safeAreaInset(edge: .bottom) {
+                ConfirmBar(title: "Done", enabled: true, action: onDone)
+            }
+        }
+    }
+
+    private var standingCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .firstTextBaseline, spacing: 10) {
+                    levelText
+                    earnedText
+                    Spacer(minLength: 8)
+                    toNextText
+                }
+                VStack(alignment: .leading, spacing: 2) { levelText; earnedText; toNextText }
+            }
+            LevelDotGrid(filled: Economy.levelDots(totalEarned: totalEarned, count: 20), total: 20,
+                         columns: typeSize.isAccessibilitySize ? 10 : 20)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .lrCard(.surface, radius: LR.Radius.card)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Level \(level)")
+        .accessibilityValue("\(totalEarned) earned, \(toNext) to the next level")
+    }
+
+    private var levelText: some View {
+        Text("Lv \(level)").lr(.levelInline).foregroundStyle(LR.Color.ink)
+    }
+
+    private var earnedText: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 4) {
+            Text("\(totalEarned)").lr(.titleCard).monospacedDigit().foregroundStyle(LR.Color.ink)
+            Text("earned").lr(.caption).foregroundStyle(LR.Color.inkSecondary)
+        }
+    }
+
+    private var toNextText: some View {
+        Text("\(toNext) to Lv \(level + 1)").lr(.caption).foregroundStyle(LR.Color.inkSecondary)
+    }
+
+    private var perksCard: some View {
+        VStack(spacing: 0) {
+            ForEach(Array(Perks.track.enumerated()), id: \.element) { index, perk in
+                if index > 0 { Rectangle().fill(LR.Color.divider).frame(height: 1) }
+                perkRow(summary: perk.summary, level: perk.level, open: Perks.has(perk, at: level))
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .lrCard(.surface, radius: LR.Radius.row)
+    }
+
+    /// Unlocked: a sage disc with a check and full-strength text. Locked: a quiet disc with a lock
+    /// and secondary text. The state is never colour alone, and VoiceOver hears it as the value.
+    private func perkRow(summary: String, level unlocksAt: Int, open: Bool) -> some View {
+        HStack(alignment: .center, spacing: 12) {
+            Circle().fill(open ? LR.Color.tintTrivial : LR.Color.pillFill)
+                .frame(width: 28, height: 28)
+                .overlay {
+                    Image(systemName: open ? "checkmark" : "lock.fill")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(open ? LR.Color.ink(on: .trivial) : LR.Color.iconNeutral)
+                }
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(summary).lr(.bodyStrong)
+                    .foregroundStyle(open ? LR.Color.ink : LR.Color.inkSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text("Lv \(unlocksAt) · \(Economy.earnedNeeded(forLevel: unlocksAt)) earned")
+                    .lr(.caption).monospacedDigit().foregroundStyle(LR.Color.inkSecondary)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .frame(minHeight: 44)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(summary)
+        .accessibilityValue(open ? "Unlocked" : "Locked, unlocks at level \(unlocksAt)")
+    }
+}
+
 // MARK: - routine-style row (routines and the epic)
 
 /// The frame routines, the epic and quests share: a doodle disc, the details, the controls, and an
