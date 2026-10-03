@@ -10,7 +10,7 @@ struct RootView: View {
     @Environment(\.modelContext) private var context
     @Environment(\.scenePhase) private var scenePhase
     @State private var tab = RootTab.today
-    /// Set by Today and Rewards while their card is up, so the bar fades out under the dim.
+    /// Set by Today, Rewards and Settings while their card is up, so the bar fades out under the dim.
     @State private var tabBarHidden = false
     @State private var today = Date().dayKey
     @State private var generationError: String?
@@ -49,7 +49,8 @@ struct RootView: View {
             SettingsView(seedStatus: seedStatus, today: today, sensorReport: sensorReport,
                          check: workoutCheck,
                          refresh: { await refresh(waitIfBusy: true) },
-                         onImported: { Task { await refresh() } })
+                         onImported: { Task { await refresh() } },
+                         hidesTabBar: $tabBarHidden)
                 .toolbar(.hidden, for: .tabBar)
                 .tag(RootTab.settings)
         }

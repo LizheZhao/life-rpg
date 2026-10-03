@@ -44,11 +44,11 @@ struct WorkoutDetectionView: View {
             if let check {
                 Section {
                     CheckResultCard(check: check)
-                        .listRowInsets(EdgeInsets())
-                        .listRowBackground(Color.clear)
+                        .listRowInsets(EdgeInsets(top: 14, leading: 16, bottom: 14, trailing: 16))
                 } header: {
                     header("Last check")
                 }
+                .listRowBackground(LR.Color.surface)
             }
         }
         .listRowSeparatorTint(LR.Color.divider)
@@ -83,6 +83,7 @@ struct WorkoutDetectionView: View {
                     .foregroundStyle(LR.Color.inkSecondary)
             }
             .frame(minHeight: 44)
+            .accessibilityElement(children: .combine)
             if authorization != .fullAccess {
                 Button(action: allowOrOpenSettings) {
                     label(authorization == .notDetermined ? "Allow Calendar access" : "Open iOS Settings",
@@ -183,16 +184,25 @@ struct WorkoutDetectionView: View {
         }
     }
 
+    /// The Settings row's look: the icon in a 32 pt circle of the section's tint at 18%.
     private func label(_ title: LocalizedStringKey, systemImage: String) -> some View {
-        Label(title, systemImage: systemImage)
-            .lr(.bodyStrong)
-            .foregroundStyle(LR.Color.ink)
+        HStack(spacing: 12) {
+            Image(systemName: systemImage)
+                .font(.system(size: 15, weight: .medium))
+                .foregroundStyle(LR.Color.iconNeutral)
+                .frame(width: 32, height: 32)
+                .background(Circle().fill(LR.Color.sectionCircle(.easy)))
+                .accessibilityHidden(true)
+            Text(title)
+                .lr(.bodyStrong)
+                .foregroundStyle(LR.Color.ink)
+        }
     }
 
     private func header(_ title: LocalizedStringKey) -> some View {
         Text(title)
             .lr(.heading)
-            .foregroundStyle(LR.Color.inkSecondary)
+            .foregroundStyle(LR.Color.sectionTitle)
             .textCase(nil)
     }
 
@@ -244,10 +254,7 @@ private struct CheckResultCard: View {
                 }
             }
         }
-        .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .lrCard(.surface, radius: LR.Radius.row)
-        .padding(.vertical, 6)
         .accessibilityElement(children: .combine)
     }
 

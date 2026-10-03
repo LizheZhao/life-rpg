@@ -20,12 +20,14 @@ enum RatingScale {
 // MARK: - what the card is about and what it offers
 
 /// The item the card is about: a 28 pt disc in the item's tint with its doodle, then its title.
-/// A neutral disc (no tint) is for a card that is about no particular item (a level-up).
+/// A neutral disc (no tint) is for a card that is about no particular item (a level-up). `clay` is
+/// the warning disc of a card that is about to replace something for good.
 struct MomentHeader {
     var doodle: DoodleKey
     var tint: QuestTint?
     var title: String
     var subtitle: String?
+    var clay = false
 }
 
 extension MomentHeader {
@@ -343,11 +345,11 @@ struct MomentCardFace: View {
 
     private var headerRow: some View {
         HStack(spacing: 10) {
-            Circle().fill(header.tint?.color ?? LR.Color.tabPill)
+            Circle().fill(header.tint?.color ?? (header.clay ? LR.Color.clayBg : LR.Color.tabPill))
                 .frame(width: min(disc, 48), height: min(disc, 48))
                 .overlay {
                     DoodleView(key: header.doodle, size: min(disc, 48) * 0.68,
-                               tint: header.tint.map(LR.Color.ink(on:)) ?? LR.Color.ink)
+                               tint: header.tint.map(LR.Color.ink(on:)) ?? (header.clay ? LR.Color.clay : LR.Color.ink))
                 }
             VStack(spacing: 2) {
                 Text(header.title).lr(.bodyStrong).foregroundStyle(LR.Color.ink)

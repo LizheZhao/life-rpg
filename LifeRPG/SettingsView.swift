@@ -13,6 +13,8 @@ struct SettingsView: View {
     /// Re-runs the day after a restore, so a backup that ends before today catches up at once
     /// instead of on the next foreground.
     let onImported: () -> Void
+    /// Set while the restore confirmation card is up, so the floating tab bar fades out under the dim.
+    var hidesTabBar: Binding<Bool> = .constant(false)
 
     /// The pages the rows push. A row is a button with a chevron of its own: the system disclosure
     /// indicator cannot be coloured, and the chevron is `iconNeutral`.
@@ -29,6 +31,7 @@ struct SettingsView: View {
                     Button { path.append(.library) } label: {
                         row("Library", systemImage: "books.vertical", tint: .trivial, pushes: true)
                     }
+                    .accessibilityHint("Opens your quests and routines")
                 } header: {
                     header("Library")
                 }
@@ -38,6 +41,7 @@ struct SettingsView: View {
                     Button { path.append(.workoutDetection) } label: {
                         row("Workout detection", systemImage: "figure.run", tint: .easy, pushes: true)
                     }
+                    .accessibilityHint("Opens which calendars and keywords verify workouts")
                 } header: {
                     header("Auto-verify")
                 }
@@ -47,14 +51,19 @@ struct SettingsView: View {
                     Button { transfer.prepareJSONExport(context) } label: {
                         row("Output records to JSON", systemImage: "clock.arrow.circlepath", tint: .hidden)
                     }
+                    .accessibilityHint("Saves all your history as a JSON file")
                     Button { transfer.prepareCSVExport(context) } label: {
                         row("Ratings & comments (CSV)", systemImage: "star.bubble", tint: .hidden)
                     }
+                    .accessibilityHint("Saves your ratings and comments as CSV files")
                     Button { transfer.importing = true } label: {
                         row("Restore from JSON…", systemImage: "square.and.arrow.down", tint: .hidden)
                     }
+                    .accessibilityHint("Picks a backup file. You confirm before anything is replaced")
                     if let error = transfer.error {
-                        Text(error).foregroundStyle(LR.Color.clay)
+                        BannerView(message: error)
+                            .listRowInsets(EdgeInsets(top: 6, leading: 0, bottom: 6, trailing: 0))
+                            .listRowBackground(Color.clear)
                     }
                 } header: {
                     header("Data")
@@ -65,6 +74,7 @@ struct SettingsView: View {
                     Button { path.append(.design) } label: {
                         row("Design gallery", systemImage: "paintpalette", tint: .medium, pushes: true)
                     }
+                    .accessibilityHint("Opens the sample components")
                 } header: {
                     header("Design")
                 }
@@ -74,10 +84,21 @@ struct SettingsView: View {
                     Button { path.append(.debug) } label: {
                         row("Debug", systemImage: "wrench.and.screwdriver", tint: .hard, pushes: true)
                     }
+                    .accessibilityHint("Opens row counts, the data audit and test tools")
                 } header: {
                     header("Developer")
                 }
                 .listRowBackground(LR.Color.surface)
+
+                Section {
+                    Text(about)
+                        .lr(.caption)
+                        .foregroundStyle(LR.Color.inkSecondary)
+                        .frame(maxWidth: .infinity)
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
+                        .accessibilityLabel(aboutSpoken)
+                }
             }
             .listRowSeparatorTint(LR.Color.divider)
             .scrollContentBackground(.hidden)
@@ -98,10 +119,15 @@ struct SettingsView: View {
                               refresh: refresh)
                 }
             }
-            .dataTransfer(transfer, onImported: onImported)
         }
+        .dataTransfer(transfer, hidesTabBar: hidesTabBar, onImported: onImported)
         .reservingTabBarSpace()
     }
+
+    private var version: String { Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?" }
+    private var build: String { Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "?" }
+    private var about: String { "LifeRPG \(version) (\(build))" }
+    private var aboutSpoken: String { "LifeRPG, version \(version), build \(build)" }
 
     /// The icon sits in a 32 pt circle of its section's tint at 18%, in the neutral icon colour.
     private func row(_ title: LocalizedStringKey, systemImage: String, tint: QuestTint,

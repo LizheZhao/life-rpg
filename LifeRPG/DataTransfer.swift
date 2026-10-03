@@ -5,7 +5,8 @@ import UniformTypeIdentifiers
 
 /// History export (JSON), the ratings-and-comments export (CSV folder) and restoring from JSON.
 /// Moved out of the Today page unchanged: the state, the handlers, the save and open panels and
-/// the "Replace all history?" confirmation. `error` is what the page used to call `actionError`.
+/// the "Replace all history?" confirmation (now the centered `MomentCard`). `error` is what the
+/// page used to call `actionError`.
 @MainActor @Observable
 final class DataTransfer {
     var error: String?
@@ -79,17 +80,22 @@ final class DataTransfer {
 
 extension View {
     /// Attaches the open panel, the save panel and the overwrite confirmation for `transfer`.
-    /// `onImported` runs after a restore has been applied.
-    func dataTransfer(_ transfer: DataTransfer, onImported: @escaping () -> Void) -> some View {
-        modifier(DataTransferModifier(transfer: transfer, onImported: onImported))
+    /// `onImported` runs after a restore has been applied. `hidesTabBar` is set while the
+    /// confirmation card is up, so the floating bar fades out under the dim. Apply it outside the
+    /// navigation stack, so the dim covers the navigation bar too.
+    func dataTransfer(_ transfer: DataTransfer, hidesTabBar: Binding<Bool> = .constant(false),
+                      onImported: @escaping () -> Void) -> some View {
+        modifier(DataTransferModifier(transfer: transfer, hidesTabBar: hidesTabBar, onImported: onImported))
     }
 }
 
 private struct DataTransferModifier: ViewModifier {
     @Bindable var transfer: DataTransfer
+    let hidesTabBar: Binding<Bool>
     let onImported: () -> Void
 
     @Environment(\.modelContext) private var context
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     func body(content: Content) -> some View {
         content
@@ -103,16 +109,26 @@ private struct DataTransferModifier: ViewModifier {
                 if case .failure(let error) = result { transfer.error = "Export failed: \(error)" }
                 transfer.pendingExport = nil
             }
-            .alert("Replace all history?", isPresented: Binding(
-                get: { transfer.importPlan != nil }, set: { if !$0 { transfer.importPlan = nil } }
-            ), presenting: transfer.importPlan) { plan in
-                Button("Replace", role: .destructive) {
-                    transfer.performImport(plan, context, onImported: onImported)
+            // Behind the card the page is not reachable, for VoiceOver either.
+            .accessibilityHidden(transfer.importPlan != nil)
+            .overlay {
+                if let plan = transfer.importPlan {
+                    MomentCard(header: MomentHeader(doodle: .notebook, tint: nil,
+                                                    title: "Replace all history?", clay: true),
+                               content: .notice(MomentNotice(
+                                   message: transfer.importMessage(plan.summary),
+                                   primary: "Replace everything",
+                                   quiet: "Not yet",
+                                   confirm: {
+                                       transfer.performImport(plan, context, onImported: onImported)
+                                       transfer.importPlan = nil
+                                   },
+                                   dismiss: { transfer.importPlan = nil })))
                 }
-                Button("Cancel", role: .cancel) {}
-            } message: { plan in
-                Text(transfer.importMessage(plan.summary))
             }
+            .animation(.easeOut(duration: reduceMotion ? 0.2 : 0.22), value: transfer.importPlan != nil)
+            .onChange(of: transfer.importPlan != nil) { _, up in hidesTabBar.wrappedValue = up }
+            .onDisappear { hidesTabBar.wrappedValue = false }
     }
 }
 
