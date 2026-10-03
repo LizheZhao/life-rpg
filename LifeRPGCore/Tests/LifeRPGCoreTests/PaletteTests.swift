@@ -28,17 +28,23 @@ struct PaletteTests {
         #expect(Palette.tabPill == Palette.Token(light: 0xE9E7F2, dark: 0x3A3848))
         #expect(Palette.accent == Palette.Token(light: 0x4682B4, dark: 0x8FB0CC))
         #expect(Palette.chip == Palette.Token(light: 0xFFFFFF, dark: 0x14141A))
-        // sage, steel blue, amber, crimson, dusk violet: trivial, easy, medium, hard, hidden.
-        #expect(Palette.tints.map { $0.token.light } == [0x9CAF88, 0x4682B4, 0xFFBF00, 0xC8465A, 0x8A7BB3])
-        #expect(Palette.tints.map { $0.token.dark } == [0x86987A, 0x3F76A5, 0xD8A645, 0xB84A60, 0x7A6CA8])
+        // sage, steel blue, amber, crimson, dusk violet, then routine (beige grey) and epic (umber):
+        // trivial, easy, medium, hard, hidden, routine, epic.
+        #expect(Palette.tints.map { $0.token.light }
+                == [0x9CAF88, 0x4682B4, 0xFFBF00, 0xC8465A, 0x8A7BB3, 0xC9C4BB, 0x5D5750])
+        #expect(Palette.tints.map { $0.token.dark }
+                == [0x86987A, 0x3F76A5, 0xD8A645, 0xB84A60, 0x7A6CA8, 0xB9B4AB, 0x716B63])
+        #expect(Palette.tintRoutine == Palette.Token(light: 0xC9C4BB, dark: 0xB9B4AB))
+        #expect(Palette.tintEpic == Palette.Token(light: 0x5D5750, dark: 0x716B63))
         #expect(Palette.onTintDark == Palette.Token(light: 0x25232F, dark: 0x1B1A22))
     }
 
     @Test func textOnATintIsChosenPerTint() {
-        // Dark on the light amber and sage, white on steel blue, crimson and violet, both appearances.
+        // Dark on the light amber, sage and routine beige; white on steel blue, crimson, violet and
+        // the epic umber, both appearances.
         #expect(Palette.tints.map { Palette.ink(on: $0.tint) }
                 == [Palette.onTintDark, Palette.onTintWhite, Palette.onTintDark,
-                    Palette.onTintWhite, Palette.onTintWhite])
+                    Palette.onTintWhite, Palette.onTintWhite, Palette.onTintDark, Palette.onTintWhite])
         #expect(Palette.onTintWhite.light == 0xFFFFFF && Palette.onTintWhite.dark == 0xFFFFFF)
     }
 
@@ -104,7 +110,7 @@ struct PaletteTests {
     @Test(arguments: Palette.Appearance.allCases)
     func iconsAndChevronsClearThreeToOne(appearance: Palette.Appearance) {
         let pairs = Palette.iconPairs(appearance)
-        #expect(pairs.count == 8)
+        #expect(pairs.count == 10)
         for pair in pairs {
             let measured = ratio(pair.foreground, pair.background)
             #expect(measured >= 3.0, "\(appearance) \(pair.label): \(measured)")
@@ -133,11 +139,54 @@ struct PaletteTests {
             (.light, .medium, 9.34), (.light, .trivial, 6.54), (.light, .hard, 4.69),
             (.dark, .medium, 7.77), (.dark, .trivial, 5.57),
             (.dark, .easy, 4.83), (.dark, .hard, 5.02), (.dark, .hidden, 4.63),
+            // The two warm greys: dark ink on the routine beige, white on the epic umber.
+            (.light, .routine, 8.89), (.dark, .routine, 8.36),
+            (.light, .epic, 7.13), (.dark, .epic, 5.27),
         ]
         for (appearance, tint, value) in expected {
             let measured = ratio(Palette.ink(on: tint).value(appearance), Palette.tint(tint).value(appearance))
             #expect(abs(measured - value) < 0.01, "\(appearance) \(tint): \(measured)")
         }
+    }
+
+    @Test func routineAndEpicAreTheirOwnTints() {
+        // An epic quest is no longer drawn as the hard tint.
+        #expect(QuestTint(Difficulty.epic) == .epic)
+        #expect(QuestTint(Difficulty.hard) == .hard)
+        #expect(Palette.tint(.routine) == Palette.tintRoutine)
+        #expect(Palette.tint(.epic) == Palette.tintEpic)
+        #expect(Palette.ink(on: .routine) == Palette.onTintDark)
+        #expect(Palette.ink(on: .epic) == Palette.onTintWhite)
+        #expect(QuestTint.allCases.count == 7)
+        #expect(Palette.tints.map(\.tint) == QuestTint.allCases)
+    }
+
+    /// Title, caption, `⋯` and the open complete button's ring all use `ink(on:)`, so one ratio per
+    /// tint covers the text (4.5) and the ring (3). The chip (a pill, and the doodle's disc) is
+    /// white in light and near-black in dark; its own text is `ink` on `chip`, already above.
+    @Test(arguments: Palette.Appearance.allCases)
+    func routineAndEpicCarryTextRingAndChip(appearance: Palette.Appearance) {
+        for tint in [QuestTint.routine, .epic] {
+            let ground = Palette.tint(tint).value(appearance)
+            let ink = Palette.ink(on: tint).value(appearance)
+            #expect(ratio(ink, ground) >= 4.5, "text on \(tint) in \(appearance)")
+            #expect(ratio(ink, ground) >= 3.0, "ring on \(tint) in \(appearance)")
+            #expect(ratio(Palette.chip.value(appearance), ground) >= 1.5, "chip on \(tint) in \(appearance)")
+            // The doodle sits on the chip in `ink`.
+            #expect(ratio(Palette.ink.value(appearance), Palette.chip.value(appearance)) >= 4.5)
+        }
+        // The chip's measured edge against each: 1.74 and 7.13 in light, 8.89 and 3.48 in dark.
+        let chip = Palette.chip.value(appearance)
+        let expected: [Palette.Appearance: (Double, Double)] = [.light: (1.74, 7.13), .dark: (8.89, 3.48)]
+        #expect(abs(ratio(chip, Palette.tintRoutine.value(appearance)) - expected[appearance]!.0) < 0.01)
+        #expect(abs(ratio(chip, Palette.tintEpic.value(appearance)) - expected[appearance]!.1) < 0.01)
+    }
+
+    @Test func routineAndEpicShadowsFollowTheTintedRecipe() {
+        // Same recipe as every tint: its own colour at 22% in light, black at 40% in dark, none on a
+        // neutral card in dark. Nothing is special-cased per tint.
+        #expect(Palette.shadow(.light).tintedByCard && Palette.shadow(.light).tint == 0.22)
+        #expect(!Palette.shadow(.dark).tintedByCard && Palette.shadow(.dark).tint == 0.4)
     }
 
     @Test(arguments: Palette.Appearance.allCases)

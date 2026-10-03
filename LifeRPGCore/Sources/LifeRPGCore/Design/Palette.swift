@@ -50,17 +50,21 @@ public enum Palette {
     public static let dotEmpty = Token(light: 0xDDDED9, dark: 0x34333F)
     public static let dotFill = Token(light: 0x9CAF88, dark: 0x86987A)
 
-    // MARK: tints (trivial, easy, medium, hard, hidden)
+    // MARK: tints (trivial, easy, medium, hard, hidden, routine, epic)
 
     public static let tintTrivial = Token(light: 0x9CAF88, dark: 0x86987A)   // sage
     public static let tintEasy = Token(light: 0x4682B4, dark: 0x3F76A5)      // steel blue
     public static let tintMedium = Token(light: 0xFFBF00, dark: 0xD8A645)    // amber
     public static let tintHard = Token(light: 0xC8465A, dark: 0xB84A60)      // crimson
     public static let tintHidden = Token(light: 0x8A7BB3, dark: 0x7A6CA8)    // dusk violet
+    /// Routine rows: the light beige grey (the user's own pick).
+    public static let tintRoutine = Token(light: 0xC9C4BB, dark: 0xB9B4AB)
+    /// The weekly epic: the dark umber (the user's own pick).
+    public static let tintEpic = Token(light: 0x5D5750, dark: 0x716B63)
 
-    /// Title, caption, doodle, `⋯` and open ring on amber and sage.
+    /// Title, caption, `⋯` and open ring on amber, sage and the routine beige.
     public static let onTintDark = Token(light: 0x25232F, dark: 0x1B1A22)
-    /// The same on steel blue, crimson and violet: white in both appearances.
+    /// The same on steel blue, crimson, violet and the epic umber: white in both appearances.
     public static let onTintWhite = Token(light: 0xFFFFFF, dark: 0xFFFFFF)
 
     /// A pill on a tinted row: a solid chip, so the range or `+N` keeps its shape on every tint.
@@ -83,15 +87,18 @@ public enum Palette {
         case .medium: tintMedium
         case .hard: tintHard
         case .hidden: tintHidden
+        case .routine: tintRoutine
+        case .epic: tintEpic
         }
     }
 
-    /// What is drawn on a tint, per tint: dark on the light amber and sage, white on the rest (the
-    /// sheet's rule). One colour serves the title, the caption, the doodle and the glyphs.
+    /// What is drawn on a tint, per tint: dark on the light amber, sage and routine beige, white on
+    /// the rest (the sheet's rule, extended to the two warm greys by their measured contrast). One
+    /// colour serves the title, the caption and the glyphs.
     public static func ink(on tint: QuestTint) -> Token {
         switch tint {
-        case .trivial, .medium: onTintDark
-        case .easy, .hard, .hidden: onTintWhite
+        case .trivial, .medium, .routine: onTintDark
+        case .easy, .hard, .hidden, .epic: onTintWhite
         }
     }
 
@@ -103,16 +110,18 @@ public enum Palette {
         ("fill", fill), ("onFill", onFill), ("dotEmpty", dotEmpty), ("dotFill", dotFill),
         ("tintTrivial", tintTrivial), ("tintEasy", tintEasy), ("tintMedium", tintMedium),
         ("tintHard", tintHard), ("tintHidden", tintHidden),
+        ("tintRoutine", tintRoutine), ("tintEpic", tintEpic),
         ("onTintDark", onTintDark), ("onTintWhite", onTintWhite),
         ("chip", chip), ("pillFill", pillFill),
         ("clay", clay), ("clayBg", clayBg), ("avatarPink", avatarPink),
     ]
 
-    /// The five tints in the order the gallery lists them.
+    /// Every tint in the order the gallery lists them (the order of `QuestTint.allCases`).
     public static let tints: [(name: String, tint: QuestTint, token: Token)] = [
         ("tintTrivial", .trivial, tintTrivial), ("tintEasy", .easy, tintEasy),
         ("tintMedium", .medium, tintMedium), ("tintHard", .hard, tintHard),
-        ("tintHidden", .hidden, tintHidden),
+        ("tintHidden", .hidden, tintHidden), ("tintRoutine", .routine, tintRoutine),
+        ("tintEpic", .epic, tintEpic),
     ]
 
     // MARK: contrast

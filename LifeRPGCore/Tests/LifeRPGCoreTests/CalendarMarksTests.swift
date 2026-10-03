@@ -70,7 +70,7 @@ struct CalendarMarksTests {
 
     /// The app colours a dot with `QuestTint(difficulty)`; the mapping is Core's.
     @Test func tierToTintMapping() {
-        #expect(Difficulty.allCases.map { QuestTint($0) } == [.trivial, .easy, .medium, .hard, .hard])
+        #expect(Difficulty.allCases.map { QuestTint($0) } == [.trivial, .easy, .medium, .hard, .epic])
     }
 
     @Test func blueDotNeedsEveryGatingRoutineDoneOnTheDay() {

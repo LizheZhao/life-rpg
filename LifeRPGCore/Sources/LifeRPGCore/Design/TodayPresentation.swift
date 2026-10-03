@@ -55,18 +55,20 @@ public struct PillState: Equatable, Sendable {
     }
 }
 
-/// The tint of a tile: the difficulty, or what makes it special.
+/// The tint of a card: the difficulty, or what makes it special (hidden, a routine, the epic).
 public enum QuestTint: Hashable, Sendable, CaseIterable {
-    case trivial, easy, medium, hard, hidden
+    case trivial, easy, medium, hard, hidden, routine, epic
 
-    /// An epic is never a tile (it is a routine-style card of its own), so it takes the hardest tint.
-    /// Public so the calendar's dots and the epic-week band colour themselves by the same mapping.
+    /// A difficulty's tint; an epic has its own, not the hard one. Public so the calendar's dots
+    /// and the epic-week band colour themselves by the same mapping. `.routine` is no difficulty:
+    /// a routine row asks for it by name.
     public init(_ difficulty: Difficulty) {
         switch difficulty {
         case .trivial: self = .trivial
         case .easy: self = .easy
         case .medium: self = .medium
-        case .hard, .epic: self = .hard
+        case .hard: self = .hard
+        case .epic: self = .epic
         }
     }
 }
