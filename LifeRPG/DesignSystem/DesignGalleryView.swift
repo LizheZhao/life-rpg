@@ -146,6 +146,7 @@ struct DesignGalleryView: View {
         VStack(spacing: 6) {
             content().frame(height: 56)
             Text(name).lr(.caption).foregroundStyle(LR.Color.inkSecondary)
+                .lineLimit(1).minimumScaleFactor(0.7)
         }
         .padding(10)
         .frame(maxWidth: .infinity)

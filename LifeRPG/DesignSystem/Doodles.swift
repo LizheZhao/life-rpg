@@ -1,7 +1,49 @@
 import LifeRPGCore
 import SwiftUI
 
-/// A parsed SVG path (`M L H V C S Q Z`, absolute and relative; no arcs) so a doodle is edited as
+/// An SVG elliptical arc (spec F.6.5) as at most four cubic curves, so the parser needs no second
+/// kind of segment. Rotation is honoured; an out-of-range radius is scaled up as the spec says.
+private func addArc(to path: inout Path, from p0: CGPoint, to p1: CGPoint, radii: CGPoint,
+                    rotation degrees: CGFloat, large: Bool, sweep: Bool) {
+    guard p0 != p1 else { return }
+    var rx = abs(radii.x), ry = abs(radii.y)
+    guard rx > 0, ry > 0 else { path.addLine(to: p1); return }
+    let phi = degrees * .pi / 180, cosPhi = cos(phi), sinPhi = sin(phi)
+    let dx = (p0.x - p1.x) / 2, dy = (p0.y - p1.y) / 2
+    let x1 = cosPhi * dx + sinPhi * dy, y1 = -sinPhi * dx + cosPhi * dy
+    let lambda = x1 * x1 / (rx * rx) + y1 * y1 / (ry * ry)
+    if lambda > 1 { rx *= lambda.squareRoot(); ry *= lambda.squareRoot() }
+    let numerator = rx * rx * ry * ry - rx * rx * y1 * y1 - ry * ry * x1 * x1
+    let denominator = rx * rx * y1 * y1 + ry * ry * x1 * x1
+    let coefficient = (large == sweep ? -1 : 1) * max(0, numerator / denominator).squareRoot()
+    let cx1 = coefficient * rx * y1 / ry, cy1 = -coefficient * ry * x1 / rx
+    let cx = cosPhi * cx1 - sinPhi * cy1 + (p0.x + p1.x) / 2
+    let cy = sinPhi * cx1 + cosPhi * cy1 + (p0.y + p1.y) / 2
+    let start = atan2((y1 - cy1) / ry, (x1 - cx1) / rx)
+    var sweepAngle = atan2((-y1 - cy1) / ry, (-x1 - cx1) / rx) - start
+    if sweep && sweepAngle < 0 { sweepAngle += 2 * .pi }
+    if !sweep && sweepAngle > 0 { sweepAngle -= 2 * .pi }
+    let pieces = Int((abs(sweepAngle) / (.pi / 2)).rounded(.up))
+    let step = sweepAngle / CGFloat(pieces)
+    let handle = 4 / 3 * tan(step / 4)
+    func point(_ a: CGFloat) -> CGPoint {
+        CGPoint(x: cx + rx * cos(a) * cosPhi - ry * sin(a) * sinPhi,
+                y: cy + rx * cos(a) * sinPhi + ry * sin(a) * cosPhi)
+    }
+    func tangent(_ a: CGFloat) -> CGPoint {
+        CGPoint(x: -rx * sin(a) * cosPhi - ry * cos(a) * sinPhi,
+                y: -rx * sin(a) * sinPhi + ry * cos(a) * cosPhi)
+    }
+    for i in 0..<pieces {
+        let a = start + step * CGFloat(i), b = a + step
+        let ta = tangent(a), tb = tangent(b), pa = point(a), pb = i == pieces - 1 ? p1 : point(b)
+        path.addCurve(to: pb,
+                      control1: CGPoint(x: pa.x + handle * ta.x, y: pa.y + handle * ta.y),
+                      control2: CGPoint(x: pb.x - handle * tb.x, y: pb.y - handle * tb.y))
+    }
+}
+
+/// A parsed SVG path (`M L H V C S Q A Z`, absolute and relative) so a doodle is edited as
 /// the same string a vector tool exports, and the app has no second drawing format.
 private func svgPath(_ d: String) -> Path {
     var path = Path()
@@ -54,6 +96,12 @@ private func svgPath(_ d: String) -> Path {
         case "Q":
             guard let c = point(rel), let p = point(rel) else { return path }
             path.addQuadCurve(to: p, control: c); current = p; lastControl = nil
+        case "A":
+            guard let rx = number(), let ry = number(), let rotation = number(),
+                  let large = number(), let sweep = number(), let p = point(rel) else { return path }
+            addArc(to: &path, from: current, to: p, radii: CGPoint(x: rx, y: ry), rotation: rotation,
+                   large: large != 0, sweep: sweep != 0)
+            current = p; lastControl = nil
         case "Z":
             path.closeSubpath(); current = start; lastControl = nil
             command = "M"
@@ -64,8 +112,9 @@ private func svgPath(_ d: String) -> Path {
     return path
 }
 
-/// One doodle per `DoodleKey`, drawn in a 100 x 100 box. Closed shapes stop a unit or two short of
-/// where they began and no two lines are exactly parallel; the hand-made look is the point.
+/// One doodle per `DoodleKey`, drawn in a 100 x 100 box (the ten added later on a 48 x 48 grid, see
+/// `grid(for:)`, so a sketch exported from a vector tool pastes in as it is). Closed shapes stop a unit
+/// or two short of where they began and no two lines are exactly parallel; the hand-made look is the point.
 struct DoodleShape: Shape {
     let key: DoodleKey
 
@@ -75,8 +124,16 @@ struct DoodleShape: Shape {
         for dot in Self.dots(for: key) {
             path.addEllipse(in: CGRect(x: dot.x - dot.r, y: dot.y - dot.r, width: dot.r * 2, height: dot.r * 2))
         }
-        return path.applying(CGAffineTransform(scaleX: rect.width / 100, y: rect.height / 100)
+        let grid = Self.grid(for: key)
+        return path.applying(CGAffineTransform(scaleX: rect.width / grid, y: rect.height / grid)
             .concatenating(CGAffineTransform(translationX: rect.minX, y: rect.minY)))
+    }
+
+    private static func grid(for key: DoodleKey) -> CGFloat {
+        switch key {
+        case .headphones, .camera, .paw, .forkKnife, .moon, .heart, .speechBubble, .mapPin, .screen, .broom: 48
+        default: 100
+        }
     }
 
     private static func strokes(for key: DoodleKey) -> [String] {
@@ -123,6 +180,34 @@ struct DoodleShape: Shape {
         case .sparkle:
             ["M50 8l7 28 28 7-28 7-7 28-7-28-28-7 28-7 7-28",
              "M82 14l1 12M76 20h12"]
+        case .headphones:
+            ["M9 28v-4a15 15 0 0 1 30 0v4",
+             "M10.5 27h1a3.5 3.5 0 0 1 3.5 3.5v6a3.5 3.5 0 0 1-3.5 3.5h-1a3.5 3.5 0 0 1-3.5-3.5v-6a3.5 3.5 0 0 1 3.5-3.5z",
+             "M36.5 27h1a3.5 3.5 0 0 1 3.5 3.5v6a3.5 3.5 0 0 1-3.5 3.5h-1a3.5 3.5 0 0 1-3.5-3.5v-6a3.5 3.5 0 0 1 3.5-3.5z"]
+        case .camera:
+            ["M7 16h8l3-5h12l3 5h8a1 1 0 0 1 1 1v21a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V17a1 1 0 0 1 1-1z"]
+        case .paw:
+            ["M24 25c-6 0-11 5-11 9 0 4 3 5 6 5 2 0 3-1 5-1s3 1 5 1c3 0 6-1 6-5 0-4-5-9-11-9z"]
+        case .forkKnife:
+            ["M13 7v10a4 4 0 0 0 4 4M21 7v10a4 4 0 0 1-4 4M17 7v34",
+             "M33 41V7c-4 3-6 8-6 14h6"]
+        case .moon:
+            ["M33 9a16 16 0 1 0 6 25A13 13 0 0 1 33 9z",
+             "M37 8v6M34 11h6"]
+        case .heart:
+            ["M24 40C10 30 7 22 7 16.5A9 9 0 0 1 24 12a9 9 0 0 1 17 4.5C41 22 38 30 24 40z"]
+        case .speechBubble:
+            ["M8 11h32a2 2 0 0 1 2 2v18a2 2 0 0 1-2 2H22l-9 8v-8H8a2 2 0 0 1-2-2V13a2 2 0 0 1 2-2z"]
+        case .mapPin:
+            ["M24 43C14 31 10 25 10 19a14 14 0 0 1 28 0c0 6-4 12-14 24z"]
+        case .screen:
+            ["M11 10h26a5 5 0 0 1 5 5v16a5 5 0 0 1-5 5H11a5 5 0 0 1-5-5V15a5 5 0 0 1 5-5z",
+             "M20 17.5v11l9-5.5z",
+             "M16 42h16"]
+        case .broom:
+            ["M38 6L24 24",
+             "M19 22l7 7c1 5-2 11-9 14-6 1-11-2-11-2 4-4 5-8 7-13 2-3 5-5 6-6z",
+             "M13 36l4 4M18 31l4 4"]
         }
     }
 
@@ -130,6 +215,10 @@ struct DoodleShape: Shape {
         switch key {
         case .avatar: [(40, 58, 1.5), (62, 57, 1.5)]
         case .potion: [(46, 78, 3), (58, 56, 2)]
+        case .camera: [(24, 27, 7.5)]
+        case .paw: [(12, 22, 3.6), (19.5, 14.5, 3.6), (28.5, 14.5, 3.6), (36, 22, 3.6)]
+        case .speechBubble: [(16, 22, 0.8), (24, 22, 0.8), (32, 22, 0.8)]
+        case .mapPin: [(24, 19, 5)]
         default: []
         }
     }
