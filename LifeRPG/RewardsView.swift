@@ -9,8 +9,11 @@ import SwiftUI
 /// Every rule and price is Core's; this page hands it the rows its queries already hold.
 struct RewardsView: View {
     let today: String
+    /// Set while the confirmation card is up, so the floating tab bar fades out under the dim, as on Today.
+    var hidesTabBar: Binding<Bool> = .constant(false)
 
     @Environment(\.modelContext) private var context
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Query(sort: \Reward.name) private var rewards: [Reward]
     @Query private var ledger: [LedgerEntry]
     @Query private var quests: [DailyQuest]
@@ -80,8 +83,16 @@ struct RewardsView: View {
             .sheet(item: $editing) { e in
                 RewardEditor(reward: e.reward)
             }
-            .sheet(item: $confirming) { c in confirmSheet(c) }
         }
+        // Behind the card the page is not reachable, for VoiceOver either.
+        .accessibilityHidden(confirming != nil)
+        .overlay {
+            if let confirming {
+                MomentCard(header: header(for: confirming), content: content(for: confirming))
+            }
+        }
+        .onChange(of: confirming == nil) { hidesTabBar.wrappedValue = confirming != nil }
+        .onDisappear { hidesTabBar.wrappedValue = false }
     }
 
     // MARK: sections
@@ -91,7 +102,7 @@ struct RewardsView: View {
         let debt = Purchase.blocked(cost: 0, balance: balance)
         return VStack(alignment: .leading, spacing: 0) {
             Text("Coins").lr(.caption).foregroundStyle(debt == nil ? LR.Color.inkSecondary : LR.Color.clay)
-            Text("\(balance)").lr(.handDisplay).monospacedDigit()
+            HandText("\(balance)", .handDisplay).monospacedDigit()
                 .foregroundStyle(debt == nil ? LR.Color.ink : LR.Color.clay)
             if let debt {
                 Text("\(debt.description)").lr(.caption).foregroundStyle(LR.Color.clay)
@@ -117,7 +128,7 @@ struct RewardsView: View {
                        caption: "A freeze covers it, and the streak runs on as if it hadn't broken.",
                        pills: [], blocked: blocked,
                        buttonTitle: "Freeze · \(cost == 0 ? "free" : "\(cost)")",
-                       actions: [], goal: nil) { confirming = .freeze(day) }
+                       actions: [], goal: nil) { show(.freeze(day)) }
         }
     }
 
@@ -149,7 +160,7 @@ struct RewardsView: View {
             Circle().fill(LR.Color.pillFill).frame(width: 64, height: 64)
                 .overlay { DoodleView(key: .sparkle, size: 34) }
                 .accessibilityHidden(true)
-            Text("Something worth saving for").lr(.handTitle).foregroundStyle(LR.Color.ink)
+            HandText("Something worth saving for", .handTitle, balanced: true, wraps: true).foregroundStyle(LR.Color.ink)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
                 .accessibilityAddTraits(.isHeader)
@@ -214,43 +225,49 @@ struct RewardsView: View {
                 // Archived, never deleted: past redemptions still point at it.
                 CardAction(title: "Archive", systemImage: "archivebox") { archive(r) },
             ],
-            goal: goal) { confirming = .redeem(r) }
+            goal: goal) { show(.redeem(r)) }
     }
 
     // MARK: confirmation
+    // The same centered card as Today's priced confirmations: the item in the header, the price and
+    // what it does as a small paragraph, one ink pill and a quiet way out. Nothing is rolled.
 
-    @ViewBuilder private func confirmSheet(_ c: Confirm) -> some View {
-        let cost = cost(of: c)
-        ConfirmSheet(title: title(for: c), subject: subject(for: c, cost: cost), notes: notes(for: c),
-                     choices: [SheetChoice(title: cost == 0 ? "Use this month's free one" : "Spend \(cost)") {
-                         buy(c)
-                     }])
+    private func show(_ next: Confirm?) {
+        withAnimation(.easeOut(duration: reduceMotion ? 0.2 : 0.22)) { confirming = next }
     }
 
-    private func subject(for c: Confirm, cost: Int) -> SheetSubject {
+    private func header(for c: Confirm) -> MomentHeader {
         switch c {
-        case .redeem(let r):
-            SheetSubject(doodle: DoodleKey.forText(r.name), title: r.name, pill: "\(cost) coins")
-        case .freeze(let day):
-            SheetSubject(doodle: .sparkle, title: "Missed \(day)", pill: cost == 0 ? "free" : "\(cost) coins")
+        case .redeem(let r): MomentHeader(doodle: DoodleKey.forText(r.name), tint: nil, title: r.name)
+        case .freeze(let day): MomentHeader(doodle: .sparkle, tint: nil, title: "Missed \(day)", subtitle: "Streak freeze")
         }
     }
 
-    private func notes(for c: Confirm) -> [String] {
+    private func content(for c: Confirm) -> MomentContent {
+        let cost = cost(of: c)
+        return .notice(MomentNotice(message: message(for: c, cost: cost),
+                                    primary: primary(for: c, cost: cost),
+                                    quiet: "Not yet",
+                                    confirm: { buy(c) },
+                                    dismiss: { show(nil) }))
+    }
+
+    private func primary(for c: Confirm, cost: Int) -> String {
         switch c {
-        case .redeem: []
-        case .freeze(let day): ["Covers \(day) so the streak doesn't break there."]
+        case .redeem: "Redeem \(cost)"
+        case .freeze: cost == 0 ? "Use this month's free one" : "Spend \(cost)"
+        }
+    }
+
+    private func message(for c: Confirm, cost: Int) -> String {
+        let price = cost == 0 ? "Free" : "\(cost) coins"
+        switch c {
+        case .redeem: return price
+        case .freeze(let day): return "\(price). Covers \(day) so the streak doesn't break there."
         }
     }
 
     // MARK: actions
-
-    private func title(for c: Confirm) -> String {
-        switch c {
-        case .redeem: "Redeem?"
-        case .freeze: "Buy a streak freeze?"
-        }
-    }
 
     private func cost(of c: Confirm) -> Int {
         switch c {
@@ -274,7 +291,7 @@ struct RewardsView: View {
         } catch {
             actionError = "\(error)"
         }
-        confirming = nil
+        show(nil)
     }
 
     private func archive(_ r: Reward) {
@@ -348,7 +365,7 @@ private struct RewardCard: View {
     private var details: some View {
         VStack(alignment: .leading, spacing: 6) {
             if goal != nil {
-                Text("saving for").lr(.hand).foregroundStyle(LR.Color.accent)
+                HandText("saving for", .hand).foregroundStyle(LR.Color.accent)
             }
             Text(title).lr(goal == nil ? .bodyStrong : .titleCard)
                 .foregroundStyle(isOpen || goal != nil ? LR.Color.ink : LR.Color.inkSecondary)

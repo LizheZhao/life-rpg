@@ -52,6 +52,14 @@ enum MomentStage: Equatable {
 /// "Mark as done?": one pill, or two when a routine done ahead on a low day has lighter versions
 /// (each with the payout it leads to), and a quiet `Not yet`.
 struct MomentAsk {
+    /// What sits between the header and the buttons. A quest's payout is rolled, so a `?` box
+    /// stands in for it. A routine's is fixed and known now, so it is a pill under the title (or on
+    /// each button, when there are two choices) and there is no reel at all.
+    enum Lead {
+        case reel
+        case fixed(pill: String?)
+    }
+
     struct Choice: Identifiable {
         let title: String
         var pill: String?
@@ -63,6 +71,7 @@ struct MomentAsk {
 
     /// Spoken when the card appears, with the item's title after it.
     var question = "Mark as done?"
+    var lead = Lead.reel
     var choices: [Choice]
     var footnote: String?
     let notYet: () -> Void
@@ -81,11 +90,46 @@ struct MomentNotice {
 
 /// A payout that is already written to the ledger. The card only describes it.
 struct MomentPayout: Identifiable {
+    /// A quest's payout is rolled and the card plays the reel. A routine's is fixed: there is
+    /// nothing to roll, so the card goes straight to the number.
+    enum Amount {
+        case rolled(Scoring.Breakdown)
+        case fixed(Int)
+    }
+
     let id: UUID
-    let breakdown: Scoring.Breakdown
+    let amount: Amount
     /// The rating you picked, or nil when you left without one. Always optional: this card appears
     /// several times a day, and a reward screen that demands an answer is a toll booth.
     let onFinish: (Int?) -> Void
+
+    init(id: UUID, breakdown: Scoring.Breakdown, onFinish: @escaping (Int?) -> Void) {
+        self.init(id: id, amount: .rolled(breakdown), onFinish: onFinish)
+    }
+
+    init(id: UUID, fixed awarded: Int, onFinish: @escaping (Int?) -> Void) {
+        self.init(id: id, amount: .fixed(awarded), onFinish: onFinish)
+    }
+
+    init(id: UUID, amount: Amount, onFinish: @escaping (Int?) -> Void) {
+        self.id = id
+        self.amount = amount
+        self.onFinish = onFinish
+    }
+
+    var awarded: Int {
+        switch amount {
+        case .rolled(let breakdown): breakdown.awarded
+        case .fixed(let value): value
+        }
+    }
+
+    var breakdown: Scoring.Breakdown? {
+        if case .rolled(let breakdown) = amount { return breakdown }
+        return nil
+    }
+
+    var isFixed: Bool { breakdown == nil }
 }
 
 enum MomentContent {
@@ -95,14 +139,6 @@ enum MomentContent {
 }
 
 // MARK: - the reel
-
-/// Caveat's glyphs overhang their advance (the `?`, the stroke of a `4`), and Text clips what hangs
-/// past its measured width, so a hand-written value is measured with an invisible full stop on
-/// each side (a space would be trimmed, and one side alone would push it off centre).
-private func handText(_ value: String) -> Text {
-    let pad = Text(verbatim: ".").foregroundColor(.clear)
-    return Text("\(pad)\(value)\(pad)")
-}
 
 /// Where the throwaway strip is. Frozen for the gallery, which draws a phase without playing it.
 enum ReelClock {
@@ -171,7 +207,7 @@ private struct ReelBox: View {
     @ViewBuilder private var content: some View {
         switch stage {
         case .ask, .rate:
-            handText("?").lr(.handDisplay).foregroundStyle(LR.Color.ink)
+            HandText("?", .handDisplay, balanced: true).foregroundStyle(LR.Color.ink)
         case .rolling:
             strip.transition(.opacity)
         case .landed:
@@ -186,8 +222,7 @@ private struct ReelBox: View {
             ZStack {
                 ForEach((base - 2)...(base + 2), id: \.self) { index in
                     if frames.indices.contains(index) {
-                        handText("\(frames[index])")
-                            .lr(.handTitle)
+                        HandText("\(frames[index])", .handTitle, balanced: true)
                             .foregroundStyle(LR.Color.ink)
                             .blur(radius: 2.2)
                             .offset(y: (Double(index) - position) * 40 * k)
@@ -202,14 +237,14 @@ private struct ReelBox: View {
         return ZStack {
             // Smaller and dim, and without the `+`, so neither can be read as a payout.
             if let before = neighbours?.before {
-                handText("\(before)").lr(.hand).foregroundStyle(LR.Color.inkSecondary)
+                HandText("\(before)", .hand, balanced: true).foregroundStyle(LR.Color.inkSecondary)
                     .scaleEffect(0.8).offset(y: -36 * k)
             }
             if let after = neighbours?.after {
-                handText("\(after)").lr(.hand).foregroundStyle(LR.Color.inkSecondary)
+                HandText("\(after)", .hand, balanced: true).foregroundStyle(LR.Color.inkSecondary)
                     .scaleEffect(0.8).offset(y: 36 * k)
             }
-            handText(awarded.map { "+\($0)" } ?? "").lr(.handDisplay).foregroundStyle(LR.Color.ink)
+            HandText(awarded.map { "+\($0)" } ?? "", .handDisplay, balanced: true).foregroundStyle(LR.Color.ink)
         }
     }
 }
@@ -264,10 +299,16 @@ struct MomentCardFace: View {
 
     private var reelStage: MomentStage? {
         switch content {
-        case .ask: .ask
-        case .payout: stage
+        case .ask(let ask): if case .reel = ask.lead { .ask } else { nil }
+        case .payout(let payout): payout.isFixed ? nil : stage
         case .notice: nil
         }
+    }
+
+    /// The fixed payout pill of a routine's ask, in the row a quest's range pill uses.
+    private var fixedPill: String? {
+        if case .ask(let ask) = content, case .fixed(let pill) = ask.lead { return pill }
+        return nil
     }
 
     private var payout: MomentPayout? {
@@ -285,6 +326,8 @@ struct MomentCardFace: View {
         VStack(spacing: 14) {
             headerRow
             if let reelStage { reelSection(reelStage) }
+            if let fixedPill { fixedPillRow(fixedPill) }
+            if let payout, payout.isFixed { fixedResult(payout.awarded) }
             switch content {
             case .ask(let ask): askControls(ask).transition(swap)
             case .notice(let notice): noticeBody(notice).id(noticeKey).transition(swap)
@@ -328,24 +371,41 @@ struct MomentCardFace: View {
     private func reelSection(_ stage: MomentStage) -> some View {
         VStack(spacing: 10) {
             if stage == .rate {
-                handText(payout.map { "+\($0.breakdown.awarded)" } ?? "")
-                    .lr(.handTitle).foregroundStyle(LR.Color.ink)
+                HandText(payout.map { "+\($0.awarded)" } ?? "", .handTitle, balanced: true).foregroundStyle(LR.Color.ink)
                     .transition(.opacity)
-                    .accessibilityLabel(payout.map { "Paid \($0.breakdown.awarded) coins" } ?? "")
+                    .accessibilityLabel(payout.map { "Paid \($0.awarded) coins" } ?? "")
             } else {
                 rangeRow(stage)
-                ReelBox(stage: stage, tint: header.tint, awarded: payout?.breakdown.awarded,
-                        range: payout?.breakdown.payoutRange, frames: frames, clock: clock)
+                ReelBox(stage: stage, tint: header.tint, awarded: payout?.awarded,
+                        range: payout?.breakdown?.payoutRange, frames: frames, clock: clock)
                     .transition(.opacity)
             }
         }
+    }
+
+    private func fixedPillRow(_ pill: String) -> some View {
+        PillLabel(text: pill, style: .plain)
+            .transition(.opacity)
+            .accessibilityLabel("Pays \(pill) coins")
+    }
+
+    /// A routine's payout: the number it paid, big, then the rating row below. No reel and no
+    /// sparkles, since there was nothing to roll.
+    private func fixedResult(_ awarded: Int) -> some View {
+        VStack(spacing: 2) {
+            HandText("+\(awarded)", .handDisplay, balanced: true).foregroundStyle(LR.Color.ink)
+            Text("paid").lr(.caption).foregroundStyle(LR.Color.sectionTitle)
+        }
+        .transition(.opacity)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Paid \(awarded) coins")
     }
 
     /// Always as tall as the pill, so the box does not move when it appears and goes.
     private func rangeRow(_ stage: MomentStage) -> some View {
         ZStack {
             Color.clear.frame(height: 26)
-            if let range = payout?.breakdown.payoutRange, range.count > 1, stage != .ask {
+            if let range = payout?.breakdown?.payoutRange, range.count > 1, stage != .ask {
                 PillLabel(text: PresentationText.range(range), style: .plain)
                     .transition(.opacity)
                     .accessibilityHidden(true)
@@ -413,14 +473,17 @@ struct MomentCardFace: View {
     // MARK: payout
 
     @ViewBuilder private func payoutBottom(_ payout: MomentPayout) -> some View {
-        switch stage {
+        // A fixed payout has no reel to wait for: it is already at the rating.
+        switch payout.isFixed ? .rate : stage {
         case .ask, .rolling:
             Text("rolling…").lr(.caption).foregroundStyle(LR.Color.sectionTitle)
                 .frame(maxWidth: .infinity, minHeight: Self.captionHeight, alignment: .top)
                 .accessibilityHidden(true)
         case .landed:
-            landedCaption(payout.breakdown)
-                .frame(maxWidth: .infinity, minHeight: Self.captionHeight, alignment: .top)
+            if let breakdown = payout.breakdown {
+                landedCaption(breakdown)
+                    .frame(maxWidth: .infinity, minHeight: Self.captionHeight, alignment: .top)
+            }
         case .rate:
             rateBlock
         }
@@ -451,7 +514,7 @@ struct MomentCardFace: View {
     /// cheap and honest: you have just done the thing.
     private var rateBlock: some View {
         VStack(spacing: 10) {
-            handText("how did that feel?").lr(.hand).foregroundStyle(LR.Color.accent)
+            HandText("how did that feel?", .hand, balanced: true).foregroundStyle(LR.Color.accent)
             ViewThatFits(in: .horizontal) {
                 HStack(spacing: 6) { ratingButtons(0..<RatingScale.steps.count) }
                 VStack(spacing: 6) {
@@ -554,6 +617,9 @@ struct MomentCard: View {
         return nil
     }
 
+    /// Where the card is. A fixed payout has no roll to play, so it is at the rating from the start.
+    private var phase: MomentStage { payout?.isFixed == true ? .rate : stage }
+
     private var phaseAnimation: Animation { reduceMotion ? .easeInOut(duration: 0.2) : .snappy }
 
     var body: some View {
@@ -567,7 +633,7 @@ struct MomentCard: View {
 
             GeometryReader { geo in
                 ScrollView {
-                    MomentCardFace(header: header, content: content, stage: stage, frames: frames,
+                    MomentCardFace(header: header, content: content, stage: phase, frames: frames,
                                    clock: clock, picked: picked, onPick: pick, onDone: finish,
                                    noticeKey: noticeKey)
                         .background {
@@ -576,7 +642,7 @@ struct MomentCard: View {
                             }
                         }
                         .overlay {
-                            if payout != nil, stage == .landed {
+                            if payout != nil, phase == .landed {
                                 Color.clear.contentShape(Rectangle()).onTapGesture(perform: advance)
                             }
                         }
@@ -613,7 +679,7 @@ struct MomentCard: View {
         case .ask(let ask): ask.notYet()
         case .notice(let notice): notice.dismiss()
         case .payout:
-            switch stage {
+            switch phase {
             case .ask, .rolling: land()
             case .landed: advance()
             case .rate: finish()
@@ -643,9 +709,12 @@ struct MomentCard: View {
     /// go straight to the landed number.
     private func play() async {
         guard let payout else { return }
-        stage = .rolling
         picked = nil
-        let breakdown = payout.breakdown
+        guard let breakdown = payout.breakdown else {
+            AccessibilityNotification.Announcement("Paid \(payout.awarded) coins").post()
+            return
+        }
+        stage = .rolling
         var rng = SystemRandomNumberGenerator()
         frames = PayoutReel.frames(range: breakdown.payoutRange, awarded: breakdown.awarded,
                                    count: Self.frameCount, using: &rng)
@@ -664,8 +733,8 @@ struct MomentCard: View {
         guard let payout, stage == .rolling else { return }
         withAnimation(phaseAnimation) { stage = .landed }
         Haptics.impact(.rigid)
-        AccessibilityNotification.Announcement("Paid \(payout.breakdown.awarded) coins").post()
-        if payout.breakdown.bonus > 0 {
+        AccessibilityNotification.Announcement("Paid \(payout.awarded) coins").post()
+        if (payout.breakdown?.bonus ?? 0) > 0 {
             Task { @MainActor in
                 try? await Task.sleep(for: .milliseconds(300))
                 Haptics.impact(.soft)
@@ -688,7 +757,7 @@ struct MomentCard: View {
 
     /// Restarts on every pick. The card closes itself eventually, so one left open on a phone put
     /// down mid-tap doesn't sit there (with a rating nobody has written yet) until the app is quit.
-    private var rateTimerID: Int? { payout != nil && stage == .rate ? (picked ?? 99) : nil }
+    private var rateTimerID: Int? { payout != nil && phase == .rate ? (picked ?? 99) : nil }
 
     private func expireRate() async {
         guard rateTimerID != nil else { return }

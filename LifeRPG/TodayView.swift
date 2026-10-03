@@ -87,10 +87,12 @@ struct TodayView: View {
     private struct Roll: Identifiable {
         let id = UUID()
         var header: MomentHeader
-        var breakdown: Scoring.Breakdown
-        /// Carried so the rating can be filed against the exact completion that prompted it,
-        /// not just against the template.
-        var questID: UUID
+        var amount: MomentPayout.Amount
+        /// What the rating is filed under: the quest template, or the routine.
+        var target: FeedbackTarget
+        /// Carried so the rating can be filed against the exact completion that prompted it (the
+        /// `DailyQuest` or the `RoutineOccurrence`), not just against the template.
+        var questID: UUID?
         var templateID: UUID?
         var text: String
         var dayKey: String
@@ -287,7 +289,7 @@ struct TodayView: View {
 
     private var greetingBlock: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text(greeting.handLine).lr(.hand).foregroundStyle(LR.Color.accent)
+            HandText(greeting.handLine, .hand).foregroundStyle(LR.Color.accent)
             Text(greeting.salutation).lr(.displayGreeting).foregroundStyle(LR.Color.ink)
             HandUnderlineText(lead: "let's", emphasis: "level up")
         }
@@ -560,7 +562,7 @@ struct TodayView: View {
             .notice(MomentNotice(message: moment.message, primary: "Nice",
                                  confirm: { dismiss(moment) }, dismiss: { dismiss(moment) }))
         case .reveal(let roll):
-            .payout(MomentPayout(id: roll.id, breakdown: roll.breakdown) { value in
+            .payout(MomentPayout(id: roll.id, amount: roll.amount) { value in
                 if let value { record(rating: value, for: roll) }
                 show(nil)
             })
@@ -578,6 +580,7 @@ struct TodayView: View {
         // is picked here, and a lighter version pays its own points.
         if case .ahead(let routine) = action, offersLightVersion(routine) {
             return MomentAsk(
+                lead: .fixed(pill: nil),
                 choices: [
                     .init(title: "Did the original", pill: aheadPill([routine.basePoints])) {
                         perform(action, light: false)
@@ -591,7 +594,19 @@ struct TodayView: View {
                 footnote: "Lighter: \(lightVersionList(routine))",
                 notYet: { show(nil) })
         }
-        return MomentAsk(choices: [.init(title: "Complete") { perform(action) }], notYet: { show(nil) })
+        return MomentAsk(lead: payoutLead(for: action),
+                         choices: [.init(title: "Complete") { perform(action) }], notYet: { show(nil) })
+    }
+
+    /// A routine pays a fixed number, known before it is tapped, so its card has no reel: the
+    /// number is a pill under the title. A quest's is rolled at completion and keeps the reel.
+    private func payoutLead(for action: PendingAction) -> MomentAsk.Lead {
+        switch action {
+        case .quest, .trivialItem: .reel
+        case .routine(let occurrence):
+            .fixed(pill: routineState(occurrence, .today).pills.first { $0.kind == .payout }?.text)
+        case .ahead(let routine): .fixed(pill: aheadPill([routine.basePoints]))
+        }
     }
 
     /// The whole level track, unlocked and still ahead (`Perks.track`).
@@ -677,6 +692,8 @@ struct TodayView: View {
     private func perform(_ action: PendingAction, light: Bool = true) {
         var rng = SystemRandomNumberGenerator()
         var next: Overlay?
+        // Read before the completion: an ahead candidate is gone from the page once it is done.
+        let header = header(for: action)
         do {
             switch action {
             case .quest(let quest):
@@ -691,11 +708,13 @@ struct TodayView: View {
                     settle(quest.id)
                 }
             case .routine(let occurrence):
-                // A fixed payout, nothing rolled — the number lands on the row, no reveal.
-                try Completion.completeRoutine(occurrence, on: today, tier: tier, in: context)
+                // A fixed payout, nothing rolled: the card shows the number it paid and asks how it felt.
+                let points = try Completion.completeRoutine(occurrence, on: today, tier: tier, in: context)
+                next = reveal(points, forRoutine: occurrence, header: header)
                 settle(occurrence.id)
             case .ahead(let routine):
-                try Completion.completeAhead(routine, on: today, tier: tier, light: light, in: context)
+                let points = try Completion.completeAhead(routine, on: today, tier: tier, light: light, in: context)
+                next = reveal(points, aheadOf: routine, header: header)
             }
             // The tap that opened the confirmation is silent; this is the completion itself.
             Haptics.impact(.medium)
@@ -722,7 +741,8 @@ struct TodayView: View {
     /// decides the number it shows.
     private func reveal(_ points: Int, for quest: DailyQuest) -> Overlay {
         .reveal(Roll(header: header(for: quest),
-                     breakdown: Scoring.breakdown(quest, tier: tier, awarded: points),
+                     amount: .rolled(Scoring.breakdown(quest, tier: tier, awarded: points)),
+                     target: .quest,
                      questID: quest.id,
                      templateID: quest.templateID,
                      text: quest.textSnapshot,
@@ -730,10 +750,30 @@ struct TodayView: View {
                      dayKey: quest.slot == .epic ? today : quest.dayKey))
     }
 
+    private func reveal(_ points: Int, forRoutine occurrence: RoutineOccurrence, header: MomentHeader) -> Overlay {
+        .reveal(Roll(header: header, amount: .fixed(points), target: .routine,
+                     questID: occurrence.id, templateID: occurrence.routineID,
+                     text: occurrence.displayText, dayKey: today))
+    }
+
+    /// Doing a routine ahead creates its occurrence inside `Completion.completeAhead`; the rating
+    /// is linked to it (so the day detail shows it on the routine) when it can be found again.
+    private func reveal(_ points: Int, aheadOf routine: RoutineTask, header: MomentHeader) -> Overlay {
+        let id: UUID? = routine.id
+        var found = FetchDescriptor<RoutineOccurrence>(
+            predicate: #Predicate { $0.routineID == id && $0.awardedPoints != nil },
+            sortBy: [SortDescriptor(\.completedAt, order: .reverse)])
+        found.fetchLimit = 1
+        let occurrence = try? context.fetch(found).first
+        return .reveal(Roll(header: header, amount: .fixed(points), target: .routine,
+                            questID: occurrence?.id, templateID: routine.id,
+                            text: occurrence?.displayText ?? routine.text, dayKey: today))
+    }
+
     /// Rating is never required, so a failure here must not interrupt anything — the points are
     /// already banked and the quest is already done.
     private func record(rating: Int, for roll: Roll) {
-        Feedback.rate(context, target: .quest, id: roll.templateID, questID: roll.questID,
+        Feedback.rate(context, target: roll.target, id: roll.templateID, questID: roll.questID,
                       text: roll.text, rating: rating, dayKey: roll.dayKey)
         try? Affinity.sync(context)           // the next draw already weighs it
         try? context.save()

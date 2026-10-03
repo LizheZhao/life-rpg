@@ -1,6 +1,6 @@
 # Today: complete a quest
 
-The Today tab is a scroll of cards: header (avatar, `+`), greeting, level card, an `Epic` section with a routine-style card (tap the body to expand), Routines (full-width rows), Today's quests (full-width tinted rows), a `Hidden` section, then Completed, Ahead this week (a stack, like Completed) and Backlog. The round complete button on a quest or routine row asks for confirmation, writes a ledger entry, plays the payout reveal (quests only) and offers a rating, all in one centered card. The coin count on the level card must equal the ledger.
+The Today tab is a scroll of cards: header (avatar, `+`), greeting, level card, an `Epic` section with a routine-style card (tap the body to expand), Routines (full-width rows), Today's quests (full-width tinted rows), a `Hidden` section, then Completed, Ahead this week (a stack, like Completed) and Backlog. The round complete button on a quest or routine row asks for confirmation, writes a ledger entry, plays the payout reveal (quests only; a routine's fixed payout goes straight to `+N` and `paid`) and offers a rating, all in one centered card. The coin count on the level card must equal the ledger.
 
 ## Sub-features
 
@@ -34,7 +34,7 @@ Preconditions:
 - **Read the stored result.** Run `V ledger | tee build/verify-evidence/today-complete-ledger.txt`. A `quest` row for today with the points shown on the card appears, and the balance equals 100 + those points. Run `V sql "select ZRATING, ZTARGETKINDRAW, ZTEXTSNAPSHOT from ZQUESTRATING"`: one row, rating `2`, the quest's text.
 - **Check the page.** Screenshot Today: the level card's coins equal the ledger balance, the hand line ends `1 day streak`, the row shows a drawn check, a struck-through title and `+<points>` in its pill. Capture `V shot today-complete-after`.
 - **Menu purchase.** Tap `⋯` on an open quest row: `Reroll · <price>`, `Cancel` (greyed while the balance is too low), `Replace`, and `Open link` when the quest has a link. Tap `Reroll`, then `Spend <price>`. `V ledger` shows a `reroll` row of `-<price>`.
-- **Routine.** Tap the round button on a routine row, then `Complete`: the pill reads `+<n>`, no reveal; `V ledger` has a `routine` row.
+- **Routine.** Tap the round button on a routine row: the card has the routine's disc and title, a `+<n>` pill and no `?` box. `Complete` turns it (a short fade, no roll) into the big `+<n>`, `paid`, `how did that feel?` and `Done`; `<n>` equals the `routine` row in `V ledger`. A rating is filed as `routine` in `ZQUESTRATING` with `ZQUESTID` = the occurrence's id. The same holds for `Do now` on an Ahead row (needs a Saturday or `V day`).
 
 ## Gotchas
 

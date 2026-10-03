@@ -19,7 +19,7 @@ The Rewards tab shows the coin balance and the user's hand-entered rewards (name
 Preconditions: `V up --fresh`.
 
 - **Balance (driven).** Tap Rewards (x=220 pt). The balance equals `V ledger`'s balance (100 on a fresh store).
-- **Add (not yet driven).** Tap `+`, tap `Name`, type a name, tap `Estimated cost`, type a number; the sheet previews `<n> coins`. Tap `Save`. Then `V sql "select ZNAME, ZESTIMATEDCOST from ZREWARD"` must return the row.- **Redeem (not yet driven).** With enough coins, tap `Redeem` → alert text `<name>\n\n<n> coins. This is final.` → the spend button. A negative ledger row appears and the balance drops by that price; with too few coins the action is blocked.
+- **Add (not yet driven).** Tap `+`, tap `Name`, type a name, tap `Estimated cost`, type a number; the sheet previews `<n> coins`. Tap `Save`. Then `V sql "select ZNAME, ZESTIMATEDCOST from ZREWARD"` must return the row.- **Redeem (driven).** With enough coins, tap `Redeem` → the centered card (the reward's disc and name, `<n> coins`, an ink `Redeem <n>` pill, `Not yet`; the tab bar fades out) → the ink pill. A negative `redeem` ledger row appears and the balance drops by that price. `Not yet` or a tap on the dim leaves the ledger alone; with too few coins the button is disabled. The streak freeze (`Freeze · <n>` on a `Missed <day>` card; `V day 2` after a completed day, and enough coins) opens the same card with `Spend <n>`.
 
 ## Gotchas
 

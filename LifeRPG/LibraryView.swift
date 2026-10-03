@@ -581,7 +581,7 @@ private struct LibrarySectionHeader: View {
                 Text(title).lr(.heading).foregroundStyle(LR.Color.sectionTitle)
                     .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 8)
-                Text("\(count)").lr(.hand).monospacedDigit().foregroundStyle(LR.Color.accent)
+                HandText("\(count)", .hand).monospacedDigit().foregroundStyle(LR.Color.accent)
             }
             .frame(minHeight: 44)
             .contentShape(Rectangle())

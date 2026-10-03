@@ -441,7 +441,10 @@ struct PopupsGallery: View {
                     .lr(.caption).foregroundStyle(LR.Color.inkSecondary)
             }
             phase("Ask: a quest", Self.quest, .ask(ask))
-            phase("Ask: a routine", MomentHeader(Self.routine("Incline walk, 30 minutes", base: 20)), .ask(ask))
+            phase("Ask: a routine, fixed payout and no reel", MomentHeader(Self.routine("Incline walk, 30 minutes", base: 20)),
+                  .ask(MomentAsk(lead: .fixed(pill: "+20"), choices: [.init(title: "Complete") {}], notYet: {})))
+            phase("Paid: a routine, no roll", MomentHeader(Self.routine("Incline walk, 30 minutes", base: 20)),
+                  .payout(MomentPayout(id: UUID(), fixed: 20) { _ in }), stage: .rate, picked: 1)
             phase("Ask: the epic", MomentHeader(Self.epic), .ask(ask))
             phase("Rolling", Self.quest, .payout(payout), stage: .rolling, clock: .frozen(0.55))
             phase("Landed", Self.quest, .payout(payout), stage: .landed)
@@ -456,7 +459,8 @@ struct PopupsGallery: View {
             phase("Ask: low day, light version",
                   MomentHeader(doodle: .forText("Workout: weight training"), tint: .routine,
                                title: "Workout: weight training", subtitle: "Ahead of schedule"),
-                  .ask(MomentAsk(choices: [.init(title: "Did the original", pill: "+20") {},
+                  .ask(MomentAsk(lead: .fixed(pill: nil),
+                                 choices: [.init(title: "Did the original", pill: "+20") {},
                                            .init(title: "Did a lighter version", pill: "+10–14", outlined: true) {}],
                                  footnote: "Lighter: Stretch 15 min / Walk 20 min", notYet: {})))
             phase("Spend: reroll", Self.spendHeader,
@@ -508,7 +512,7 @@ struct PopupsGallery: View {
         var body: some View {
             ZStack {
                 LR.Color.canvas.ignoresSafeArea()
-                Text("The page behind").lr(.hand).foregroundStyle(LR.Color.accent)
+                HandText("The page behind", .hand).foregroundStyle(LR.Color.accent)
                 MomentCard(header: PopupsGallery.quest, content: content)
             }
         }

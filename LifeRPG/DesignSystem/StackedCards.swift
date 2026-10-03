@@ -95,8 +95,8 @@ struct StackedCards<Item: Identifiable, Row: View>: View {
     }
 
     @ViewBuilder private var headerLabels: some View {
-        Text(summary).lr(.hand).foregroundStyle(LR.Color.accent)
-        if let badge { Text(badge).lr(.hand).foregroundStyle(LR.Color.clay) }
+        HandText(summary, .hand).foregroundStyle(LR.Color.accent)
+        if let badge { HandText(badge, .hand).foregroundStyle(LR.Color.clay) }
     }
 
     private var chevron: some View {

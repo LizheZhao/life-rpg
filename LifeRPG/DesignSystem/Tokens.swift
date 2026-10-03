@@ -122,11 +122,16 @@ enum LR {
         /// Scaled for `dynamicType` by hand, because `UIFontMetrics` alone reads the process-wide
         /// category and would ignore a SwiftUI `.dynamicTypeSize` override (previews, the gallery).
         /// Bold Text raises the weight one step (100 on the axis).
-        func font(dynamicType: DynamicTypeSize, boldText: Bool) -> Font {
+        func pointSize(dynamicType: DynamicTypeSize) -> CGFloat {
             let spec = spec
             let traits = UITraitCollection(preferredContentSizeCategory: dynamicType.contentSizeCategory)
-            var size = UIFontMetrics(forTextStyle: spec.textStyle).scaledValue(for: spec.size, compatibleWith: traits)
-            if let cap = spec.maximumSize { size = min(size, cap) }
+            let size = UIFontMetrics(forTextStyle: spec.textStyle).scaledValue(for: spec.size, compatibleWith: traits)
+            return min(size, spec.maximumSize ?? size)
+        }
+
+        func font(dynamicType: DynamicTypeSize, boldText: Bool) -> Font {
+            let spec = spec
+            let size = pointSize(dynamicType: dynamicType)
             let weight = spec.weight + (boldText ? 100 : 0)
             return Font(LRFonts.uiFont(spec.family, weight: weight, size: size) as CTFont)
         }

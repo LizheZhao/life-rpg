@@ -32,6 +32,7 @@ struct AdHocView: View {
     private enum Tab: Hashable { case library, custom }
     @State private var tab: Tab = .library
     @State private var routineID: UUID?
+    @State private var query = ""
     @State private var text = ""
     @State private var difficulty: Difficulty = .easy
     /// The doodle picked by hand; nil follows what the typed text suggests.
@@ -60,6 +61,8 @@ struct AdHocView: View {
         AdHoc.libraryCandidates(routines, occurrences: occurrences, on: today)
             .filter { $0.basePoints >= minimumBase }
     }
+    /// What the search leaves in view. The pick (`chosenRoutine`) stays whether or not it shows.
+    private var shownCandidates: [RoutineTask] { candidates.matching(query, text: \.text) }
     private var chosenRoutine: RoutineTask? { candidates.first { $0.id == routineID } }
 
     /// Routines `candidates` leaves out because they are already on today's page — listed anyway,
@@ -190,20 +193,28 @@ struct AdHocView: View {
 
     @ViewBuilder private var librarySection: some View {
         SectionTitle(title: "Routine")
+        LibrarySearchField(text: $query)
+        if let chosenRoutine, !shownCandidates.contains(where: { $0.id == chosenRoutine.id }) {
+            SelectedHint(title: chosenRoutine.text)
+        }
         if candidates.isEmpty {
             RecordRowView(title: minimumBase > 0
                           ? "No routine that isn't already on today's page is worth \(minimumBase) or more."
                           : "Every active routine is already on today's page.", secondary: true) { EmptyView() }
+        } else if shownCandidates.isEmpty {
+            RecordRowView(title: "Nothing matches \"\(query.trimmingCharacters(in: .whitespacesAndNewlines))\"",
+                          secondary: true) { EmptyView() }
         }
-        ForEach(candidates) { r in
+        ForEach(shownCandidates) { r in
             let pays = pays(r.basePoints)
             ChoiceRow(doodle: DoodleKey.resolve(iconKey: nil, text: r.text), title: r.text,
                       pills: [("+\(pays)", .plain)] + (tier.isLow ? [("low day", .plain)] : []),
                       selected: routineID == r.id) { routineID = r.id }
         }
-        if !onPage.isEmpty {
+        let shownOnPage = onPage.matching(query, text: { $0.occurrence.displayText })
+        if !shownOnPage.isEmpty {
             SectionTitle(title: "Already on today's page")
-            ForEach(onPage, id: \.occurrence.id) { entry in
+            ForEach(shownOnPage, id: \.occurrence.id) { entry in
                 onPageRow(entry.routine, entry.occurrence).modifier(RowCard())
             }
             Text(isAdding ? "Did one of these? Mark it done here, since adding it again wouldn't count for the routine."
@@ -381,11 +392,14 @@ struct EpicReplaceView: View {
     private enum Tab: Hashable { case library, custom }
     @State private var tab: Tab = .library
     @State private var templateID: UUID?
+    @State private var query = ""
     @State private var text = ""
     @State private var confirming = false
     @State private var error: String?
 
     private var candidates: [QuestTemplate] { Epic.replaceCandidates(templates, replacing: epic) }
+    /// What the search leaves in view. The pick stays whether or not it shows.
+    private var shownCandidates: [QuestTemplate] { candidates.matching(query, text: \.text) }
     private var pick: Epic.Pick? {
         switch tab {
         case .library:
@@ -415,10 +429,18 @@ struct EpicReplaceView: View {
                     SectionTitle(title: "Epic")
                     switch tab {
                     case .library:
+                        LibrarySearchField(text: $query)
+                        if let chosen = candidates.first(where: { $0.id == templateID }),
+                           !shownCandidates.contains(where: { $0.id == chosen.id }) {
+                            SelectedHint(title: chosen.text)
+                        }
                         if candidates.isEmpty {
                             RecordRowView(title: "No other epic in the library.", secondary: true) { EmptyView() }
+                        } else if shownCandidates.isEmpty {
+                            RecordRowView(title: "Nothing matches \"\(query.trimmingCharacters(in: .whitespacesAndNewlines))\"",
+                                          secondary: true) { EmptyView() }
                         }
-                        ForEach(candidates) { t in
+                        ForEach(shownCandidates) { t in
                             ChoiceRow(doodle: DoodleKey.resolve(iconKey: nil, text: t.text), title: t.text,
                                       pills: [], selected: templateID == t.id) { templateID = t.id }
                         }

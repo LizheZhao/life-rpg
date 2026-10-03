@@ -115,7 +115,7 @@ struct DayDetailView: View {
                 Text("Net points").lr(.caption).foregroundStyle(LR.Color.inkSecondary)
                 // Sage fails contrast as text on a white card, so a gain stays `ink` and the sign
                 // says which way it went; a loss is clay.
-                Text(text).lr(.handDisplay).monospacedDigit()
+                HandText(text, .handDisplay).monospacedDigit()
                     .foregroundStyle(net < 0 ? LR.Color.clay : net == 0 ? LR.Color.inkSecondary : LR.Color.ink)
             }
             Spacer(minLength: 8)

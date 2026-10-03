@@ -18,6 +18,49 @@ enum Haptics {
     }
 }
 
+/// Every Caveat string goes through here, never `Text(...).lr(.hand...)` on its own.
+///
+/// Caveat's glyphs overhang their advance (the stroke of a `d`, the tail of a `6`, a `?`), and Text
+/// clips what hangs past its measured width, so the last glyph loses a sliver. The string is
+/// measured with an invisible full stop after it (a space is trimmed away, and the first attempt
+/// with a thin space widened nothing), and an equal negative padding takes that width back out of
+/// the layout, so the visible glyphs sit exactly where they did and right-aligned or centred text
+/// does not move. `balanced` pads the leading side too, for centred values. VoiceOver reads the
+/// original string, not the padding.
+struct HandText: View {
+    let string: String
+    let style: LR.Typography
+    var balanced = false
+    /// A string that may need more than one line (a centred title). Everything else is one line at
+    /// its own width: the padding trick above makes a Text in a tight spot (the payout band) lose
+    /// its last digit to truncation otherwise.
+    var wraps = false
+
+    @Environment(\.dynamicTypeSize) private var dynamicType
+
+    init(_ string: String, _ style: LR.Typography, balanced: Bool = false, wraps: Bool = false) {
+        self.string = string
+        self.style = style
+        self.balanced = balanced
+        self.wraps = wraps
+    }
+
+    /// The system full stop at the style's own size, in whatever the user's Dynamic Type makes of it (about a quarter of an em).
+    private var padFont: UIFont { .systemFont(ofSize: style.pointSize(dynamicType: dynamicType)) }
+    private var pad: CGFloat { ("." as NSString).size(withAttributes: [.font: padFont]).width }
+
+    var body: some View {
+        let mark = Text(verbatim: ".").font(Font(padFont as CTFont)).foregroundColor(.clear)
+        let lead = balanced ? mark : Text(verbatim: "")
+        Text("\(lead)\(Text(verbatim: string))\(mark)")
+            .lr(style)
+            .accessibilityLabel(string)
+            .fixedSize(horizontal: !wraps, vertical: true)
+            .padding(.leading, balanced ? -pad : 0)
+            .padding(.trailing, -pad)
+    }
+}
+
 /// What a card is filled with: the neutral surface, a difficulty tint, or the clay error ground.
 enum CardFill {
     case surface, tint(QuestTint), clayBg
@@ -214,22 +257,9 @@ struct FlowRow: Layout {
     }
 }
 
-// MARK: - sheets
+// MARK: - buttons
 
-/// One thing a bottom sheet answers: a full-width ink pill, with the payout it leads to when there
-/// is one.
-struct SheetChoice: Identifiable {
-    let title: String
-    var pill: String?
-    /// Closes the sheet after the action, for a pill that only acknowledges. The ones that change
-    /// something close it through the state they clear.
-    var dismisses = false
-    let action: () -> Void
-
-    var id: String { title }
-}
-
-/// The full-width ink-filled pill at the foot of a sheet, sized for the thumb.
+/// A full-width ink-filled pill, sized for the thumb (the Rewards empty state's `Add a reward`).
 struct SheetPrimaryButtonStyle: ButtonStyle {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -294,98 +324,74 @@ struct ConfirmBar: View {
     }
 }
 
-private struct SheetHeightKey: PreferenceKey {
-    static let defaultValue: CGFloat = 0
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = max(value, nextValue()) }
-}
-
-/// The frame every Today popup shares: the canvas, a drag indicator, 26 pt corners, and a detent
-/// as tall as the content. The content scrolls once it outgrows the screen (accessibility sizes).
-struct SheetFrame<Content: View>: View {
-    @ViewBuilder let content: Content
-
-    @State private var contentHeight: CGFloat = 0
-
-    var body: some View {
-        ScrollView {
-            content
-                .padding(.horizontal, LR.Spacing.inset)
-                .padding(.top, 14)
-                .padding(.bottom, 2)
-                .background {
-                    GeometryReader { proxy in
-                        Color.clear.preference(key: SheetHeightKey.self, value: proxy.size.height)
-                    }
-                }
-        }
-        .scrollBounceBehavior(.basedOnSize)
-        .onPreferenceChange(SheetHeightKey.self) { contentHeight = $0 }
-        .presentationDetents([.height(contentHeight > 0 ? contentHeight : 360)])
-        .presentationDragIndicator(.visible)
-        .presentationBackground(LR.Color.canvas)
-        .presentationCornerRadius(26)
+/// The library search rule, shared by every library picker: the query trimmed, then matched the way
+/// the system's own search matches (case, diacritics and width ignored). An empty query keeps everything.
+extension Sequence {
+    func matching(_ query: String, text: (Element) -> String) -> [Element] {
+        let query = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        return query.isEmpty ? Array(self) : filter { text($0).localizedStandardContains(query) }
     }
 }
 
-/// The popup language of the Today page: an optional hand-written title, the card the question is
-/// about, a few secondary lines, one or two ink pills, and a quiet text button underneath.
-struct ConfirmSheet: View {
-    var title: String?
-    var subject: SheetSubject?
-    var notes: [String] = []
-    let choices: [SheetChoice]
-    /// The quiet way out under the pills; nil leaves only the pills.
-    var quietTitle: String? = "Not yet"
+/// A search field in the card language: a magnifier, the app's text style, and a clear button once
+/// there is something to clear. The keyboard's Search key puts the keyboard away.
+struct LibrarySearchField: View {
+    @Binding var text: String
+    var prompt = "Search library"
 
-    @Environment(\.dismiss) private var dismiss
+    @FocusState private var focused: Bool
 
     var body: some View {
-        SheetFrame {
-            VStack(alignment: .leading, spacing: 16) {
-                if let title {
-                    Text(title).lr(.handTitle).foregroundStyle(LR.Color.ink)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .accessibilityAddTraits(.isHeader)
+        HStack(spacing: 8) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(LR.Color.iconNeutral)
+                .accessibilityHidden(true)
+            TextField(prompt, text: $text, prompt: Text(prompt).foregroundStyle(LR.Color.inkSecondary))
+                .lr(.bodyStrong).foregroundStyle(LR.Color.ink)
+                .submitLabel(.search)
+                .focused($focused)
+                .onSubmit { focused = false }
+                .autocorrectionDisabled()
+                .textInputAutocapitalization(.never)
+                .frame(minHeight: 44)
+            if !text.isEmpty {
+                Button {
+                    text = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 18))
+                        .foregroundStyle(LR.Color.iconNeutral)
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
                 }
-                if let subject { SheetSubjectRow(subject: subject) }
-                if !notes.isEmpty {
-                    VStack(alignment: .leading, spacing: 4) {
-                        ForEach(notes, id: \.self) { note in
-                            Text(note).lr(.caption).foregroundStyle(LR.Color.inkSecondary)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                    }
-                    .padding(.horizontal, 4)
-                }
-                VStack(spacing: 6) {
-                    ForEach(choices) { choice in
-                        Button {
-                            choice.action()
-                            if choice.dismisses { dismiss() }
-                        } label: { choiceLabel(choice) }
-                            .buttonStyle(SheetPrimaryButtonStyle())
-                    }
-                    if let quietTitle {
-                        Button(quietTitle) { dismiss() }
-                            .lr(.bodyStrong).foregroundStyle(LR.Color.inkSecondary)
-                            .frame(maxWidth: .infinity, minHeight: 44)
-                            .contentShape(Rectangle())
-                    }
-                }
-                .padding(.top, 4)
+                .buttonStyle(.plain)
+                .accessibilityLabel("Clear search")
             }
         }
+        .padding(.leading, 14)
+        .padding(.trailing, text.isEmpty ? 14 : 2)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .lrCard(.surface, radius: LR.Radius.row)
     }
+}
 
-    private func choiceLabel(_ choice: SheetChoice) -> some View {
-        HStack(spacing: 10) {
-            Text(choice.title)
-            if let pill = choice.pill {
-                Text(pill).lr(.pill)
-                    .padding(.horizontal, 10).padding(.vertical, 4)
-                    .background(Capsule().fill(LR.Color.onFill.opacity(0.2)))
-            }
+/// Says which row is picked while the search hides it, so `Add` never looks like it acts on nothing.
+struct SelectedHint: View {
+    let title: String
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "checkmark.circle.fill")
+                .font(.system(size: 14))
+                .foregroundStyle(LR.Color.fill)
+            Text(title).lr(.pill).foregroundStyle(LR.Color.ink).lineLimit(1)
         }
+        .padding(.horizontal, 10).padding(.vertical, 6)
+        .background(Capsule().fill(LR.Color.pillFill))
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Selected, \(title), hidden by the search")
     }
 }
 

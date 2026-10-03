@@ -54,12 +54,12 @@ struct SectionTitle: View {
             HStack(alignment: .firstTextBaseline) {
                 heading
                 Spacer(minLength: 8)
-                if let count { Text(count).lr(.hand).foregroundStyle(LR.Color.accent) }
+                if let count { HandText(count, .hand).foregroundStyle(LR.Color.accent) }
             }
             // At accessibility sizes the count drops under the title instead of squeezing it.
             VStack(alignment: .leading, spacing: 2) {
                 heading
-                if let count { Text(count).lr(.hand).foregroundStyle(LR.Color.accent) }
+                if let count { HandText(count, .hand).foregroundStyle(LR.Color.accent) }
             }
         }
         .padding(.top, 6)
@@ -189,47 +189,6 @@ private struct RowLayout<Details: View, Controls: View, Footer: View>: View {
         Circle().fill(fill.disc)
             .frame(width: 52, height: 52)
             .overlay { DoodleView(key: doodle, size: 28) }
-    }
-}
-
-// MARK: - the card a popup is about
-
-/// What a `ConfirmSheet` shows of the thing it is about: a doodle, a fill, a title and a pill.
-/// (Today's confirmations use `MomentCard` and its `MomentHeader` instead.)
-struct SheetSubject {
-    var doodle: DoodleKey
-    var fill: CardFill = .surface
-    var title: String
-    var caption: String?
-    var pill: String?
-}
-
-/// A routine-style row without controls, in the tint of what it shows (a quest's difficulty, the
-/// routine's, the epic's); a neutral one for anything else.
-struct SheetSubjectRow: View {
-    let subject: SheetSubject
-
-    var body: some View {
-        let tint = subject.fill.tint
-        RowLayout(doodle: subject.doodle, fill: subject.fill) {
-            VStack(alignment: .leading, spacing: 6) {
-                DoneTitle(text: subject.title, isDone: false)
-                if let caption = subject.caption {
-                    Text(caption).lr(.caption)
-                        .foregroundStyle(tint.map(LR.Color.ink(on:)) ?? LR.Color.inkSecondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                if let pill = subject.pill {
-                    PillLabel(text: pill, style: tint == nil ? .plain : .onTint)
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-        } controls: {
-            EmptyView()
-        } footer: {
-            EmptyView()
-        }
-        .accessibilityElement(children: .combine)
     }
 }
 

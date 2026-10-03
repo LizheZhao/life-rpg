@@ -48,7 +48,7 @@ struct DesignGalleryView: View {
 
     private func section<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text(title).lr(.hand).foregroundStyle(LR.Color.accent)
+            HandText(title, .hand).foregroundStyle(LR.Color.accent)
             content()
         }
     }
@@ -79,10 +79,18 @@ struct DesignGalleryView: View {
         VStack(alignment: .leading, spacing: 14) {
             ForEach(LR.Typography.allCases, id: \.self) { style in
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(sample(style)).lr(style).foregroundStyle(LR.Color.ink)
+                    sampleText(style).foregroundStyle(LR.Color.ink)
                     Text(style.name).lr(.caption).foregroundStyle(LR.Color.inkSecondary)
                 }
             }
+        }
+    }
+
+    /// A Caveat style's sample goes through `HandText`, like every other Caveat string.
+    @ViewBuilder private func sampleText(_ style: LR.Typography) -> some View {
+        switch style {
+        case .hand, .handTitle, .handDisplay: HandText(sample(style), style)
+        default: Text(sample(style)).lr(style)
         }
     }
 

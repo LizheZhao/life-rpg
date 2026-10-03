@@ -62,8 +62,7 @@ struct CalendarView: View {
         HStack(spacing: 12) {
             monthButton(systemImage: "chevron.left", label: "Previous month", enabled: true) { go(-1) }
             VStack(spacing: 6) {
-                Text(title(shownMonth))
-                    .lr(.handTitle).foregroundStyle(LR.Color.ink)
+                HandText(title(shownMonth), .handTitle, balanced: true).foregroundStyle(LR.Color.ink)
                     .monospacedDigit()
                     .multilineTextAlignment(.center)
                     .accessibilityAddTraits(.isHeader)
