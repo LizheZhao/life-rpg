@@ -39,7 +39,7 @@ Preconditions:
 ## Gotchas
 
 - Payout points are drawn once at completion, within the band on the row's pill (e.g. `5–15`). Assert the band and that the card, the row and the ledger agree — not a fixed number.
-- Completion is final. To repeat the recipe use `V up --fresh`, not Debug → Reopen today (that is a test aid, not an app behavior to prove).
+- Completion is final. To repeat the recipe use `V up --fresh`, not Debug → Reset today / Reopen quests (those are test aids, not an app behavior to prove).
 - A rating is optional: the card closes by itself 8 s after the rate phase appears or after the last pick, and the rating row exists only if one was picked.
 - The streak counts only random quests: a routine or epic completion does not produce `1 day streak`.
 - "Clear every slot to unlock" below the quest rows is the hidden quest's gate; it becomes `Reveal the hidden quest` when its condition is met. Observed: it stayed locked after the day's only random slot was done while routines were still open, so whether routines also gate it is unconfirmed here.

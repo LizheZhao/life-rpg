@@ -20,6 +20,7 @@ struct DebugView: View {
     @State private var audit: [StoreAudit.Issue] = []
     @State private var auditError: String?
     @State private var confirmingReset = false
+    @State private var confirmingWholeReset = false
     @State private var resetResult: String?
     @State private var permissionError: String?
     @State private var preview: HealthService.Body?
@@ -83,11 +84,17 @@ struct DebugView: View {
                 // final, and a reset button sitting next to the quests would undo that rule in
                 // practice whatever the doc says. This is for exercising the payout roll while
                 // it is being built, not for changing your mind.
-                section("Testing", footer: "Marks today's quests undone, deletes the ledger entries that paid for them, and removes the hidden quest so it can be revealed again. The same quests come back — only the day's results are undone.") {
-                    Button { confirmingReset = true } label: {
-                        Label("Reopen today", systemImage: "arrow.counterclockwise")
+                section("Testing", footer: "Reset today puts the day back as if it had just been opened: everything dated today (quests, routines, extras, what was done ahead) is removed with its payouts, ratings and notes, and the day is drawn again. Reopen quests only undoes the day's results: the same quests come back, undone. Other days are untouched.") {
+                    FlowRow(spacing: 8) {
+                        Button { confirmingWholeReset = true } label: {
+                            Label("Reset today", systemImage: "arrow.triangle.2.circlepath")
+                        }
+                        .buttonStyle(ClayPillButtonStyle())
+                        Button { confirmingReset = true } label: {
+                            Label("Reopen quests", systemImage: "arrow.counterclockwise")
+                        }
+                        .buttonStyle(ClayPillButtonStyle())
                     }
-                    .buttonStyle(ClayPillButtonStyle())
                     .frame(maxWidth: .infinity, alignment: .leading)
                     if let resetResult { note(resetResult) }
                 }
@@ -127,11 +134,17 @@ struct DebugView: View {
             do { audit = try StoreAudit.issues(modelContext) }
             catch { auditError = "Audit failed: \(error)" }
         }
-        .alert("Reopen today?", isPresented: $confirmingReset) {
+        .alert("Reopen today's quests?", isPresented: $confirmingReset) {
             Button("Reopen", role: .destructive) { reopenToday() }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("Today's completions and the points they paid are deleted. Other days are untouched.")
+            Text("Today's quest completions and the points they paid are deleted; the same quests come back. Routines are not touched. Other days are untouched.")
+        }
+        .alert("Reset today?", isPresented: $confirmingWholeReset) {
+            Button("Reset", role: .destructive) { resetToday() }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Everything dated today is removed with its payouts, ratings and notes, and the day is drawn again. Other days are untouched.")
         }
     }
 
@@ -287,6 +300,19 @@ struct DebugView: View {
             Text("\(count)").font(Self.mono).foregroundStyle(clay ? LR.Color.clay : LR.Color.ink)
         }
         .accessibilityElement(children: .combine)
+    }
+
+    private func resetToday() {
+        do {
+            // The same clock the day is opened with, so a simulator day offset resets that day.
+            let now = LifeCalendar.gregorian().date(byAdding: .day, value: dayOffset, to: Date()) ?? Date()
+            var rng = SystemRandomNumberGenerator()
+            let result = try DayReset.reset(modelContext, dayKey: today, now: now, rng: &rng)
+            resetResult = result.description
+            audit = try StoreAudit.issues(modelContext)
+        } catch {
+            resetResult = "Reset failed: \(error)"
+        }
     }
 
     private func reopenToday() {
