@@ -21,7 +21,10 @@ public struct DayRecord {
         // flexible one moved later in the week (full pay) both land here — what it paid is
         // `awardedPoints`, and a fixed make-up also carries its earlier `penaltyApplied`.
         case late(on: String)
-        case skipped                      // by hand, or automatically on day 4
+        case skipped                      // paid to cancel (`Redemption.cancel`)
+        // The settlement gave up on it — day-4 auto-skip or Sunday's shortfall. Told apart from
+        // `skipped` by the `skip` ledger entry only `Overdue` books (`Schedule.settledIDs`).
+        case missed
         case replaced                     // swapped for an ad-hoc routine (`AdHoc.replaceRoutine`)
         case notDone
     }
@@ -72,8 +75,12 @@ public struct DayRecord {
             .sorted { (order($0), $0.textSnapshot) < (order($1), $1.textSnapshot) }
             .map { QuestLine(quest: $0, ratings: byQuestID[$0.id] ?? []) }
 
+        // A skip entry is dated the day after the due day, so `ledger` has to hold more than this
+        // day's rows for a due day's line to find its own.
+        let settled = Schedule.settledIDs(ledger)
         func line(_ o: RoutineOccurrence) -> RoutineLine {
-            RoutineLine(occurrence: o, status: Self.status(of: o), ratings: byQuestID[o.id] ?? [])
+            RoutineLine(occurrence: o, status: Self.status(of: o, settled: settled),
+                        ratings: byQuestID[o.id] ?? [])
         }
         self.routines = occurrences
             .filter { $0.dueDayKey == dayKey }
@@ -97,9 +104,11 @@ public struct DayRecord {
             .sorted { $0.timestamp < $1.timestamp }
     }
 
-    public static func status(of o: RoutineOccurrence) -> RoutineStatus {
+    /// - Parameter settled: `Schedule.settledIDs` of the ledger; without it a skip can't be
+    ///   told from a cancel and reads as `.skipped`.
+    public static func status(of o: RoutineOccurrence, settled: Set<UUID> = []) -> RoutineStatus {
         if o.isReplaced { return .replaced }
-        if o.skipped { return .skipped }
+        if o.skipped { return Schedule.isMissed(o, settled: settled) ? .missed : .skipped }
         guard let done = o.completedDayKey else { return .notDone }
         if done == o.dueDayKey { return .done }
         return done < o.dueDayKey ? .doneAhead(on: done) : .late(on: done)
@@ -111,8 +120,10 @@ public struct DayRecord {
             predicate: #Predicate { $0.dayKey == dayKey }))
         let occurrences = try context.fetch(FetchDescriptor<RoutineOccurrence>(
             predicate: #Predicate { $0.dueDayKey == dayKey || $0.completedDayKey == dayKey }))
+        // Plus every `skip` entry, wherever dated: one closes the occurrence it names the day after.
+        let skipKind = Economy.Kind.skip.rawValue
         let ledger = try context.fetch(FetchDescriptor<LedgerEntry>(
-            predicate: #Predicate { $0.dayKey == dayKey }))
+            predicate: #Predicate { $0.dayKey == dayKey || $0.kind == skipKind }))
         let contexts = try context.fetch(FetchDescriptor<DailyContext>(
             predicate: #Predicate { $0.dayKey == dayKey }))
         // A rating is linked by id, and can be dated a day after its completion (rated just past

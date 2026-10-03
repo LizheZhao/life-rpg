@@ -41,7 +41,7 @@ import SwiftData
     public var adHocSourceRoutineID: UUID?
     // Swapped by hand for an ad-hoc occurrence (`AdHoc.replaceRoutine`): the id of the one that
     // took over. The row is also `skipped`, which closes it everywhere; this is what tells "swapped
-    // for something at least as heavy" apart from "gave up" (backlog, day detail, calendar).
+    // for something at least as heavy" apart from "gave up" (the calendar's "Did not finish", day detail).
     // Added after V2 shipped: optional, so lightweight migration fills nil.
     public var replacedByID: UUID?
     // The doodle picked for a custom ad-hoc routine (`DoodleKey.rawValue`). Nil = none chosen, so

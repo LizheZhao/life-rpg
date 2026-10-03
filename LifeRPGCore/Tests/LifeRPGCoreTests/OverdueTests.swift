@@ -246,7 +246,7 @@ struct OverdueTests {
 
     // MARK: what the page lists
 
-    @Test func overdueExcludesFlexibleAndBacklogListsSkipped() throws {
+    @Test func overdueExcludesFlexibleAndMissedListsWhatWasGivenUp() throws {
         let ctx = try Fixtures.context()
         let fixed = occurrence(ctx, routine(ctx, "fixed"), due: sat)
         let flex = routine(ctx, "flex", spec: "SAT,SUN", target: 2, flexible: true)
@@ -258,6 +258,7 @@ struct OverdueTests {
         #expect(Schedule.openThisWeek([fixed, f], flexible: flexIDs, on: mon, in: tz).isEmpty)
 
         try settle(ctx, sat, sun, mon)
-        #expect(Schedule.backlog([fixed, f]).map(\.textSnapshot) == ["fixed", "flex"])
+        #expect(Schedule.missed([fixed, f], ledger: try ctx.fetch(FetchDescriptor<LedgerEntry>())).map(\.textSnapshot)
+                == ["fixed", "flex"])
     }
 }

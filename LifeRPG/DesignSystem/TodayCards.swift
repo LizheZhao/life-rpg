@@ -561,8 +561,8 @@ struct ReplacedRowView: View {
     }
 }
 
-/// A plain card row for the read-only backlog: a title, a caption and whatever sits at the
-/// trailing edge.
+/// A plain card row for the calendar's "Did not finish" list: a title, a caption and whatever
+/// sits at the trailing edge.
 struct RecordRowView<Trailing: View>: View {
     let title: String
     var caption: String?
@@ -612,7 +612,8 @@ struct BannerView: View {
 /// the filled check for done, an open ring for not done, a ring with a dash for skipped or
 /// replaced. Never the only signal: the row's status text says the same.
 struct HistoryMark: View {
-    enum Kind { case done, open, dropped }
+    /// `dropped` is a dash (swapped, cancelled); `missed` a cross (the settlement gave up on it).
+    enum Kind { case done, open, dropped, missed }
     let kind: Kind
 
     @Environment(\.lrTint) private var tint
@@ -628,6 +629,11 @@ struct HistoryMark: View {
                     .frame(width: 20, height: 20)
             }
             if kind == .dropped { Capsule().fill(ring).frame(width: 12, height: 2) }
+            if kind == .missed {
+                ForEach([45.0, -45.0], id: \.self) { angle in
+                    Capsule().fill(ring).frame(width: 14, height: 2).rotationEffect(.degrees(angle))
+                }
+            }
         }
         .frame(width: 44, height: 44)
         .accessibilityHidden(true)

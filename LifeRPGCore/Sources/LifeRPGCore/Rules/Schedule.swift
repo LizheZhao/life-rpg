@@ -175,12 +175,31 @@ public enum Schedule {
         sorted(occurrences.filter { $0.completedDayKey == dayKey && $0.dueDayKey > dayKey })
     }
 
-    /// Skipped and never done — auto on day 4, or at Sunday settlement — newest first.
-    public static func backlog(_ occurrences: [RoutineOccurrence]) -> [RoutineOccurrence] {
-        occurrences
-            .filter { $0.skipped && $0.completedDayKey == nil && !$0.isReplaced }
+    /// What the settlement gave up on — auto-skipped on day 4, or closed at Sunday's settlement —
+    /// and was never done, newest due day first. "Did not finish" on the calendar.
+    ///
+    /// `skipped` alone can't say who closed it: a routine you paid to cancel and one you swapped
+    /// are skipped too. Only `Overdue` books a `skip` ledger entry, so that entry is the mark.
+    /// - Parameter month: only occurrences due in it, the month the calendar is showing.
+    public static func missed(_ occurrences: [RoutineOccurrence], ledger: [LedgerEntry],
+                              in month: MonthKey? = nil) -> [RoutineOccurrence] {
+        let settled = settledIDs(ledger)
+        return occurrences
+            .filter { o in
+                isMissed(o, settled: settled) && (month.map { MonthKey(dayKey: o.dueDayKey) == $0 } ?? true)
+            }
             .sorted { $0.dueDayKey == $1.dueDayKey ? $0.textSnapshot < $1.textSnapshot
                                                    : $0.dueDayKey > $1.dueDayKey }
+    }
+
+    /// The occurrences `Overdue` closed: the `refID` of every `skip` entry.
+    public static func settledIDs(_ ledger: [LedgerEntry]) -> Set<UUID> {
+        let skip = Economy.Kind.skip.rawValue
+        return Set(ledger.lazy.filter { $0.kind == skip }.compactMap(\.refID))
+    }
+
+    public static func isMissed(_ o: RoutineOccurrence, settled: Set<UUID>) -> Bool {
+        o.skipped && o.completedDayKey == nil && !o.isReplaced && settled.contains(o.id)
     }
 
     /// Sessions of `routineID` completed in `weekKey`: its own occurrences, plus ad-hoc ones picked

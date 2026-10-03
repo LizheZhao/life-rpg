@@ -70,8 +70,11 @@ struct ScenarioTests {
                              flexible: try flexibleIDs, on: day, in: tz).map(\.textSnapshot)
         }
 
-        var backlog: [RoutineOccurrence] {
-            get throws { Schedule.backlog(try ctx.fetch(FetchDescriptor<RoutineOccurrence>())) }
+        var missed: [RoutineOccurrence] {
+            get throws {
+                Schedule.missed(try ctx.fetch(FetchDescriptor<RoutineOccurrence>()),
+                                ledger: try ctx.fetch(FetchDescriptor<LedgerEntry>()))
+            }
         }
     }
 
@@ -144,7 +147,7 @@ struct ScenarioTests {
         #expect(try w.penalties(on: "2026-09-27") == [-18, -13, -13, -10, -10, -4])
         #expect(try w.balance == 74)
         #expect(try w.overdue(on: "2026-09-28") == ["Take out the trash"])  // Sat's, day 3
-        #expect(try w.backlog.count == 5)            // the five flexible shortfalls, skipped Sunday
+        #expect(try w.missed.count == 5)            // the five flexible shortfalls, skipped Sunday
 
         // Tue 29 (tier low): Mon is judged — trash day 3 → −5, then skipped (dated day 4).
         // Mon's study done on Tue: created on a normal day, so it is still the full version —
@@ -158,7 +161,7 @@ struct ScenarioTests {
         #expect(trash.skipped)
         #expect(trash.penaltyApplied == 12)                                 // 3 + 4 + 5
         #expect(try w.overdue(on: "2026-09-29").isEmpty)
-        #expect(try w.backlog.map(\.textSnapshot).sorted() == [
+        #expect(try w.missed.map(\.textSnapshot).sorted() == [
             "Review bills/statements", "Send job applications", "Take out the trash",
             "Work on project", "Workout: dumbbell training", "Workout: running",
         ])

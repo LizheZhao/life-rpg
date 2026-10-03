@@ -242,6 +242,7 @@ struct DayDetailView: View {
         let mark: HistoryMark.Kind = switch line.status {
         case .done, .doneAhead, .late: .done
         case .skipped, .replaced: .dropped
+        case .missed: .missed
         case .notDone: .open
         }
         var spoken = [status]
@@ -270,6 +271,7 @@ struct DayDetailView: View {
         // Timing only; the points beside it say whether it paid half (a make-up) or full.
         case .late(let on): parts.append("Done on \(on)")
         case .skipped: parts.append("Skipped")
+        case .missed: parts.append("Did not finish")
         case .replaced: parts.append("Replaced by an ad-hoc routine")
         case .notDone: parts.append("Not done")
         }

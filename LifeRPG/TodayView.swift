@@ -181,12 +181,11 @@ struct TodayView: View {
     }
     private var flexibleIDs: Set<UUID> { Set(routines.filter(\.flexibleWithinWeek).map(\.id)) }
     private func isFlexible(_ o: RoutineOccurrence) -> Bool { o.routineID.map(flexibleIDs.contains) ?? false }
-    // Which rows are overdue, open this week or in the backlog is Core's rule; these only hand
-    // it the rows the queries already hold.
+    // Which rows are overdue or open this week is Core's rule; these only hand it the rows the
+    // queries already hold.
     private var overdueRoutines: [RoutineOccurrence] {
         Schedule.overdue(occurrences, flexible: flexibleIDs, on: today)
     }
-    private var backlog: [RoutineOccurrence] { Array(Schedule.backlog(occurrences).prefix(30)) }
 
     // Both rules live in Core; this only hands over the rows the query already has.
     private var balance: Int { Economy.balance(ledger) }
@@ -258,7 +257,6 @@ struct TodayView: View {
                 questsBlock
                 completedBlock
                 aheadBlock
-                backlogBlock
             }
             .padding(.horizontal, LR.Spacing.inset)
             .padding(.top, 8)
@@ -427,20 +425,6 @@ struct TodayView: View {
         case .candidate(let state):
             AheadCandidateRowView(state: state) {
                 if let routine = routines.first(where: { $0.id == state.id }) { show(.ask(.ahead(routine))) }
-            }
-        }
-    }
-
-    /// Skipped and never done: read-only, a record rather than a to-do.
-    @ViewBuilder private var backlogBlock: some View {
-        if !backlog.isEmpty {
-            SectionTitle(title: "Backlog")
-            ForEach(backlog) { o in
-                RecordRowView(title: o.textSnapshot, caption: "Due \(o.dueDayKey)", secondary: true) {
-                    if o.penaltyApplied > 0 {
-                        PillLabel(text: "−\(o.penaltyApplied)", style: .clay)
-                    }
-                }
             }
         }
     }

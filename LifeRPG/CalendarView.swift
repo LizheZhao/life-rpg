@@ -11,8 +11,12 @@ struct CalendarView: View {
 
     @Query private var quests: [DailyQuest]
     @Query private var occurrences: [RoutineOccurrence]
+    /// Only the settlement's `skip` entries: what tells a routine it gave up on from one you cancelled.
+    @Query(filter: #Predicate<LedgerEntry> { $0.kind == "skip" }) private var skips: [LedgerEntry]
 
     @State private var month: MonthKey?
+    /// Collapsed on every launch and every visit; not worth remembering.
+    @State private var missedExpanded = false
     @State private var selected: SelectedDay?
     /// -1 / 1 for the way the last month change went, so the new month slides in from that side.
     @State private var direction = 1
@@ -40,6 +44,7 @@ struct CalendarView: View {
                     header
                     gridCard(marks: marks, epicWeeks: epicWeeks)
                     legend
+                    missedBlock
                     ratingsLink
                 }
                 .padding(.horizontal, 16)
@@ -238,6 +243,53 @@ struct CalendarView: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Legend: dots are quests done, coloured trivial, easy, medium or hard. "
             + "A tick is routines cleared, a star the hidden quest, a tinted row an epic week.")
+    }
+
+    // MARK: did not finish
+
+    /// What the settlement gave up on in the month on show. Core's rule (`Schedule.missed`); a tap
+    /// opens the day it was due, where the row says the same. Nothing to show, nothing drawn.
+    @ViewBuilder private var missedBlock: some View {
+        let missed = Schedule.missed(occurrences, ledger: skips, in: shownMonth)
+        if !missed.isEmpty {
+            VStack(spacing: 8) {
+                Button {
+                    withAnimation(reduceMotion ? nil : .easeOut(duration: 0.25)) { missedExpanded.toggle() }
+                } label: {
+                    HStack(spacing: 12) {
+                        HistoryMark(kind: .missed).scaleEffect(0.7).frame(width: 32, height: 32)
+                        Text("Did not finish").lr(.bodyStrong).foregroundStyle(LR.Color.ink)
+                        Text("\(missed.count)").lr(.caption).foregroundStyle(LR.Color.inkSecondary)
+                        Spacer(minLength: 8)
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(LR.Color.iconNeutral)
+                            .rotationEffect(.degrees(missedExpanded ? 180 : 0))
+                            .accessibilityHidden(true)
+                    }
+                    .padding(12)
+                    .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                    .lrCard(.surface, radius: LR.Radius.row)
+                }
+                .buttonStyle(PressableCardStyle())
+                .accessibilityLabel("Did not finish, \(missed.count) this month")
+                .accessibilityValue(missedExpanded ? "expanded" : "collapsed")
+                .accessibilityHint("Shows what was given up on")
+
+                if missedExpanded {
+                    ForEach(missed) { o in
+                        Button { selected = SelectedDay(id: o.dueDayKey) } label: {
+                            RecordRowView(title: o.displayText, caption: "Due \(o.dueDayKey)", secondary: true) {
+                                if o.penaltyApplied > 0 {
+                                    PillLabel(text: "−\(o.penaltyApplied)", style: .clay)
+                                }
+                            }
+                        }
+                        .buttonStyle(PressableCardStyle())
+                    }
+                }
+            }
+        }
     }
 
     private func tierName(_ tint: QuestTint) -> String {
