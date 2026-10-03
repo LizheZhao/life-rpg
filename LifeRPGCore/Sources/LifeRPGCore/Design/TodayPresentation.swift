@@ -205,9 +205,11 @@ public struct RoutineRowState: Equatable, Identifiable, Sendable {
     /// - Parameters:
     ///   - routine: the template, for the frequency and auto-verify pills; nil for an ad-hoc one.
     ///   - quests, occurrences: the rows the page's queries hold, to name what an ad-hoc row replaced.
+    ///   - sundayBill: what Sunday night's settlement charges against this occurrence if it is
+    ///     still open then (`Overdue.Weekly.points(for:)`); only a flexible routine ever has one.
     public init(_ o: RoutineOccurrence, placement: Placement, routine: RoutineTask?, flexible: Bool,
                 today: String, tier: Tier, level: Int,
-                quests: [DailyQuest], occurrences: [RoutineOccurrence]) {
+                quests: [DailyQuest], occurrences: [RoutineOccurrence], sundayBill: Int = 0) {
         let open = o.completedDayKey == nil && !o.skipped
         // The number `Completion.completeRoutine` will pay today (the late make-up for an overdue one).
         let pays = Completion.routinePayout(o, flexible: flexible, on: today, tier: tier, level: level)
@@ -235,6 +237,8 @@ public struct RoutineRowState: Equatable, Identifiable, Sendable {
         }
         if o.usedDegraded { pills.append(PillState("light version", .plain)) }
         if let day = overdueDay { pills.append(PillState("overdue · day \(day)", .clay)) }
+        let owes = open && sundayBill > 0 ? sundayBill : 0
+        if owes > 0 { pills.append(PillState("−\(owes) Sun night", .clay)) }
         self.pills = pills
 
         if o.degradedTextSnapshot != nil {
@@ -268,6 +272,7 @@ public struct RoutineRowState: Equatable, Identifiable, Sendable {
         accessibilityLabel = [title,
                               overdueDay.map { "overdue day \($0)" },
                               open ? pays.map { "pays \(PresentationText.coins($0))" } : nil,
+                              owes > 0 ? "minus \(PresentationText.coins(owes)) Sunday night" : nil,
                               autoVerified ? "auto-verified" : nil]
             .compactMap { $0 }.joined(separator: ", ")
         accessibilityValue = o.awardedPoints.map { "done, \(PresentationText.coins($0)) earned" }

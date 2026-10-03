@@ -28,9 +28,31 @@ struct TodayPresentationTests {
 
     private func row(_ o: RoutineOccurrence, _ placement: RoutineRowState.Placement = .today,
                      routine: RoutineTask? = nil, tier: Tier = .normal, level: Int = 1,
-                     quests: [DailyQuest] = [], occurrences: [RoutineOccurrence] = []) -> RoutineRowState {
+                     quests: [DailyQuest] = [], occurrences: [RoutineOccurrence] = [],
+                     sundayBill: Int = 0) -> RoutineRowState {
         RoutineRowState(o, placement: placement, routine: routine, flexible: routine?.flexibleWithinWeek ?? false,
-                        today: friday, tier: tier, level: level, quests: quests, occurrences: occurrences)
+                        today: friday, tier: tier, level: level, quests: quests, occurrences: occurrences,
+                        sundayBill: sundayBill)
+    }
+
+    // MARK: Sunday's bill on the row that owes it
+
+    @Test func anOpenRowNamesWhatSundayNightWillChargeAgainstIt() {
+        let o = occurrence("Grocery shopping", base: 10)
+        #expect(row(o, sundayBill: 5).pills.contains(.init("−5 Sun night", .clay)))
+        #expect(row(o, sundayBill: 5).accessibilityLabel.contains("minus 5 coins Sunday night"))
+        #expect(!row(o).pills.contains { $0.text.contains("Sun night") })
+        #expect(!row(o, sundayBill: 0).accessibilityLabel.contains("Sunday night"))
+    }
+
+    @Test func aDoneOrSkippedRowOwesNothing() {
+        let done = occurrence("Done")
+        done.completedDayKey = "2026-10-02"
+        done.awardedPoints = 20
+        #expect(!row(done, sundayBill: 5).pills.contains { $0.text.contains("Sun night") })
+        let skipped = occurrence("Skipped")
+        skipped.skipped = true
+        #expect(!row(skipped, sundayBill: 5).pills.contains { $0.text.contains("Sun night") })
     }
 
     // MARK: a routine row's doodle

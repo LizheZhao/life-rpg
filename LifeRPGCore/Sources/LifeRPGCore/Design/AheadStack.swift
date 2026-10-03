@@ -57,7 +57,8 @@ public struct AheadState: Equatable, Sendable {
     public let items: [AheadItem]
     public let openCount: Int
     public let doneCount: Int
-    /// What Sunday night's settlement charges if nothing more is done, e.g. `−13 Sun night`.
+    /// What Sunday night's settlement charges against the rows in this section if nothing more
+    /// is done, e.g. `−13 Sun night`. A routine due today owes on its own row under Routines.
     public let billText: String?
     private let bill: Int
 
@@ -86,8 +87,9 @@ public struct AheadState: Equatable, Sendable {
                                                                        tier: tier, in: timeZone)) }
         openCount = open.count + candidates.count
         doneCount = done.count
-        bill = DayKey.weekKey(of: today, in: timeZone)
-            .map { Overdue.weekly(routines, occurrences: occurrences, weekKey: $0).total } ?? 0
+        let weekly = DayKey.weekKey(of: today, in: timeZone)
+            .map { Overdue.weekly(routines, occurrences: occurrences, weekKey: $0) }
+        bill = open.map { weekly?.points(for: $0) ?? 0 }.reduce(0, +)
         billText = bill > 0 ? "−\(bill) Sun night" : nil
     }
 }

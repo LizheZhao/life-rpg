@@ -122,6 +122,24 @@ struct AheadStackTests {
         #expect(c.pills.last == .init("due in 2 days", .plain))
     }
 
+    /// What is due today sits under Routines and carries its own bill; the Ahead header adds up
+    /// only the rows inside that section, so the number beside "Ahead this week" never includes
+    /// a routine the reader cannot see there.
+    @Test func headerBillCountsOnlyTheRowsInTheSection() {
+        let earlier = routine("Strength session", base: 20)
+        let dueToday = routine("Grocery shopping", base: 10)
+        let s = state([earlier, dueToday],
+                      [occurrence(earlier, due: "2026-09-30"), occurrence(dueToday, due: friday)])
+        #expect(s.billText == "−10 Sun night")          // Strength's 50% of 20, not Grocery's 5 on top
+        #expect(s.accessibilityLabel == "Ahead this week, 1 open, minus 10 coins Sunday night")
+    }
+
+    @Test func noBillInTheSectionWhenOnlyTodaysRoutineOwes() {
+        let dueToday = routine("Grocery shopping", base: 10)
+        let s = state([dueToday], [occurrence(dueToday, due: friday)])
+        #expect(s.billText == nil)
+    }
+
     @Test func headerCountsOpenAndDoneAndNamesSundaysBill() {
         let open = routine("Strength session", base: 20)
         let aheadDone = routine("Run", base: 25)

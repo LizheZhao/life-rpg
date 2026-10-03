@@ -210,10 +210,17 @@ struct TodayView: View {
     // Each card renders a state Core builds from the rows the queries already hold
     // (`TodayPresentation`); nothing below chooses a number or a note.
 
+    /// Sunday night's settlement for this week, from the rows the queries hold: each row says what
+    /// it owes itself, the Ahead header adds up only its own.
+    private var weeklyBill: Overdue.Weekly? {
+        DayKey.weekKey(of: today).map { Overdue.weekly(routines, occurrences: occurrences, weekKey: $0) }
+    }
+
     private func routineState(_ o: RoutineOccurrence, _ placement: RoutineRowState.Placement) -> RoutineRowState {
         RoutineRowState(o, placement: placement, routine: routines.first { $0.id == o.routineID },
                         flexible: isFlexible(o), today: today, tier: tier, level: level,
-                        quests: allQuests, occurrences: occurrences)
+                        quests: allQuests, occurrences: occurrences,
+                        sundayBill: weeklyBill?.points(for: o) ?? 0)
     }
 
     private func questState(_ quest: DailyQuest) -> QuestCardState { QuestCardState(quest, tier: tier) }

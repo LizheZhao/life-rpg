@@ -78,6 +78,12 @@ public enum Overdue {
         /// What the charges come to — only the ones that are actually charged
         /// (`countsForClear = false` routines never are).
         public var total: Int { charges.filter(\.occurrence.countsForClear).map(\.points).reduce(0, +) }
+
+        /// What is charged against this one occurrence, so a row can say it itself.
+        public func points(for o: RoutineOccurrence) -> Int {
+            charges.filter { $0.occurrence.id == o.id && $0.occurrence.countsForClear }
+                .map(\.points).reduce(0, +)
+        }
     }
 
     /// The target is `weeklyTarget`, capped by how many sessions actually came due that week; done

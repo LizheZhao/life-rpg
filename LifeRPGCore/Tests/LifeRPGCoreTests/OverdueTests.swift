@@ -244,6 +244,28 @@ struct OverdueTests {
         #expect(o.skipped)
     }
 
+    /// The today page shows Sunday's bill on the row that owes it, so the settlement's charges
+    /// must be readable per occurrence — the same numbers `settle` will book.
+    @Test func sundaysBillCanBeReadPerOccurrence() throws {
+        let ctx = try Fixtures.context()
+        let groceries = routine(ctx, "Groceries", spec: "SAT", base: 10, flexible: true)
+        let free = routine(ctx, "Free", spec: "SAT", base: 40, flexible: true, countsForClear: false)
+        let finished = routine(ctx, "Finished", spec: "SAT", base: 40, flexible: true)
+        let g = occurrence(ctx, groceries, due: sat)
+        let f = occurrence(ctx, free, due: sat)
+        let d = occurrence(ctx, finished, due: sat)
+        d.completedDayKey = sat
+        try ctx.save()
+
+        let bill = Overdue.weekly(try ctx.fetch(FetchDescriptor<RoutineTask>()),
+                                  occurrences: try ctx.fetch(FetchDescriptor<RoutineOccurrence>()),
+                                  weekKey: try #require(DayKey.weekKey(of: sat, in: tz)))
+        #expect(bill.points(for: g) == 5)          // 50% of base 10
+        #expect(bill.points(for: f) == 0)          // countsForClear = false is never charged
+        #expect(bill.points(for: d) == 0)          // done: nothing owed
+        #expect(bill.total == 5)
+    }
+
     // MARK: what the page lists
 
     @Test func overdueExcludesFlexibleAndMissedListsWhatWasGivenUp() throws {
