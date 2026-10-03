@@ -85,6 +85,31 @@ struct CompletionTests {
         }
     }
 
+    /// Only the tick that finishes the group rolls and pays, so only that one needs the page's
+    /// confirmation; the two before it write nothing but the tick.
+    @Test func onlyTheLastTickOfAGroupPays() throws {
+        let ctx = try Fixtures.context()
+        let group = try day(ctx, tier: .veryLow, seed: 3).first(where: \.isTrivialGroup)!
+        var rng = SeededRNG(seed: 4)
+
+        #expect(!Completion.tickWillPay(group, at: 0))
+        #expect(!Completion.tickWillPay(group, at: 2))
+        try Completion.tickTrivialItem(group, at: 0, tier: .normal, in: ctx, rng: &rng)
+        #expect(!Completion.tickWillPay(group, at: 1))
+        #expect(!Completion.tickWillPay(group, at: 0))            // already ticked: nothing to do
+        try Completion.tickTrivialItem(group, at: 1, tier: .normal, in: ctx, rng: &rng)
+        #expect(Completion.tickWillPay(group, at: 2))             // the last one left
+        #expect(!Completion.tickWillPay(group, at: 5))            // out of range
+        #expect(try Completion.tickTrivialItem(group, at: 2, tier: .normal, in: ctx, rng: &rng) != nil)
+        #expect(!Completion.tickWillPay(group, at: 2))            // the group is done
+    }
+
+    @Test func aPlainQuestHasNoTicks() throws {
+        let ctx = try Fixtures.context()
+        let quest = try day(ctx, tier: .low, seed: 5).first { !$0.isTrivialGroup }!
+        #expect(!Completion.tickWillPay(quest, at: 0))
+    }
+
     @Test func lowTierPaysTheEffortMultiplier() throws {
         let ctx = try Fixtures.context()
         let quest = try day(ctx, tier: .low, seed: 5).first { !$0.isTrivialGroup }!

@@ -37,7 +37,6 @@ struct AdHocView: View {
     @State private var difficulty: Difficulty = .easy
     /// The doodle picked by hand; nil follows what the typed text suggests.
     @State private var pickedDoodle: DoodleKey?
-    @State private var confirming = false
     @State private var error: String?
     /// An occurrence already on today's page, about to be marked done from here instead of retyped.
     @State private var markingDone: RoutineOccurrence?
@@ -110,6 +109,12 @@ struct AdHocView: View {
 
     private var actionTitle: String { isAdding ? "Add" : "Replace" }
 
+    /// What the one confirmation (the bar) is about to do. It replaces the alert that used to follow.
+    private var confirmNote: String {
+        isAdding ? "\(sourceText) · final, it stays on today's page"
+                 : "\(slotText) → \(sourceText) · final, it can't be brought back"
+    }
+
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -134,7 +139,7 @@ struct AdHocView: View {
             }
             .scrollDismissesKeyboard(.interactively)
             .safeAreaInset(edge: .bottom) {
-                ConfirmBar(title: actionTitle, enabled: source != nil) { confirming = true }
+                ConfirmBar(title: actionTitle, enabled: source != nil, note: confirmNote) { commit() }
             }
             .background(LR.Color.canvas.ignoresSafeArea())
             .navigationTitle(isAdding ? "Add for today" : "Replace")
@@ -142,16 +147,6 @@ struct AdHocView: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }.foregroundStyle(LR.Color.ink)
-                }
-            }
-            .alert(isAdding ? "Add for today?" : "Replace it?", isPresented: $confirming) {
-                Button(actionTitle) { commit() }
-                Button("Cancel", role: .cancel) {}
-            } message: {
-                if isAdding {
-                    Text("\(sourceText)\n\nThis is final — it stays on today's page.")
-                } else {
-                    Text("\(slotText) → \(sourceText)\n\nThis is final — it can't be brought back.")
                 }
             }
             .onAppear {
@@ -394,7 +389,6 @@ struct EpicReplaceView: View {
     @State private var templateID: UUID?
     @State private var query = ""
     @State private var text = ""
-    @State private var confirming = false
     @State private var error: String?
 
     private var candidates: [QuestTemplate] { Epic.replaceCandidates(templates, replacing: epic) }
@@ -462,7 +456,10 @@ struct EpicReplaceView: View {
             }
             .scrollDismissesKeyboard(.interactively)
             .safeAreaInset(edge: .bottom) {
-                ConfirmBar(title: "Replace", enabled: pick != nil) { confirming = true }
+                ConfirmBar(title: "Replace", enabled: pick != nil,
+                           note: "\(epic.textSnapshot) → \(pickText) · final, the old epic can't be brought back") {
+                    commit()
+                }
             }
             .background(LR.Color.canvas.ignoresSafeArea())
             .navigationTitle("Replace the epic")
@@ -471,12 +468,6 @@ struct EpicReplaceView: View {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }.foregroundStyle(LR.Color.ink)
                 }
-            }
-            .alert("Replace the epic?", isPresented: $confirming) {
-                Button("Replace") { commit() }
-                Button("Cancel", role: .cancel) {}
-            } message: {
-                Text("\(epic.textSnapshot) → \(pickText)\n\nThis is final — the old epic can't be brought back.")
             }
         }
     }

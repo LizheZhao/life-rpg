@@ -10,8 +10,10 @@ import SwiftData
 /// Templates and routines are not included: they are rebuilt from the seed CSVs, which live in
 /// `doc/` under version control. What cannot be rebuilt is what happened, so that is what ships —
 /// and that includes the ratings and comments you write in the app, which exist nowhere else, and
-/// the rewards you typed in. `library` carries only what a reseed can't give back: each row's old
-/// id, so history can be re-pointed at the new rows by text, and its cooldown / schedule stamps.
+/// the rewards you typed in. `library` carries only what a reseed can't give back: the old id of
+/// each row history points at, so history can be re-pointed at the new rows by text, and the
+/// cooldown / schedule stamps. A row nothing refers to and nothing stamped is left out: with a
+/// backup a day, the list is copied into every file, so it is kept to what is needed.
 public enum JSONExport {
     /// Bumped when the model changes shape, independently of the GitHub tag. Import reads this
     /// and nothing else. 4 added `Occurrence.iconKey`; an older file simply lacks it.
@@ -163,15 +165,37 @@ public enum JSONExport {
         public var timestamp: Date
     }
 
+    /// The ids of every library row the history tables point at — what `library` has to be able to
+    /// re-point on import.
+    static func referencedLibraryIDs(quests: [DailyQuest], occurrences: [RoutineOccurrence],
+                                     ratings: [QuestRating], comments: [QuestComment]) -> Set<UUID> {
+        var ids = Set<UUID>()
+        for q in quests {
+            if let id = q.templateID { ids.insert(id) }
+            ids.formUnion(q.trivialTemplateIDs)
+        }
+        for o in occurrences {
+            for id in [o.routineID, o.adHocSourceRoutineID, o.degradedRoutineID] { if let id { ids.insert(id) } }
+        }
+        for id in ratings.compactMap(\.targetID) + comments.compactMap(\.targetID) { ids.insert(id) }
+        return ids
+    }
+
     public static func snapshot(_ context: ModelContext, now: Date = Date()) throws -> Snapshot {
-        Snapshot(
+        let quests = try context.fetch(FetchDescriptor<DailyQuest>())
+        let occurrences = try context.fetch(FetchDescriptor<RoutineOccurrence>())
+        let ratings = try context.fetch(FetchDescriptor<QuestRating>())
+        let comments = try context.fetch(FetchDescriptor<QuestComment>())
+        let referenced = referencedLibraryIDs(quests: quests, occurrences: occurrences,
+                                              ratings: ratings, comments: comments)
+        return Snapshot(
             schemaVersion: schemaVersion,
             exportedAt: now,
             ledger: try context.fetch(FetchDescriptor<LedgerEntry>()).sorted { $0.timestamp < $1.timestamp }.map {
                 Ledger(id: $0.id, timestamp: $0.timestamp, dayKey: $0.dayKey, kind: $0.kind,
                        points: $0.points, refID: $0.refID, note: $0.note)
             },
-            dailyQuests: try context.fetch(FetchDescriptor<DailyQuest>()).sorted { $0.dayKey < $1.dayKey }.map {
+            dailyQuests: quests.sorted { $0.dayKey < $1.dayKey }.map {
                 Quest(id: $0.id, dayKey: $0.dayKey, weekKey: $0.weekKey, slot: $0.slotRaw,
                       isHiddenSlot: $0.isHiddenSlot, templateID: $0.templateID, text: $0.textSnapshot,
                       trivialGroup: $0.trivialGroup, trivialDone: $0.trivialDone,
@@ -182,7 +206,7 @@ public enum JSONExport {
                       rerollCount: $0.rerollCount, replaced: $0.replaced,
                       replacedReason: $0.replacedReasonRaw, extensionCount: $0.extensionCount)
             },
-            routineOccurrences: try context.fetch(FetchDescriptor<RoutineOccurrence>()).sorted { $0.dueDayKey < $1.dueDayKey }.map {
+            routineOccurrences: occurrences.sorted { $0.dueDayKey < $1.dueDayKey }.map {
                 Occurrence(id: $0.id, routineID: $0.routineID, dueDayKey: $0.dueDayKey, weekKey: $0.weekKey,
                            completedDayKey: $0.completedDayKey, text: $0.textSnapshot,
                            usedDegraded: $0.usedDegraded, basePoints: $0.basePoints,
@@ -201,26 +225,30 @@ public enum JSONExport {
                         energy: $0.energy, readiness: $0.readiness, tier: $0.tierRaw, onCycle: $0.onCycle,
                         cycleDay: $0.cycleDay, routineLoad: $0.routineLoad, randomSlots: $0.randomSlots)
             },
-            ratings: try context.fetch(FetchDescriptor<QuestRating>()).sorted { $0.timestamp < $1.timestamp }.map {
+            ratings: ratings.sorted { $0.timestamp < $1.timestamp }.map {
                 Rating(id: $0.id, targetID: $0.targetID, questID: $0.questID,
                        targetKind: $0.targetKindRaw,
                        text: $0.textSnapshot, rating: $0.rating, dayKey: $0.dayKey,
                        timestamp: $0.timestamp)
             },
-            comments: try context.fetch(FetchDescriptor<QuestComment>()).sorted { $0.timestamp < $1.timestamp }.map {
+            comments: comments.sorted { $0.timestamp < $1.timestamp }.map {
                 Comment(id: $0.id, targetID: $0.targetID, questID: $0.questID,
                         targetKind: $0.targetKindRaw,
                         text: $0.textSnapshot, comment: $0.comment, dayKey: $0.dayKey,
                         timestamp: $0.timestamp)
             },
             library: Library(
-                quests: try context.fetch(FetchDescriptor<QuestTemplate>()).sorted { $0.text < $1.text }.map {
-                    LibraryQuest(id: $0.id, text: $0.text, lastServedDayKey: $0.lastServedDayKey,
-                                 lastCompletedDayKey: $0.lastCompletedDayKey)
-                },
-                routines: try context.fetch(FetchDescriptor<RoutineTask>()).sorted { $0.text < $1.text }.map {
-                    LibraryRoutine(id: $0.id, text: $0.text, lastCompletedDayKey: $0.lastCompletedDayKey)
-                }),
+                quests: try context.fetch(FetchDescriptor<QuestTemplate>())
+                    .filter { referenced.contains($0.id) || $0.lastServedDayKey != nil || $0.lastCompletedDayKey != nil }
+                    .sorted { $0.text < $1.text }.map {
+                        LibraryQuest(id: $0.id, text: $0.text, lastServedDayKey: $0.lastServedDayKey,
+                                     lastCompletedDayKey: $0.lastCompletedDayKey)
+                    },
+                routines: try context.fetch(FetchDescriptor<RoutineTask>())
+                    .filter { referenced.contains($0.id) || $0.lastCompletedDayKey != nil }
+                    .sorted { $0.text < $1.text }.map {
+                        LibraryRoutine(id: $0.id, text: $0.text, lastCompletedDayKey: $0.lastCompletedDayKey)
+                    }),
             rewards: try context.fetch(FetchDescriptor<Reward>()).sorted { $0.name < $1.name }.map {
                 RewardRow(id: $0.id, name: $0.name, estimatedCost: $0.estimatedCost,
                           virtualKind: $0.virtualKind, fixedCoins: $0.fixedCoins, isActive: $0.isActive,
@@ -234,7 +262,8 @@ public enum JSONExport {
 
     public static func encode(_ snapshot: Snapshot) throws -> Data {
         let encoder = JSONEncoder()
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        // Sorted for a stable file, not indented: the indentation was about a third of its size.
+        encoder.outputFormatting = [.sortedKeys]
         encoder.dateEncodingStrategy = .iso8601
         return try encoder.encode(snapshot)
     }

@@ -53,6 +53,13 @@ struct TodayView: View {
     @State private var adding = false
     @State private var actionError: String?
     @State private var showingTrack = false
+    /// A card's `⋯ → Rate / note`: the sheet that files a rating or a note under what the card was.
+    private struct FeedbackRequest: Identifiable {
+        let subject: Feedback.Subject
+        var id: UUID { subject.instanceID }
+    }
+    @State private var feedbackFor: FeedbackRequest?
+
     /// What has already been announced. A UI convenience, not data: losing it only shows a card
     /// once more. 0 = never announced, which on the first launch after an update lists the perks
     /// already unlocked.
@@ -311,7 +318,8 @@ struct TodayView: View {
             SectionTitle(title: "Epic", count: state.sectionLabel)
             if staysInSection(epic.id, isDone: state.isDone) {
                 EpicCardView(state: state,
-                             actions: [rerollAction(epic), extendAction(epic), replaceEpicAction(epic)].compactMap { $0 },
+                             actions: [rerollAction(epic), extendAction(epic), replaceEpicAction(epic),
+                                       rateNoteAction(epic)].compactMap { $0 },
                              onComplete: { show(.ask(.quest(epic))) })
                     .transition(cardLeaves)
             }
@@ -329,7 +337,8 @@ struct TodayView: View {
                          count: SectionProgress(done: states.filter(\.isDone).count, total: states.count).handLabel)
             ForEach(Array(rows.enumerated()), id: \.element.0.id) { index, row in
                 if staysInSection(row.0.id, isDone: states[index].isDone) {
-                    routineCard(row.0, states[index], menu: [cancelRoutineAction(row.0), replaceRoutineAction(row.0)])
+                    routineCard(row.0, states[index],
+                                menu: [cancelRoutineAction(row.0), replaceRoutineAction(row.0), rateNoteAction(row.0)])
                         .transition(cardLeaves)
                 }
             }
@@ -362,8 +371,8 @@ struct TodayView: View {
             let state = questState(quest)
             if staysInSection(quest.id, isDone: state.isDone) {
                 QuestRowView(state: state,
-                             actions: [rerollAction(quest), cancelQuestAction(quest), replaceAction(quest)]
-                                 .compactMap { $0 },
+                             actions: [rerollAction(quest), cancelQuestAction(quest), replaceAction(quest),
+                                       rateNoteAction(quest)].compactMap { $0 },
                              onComplete: { show(.ask(.quest(quest))) })
                     .transition(cardLeaves)
             }
@@ -376,7 +385,13 @@ struct TodayView: View {
                                    onTick: { index in
                                        let done = quest.trivialDone.indices.contains(index) && quest.trivialDone[index]
                                        guard quest.completedAt == nil, !done else { return }
-                                       show(.ask(.trivialItem(quest, index)))
+                                       // Only the tick that finishes the group rolls and pays, so only
+                                       // that one asks; the others just tick, and are final too.
+                                       if Completion.tickWillPay(quest, at: index) {
+                                           show(.ask(.trivialItem(quest, index)))
+                                       } else {
+                                           perform(.trivialItem(quest, index))
+                                       }
                                    })
                     .transition(cardLeaves)
             }
@@ -385,7 +400,8 @@ struct TodayView: View {
             let state = questState(hiddenQuest)
             SectionTitle(title: "Hidden", count: state.isDone ? SectionProgress.clearedLabel : nil)
             if staysInSection(hiddenQuest.id, isDone: state.isDone) {
-                QuestRowView(state: state, onComplete: { show(.ask(.quest(hiddenQuest))) })
+                QuestRowView(state: state, actions: [rateNoteAction(hiddenQuest)].compactMap { $0 },
+                             onComplete: { show(.ask(.quest(hiddenQuest))) })
                     .transition(cardLeaves)
             }
         } else if !randomQuests.isEmpty {
@@ -399,7 +415,7 @@ struct TodayView: View {
     @ViewBuilder private var completedBlock: some View {
         let stack = completedStack
         if !stack.isEmpty {
-            CompletedStackView(state: stack, expanded: $completedExpanded)
+            CompletedStackView(state: stack, expanded: $completedExpanded, actions: completedActions)
                 .transition(.opacity)
         }
     }
@@ -428,7 +444,7 @@ struct TodayView: View {
         case .routine(let state):
             let occurrence = occurrences.first { $0.id == state.id }
             RoutineRowView(state: state,
-                           actions: occurrence.flatMap(replaceRoutineAction).map { [$0] } ?? [],
+                           actions: occurrence.map { [replaceRoutineAction($0), rateNoteAction($0)].compactMap { $0 } } ?? [],
                            onComplete: { if let occurrence { show(.ask(.routine(occurrence))) } },
                            onSwitchVersion: { if let occurrence { switchVersion(occurrence) } })
         case .candidate(let state):
@@ -487,6 +503,7 @@ struct TodayView: View {
             .sheet(item: $replacingRoutine) { o in
                 AdHocView(today: today, tier: tier, target: .routine(o, flexible: isFlexible(o)))
             }
+            .sheet(item: $feedbackFor) { FeedbackSheet(subject: $0.subject, today: today) }
             .sheet(item: $replacingEpic) { epic in
                 EpicReplaceView(today: today, epic: epic)
             }
@@ -728,8 +745,10 @@ struct TodayView: View {
     }
 
     private func reveal(_ points: Int, forRoutine occurrence: RoutineOccurrence, header: MomentHeader) -> Overlay {
+        // Filed under the same library row as the card's `Rate / note`: an extra picked from the
+        // library is that routine, so it has to carry the routine's id (`Feedback.subject`).
         .reveal(Roll(header: header, amount: .fixed(points), target: .routine,
-                     questID: occurrence.id, templateID: occurrence.routineID,
+                     questID: occurrence.id, templateID: Feedback.subject(of: occurrence)?.id,
                      text: occurrence.displayText, dayKey: today))
     }
 
@@ -783,6 +802,31 @@ struct TodayView: View {
     private func replaceRoutineAction(_ o: RoutineOccurrence) -> CardAction? {
         AdHoc.isReplaceable(o, flexible: isFlexible(o), on: today)
             ? CardAction(title: "Replace", systemImage: "arrow.triangle.swap") { replacingRoutine = o } : nil
+    }
+
+    /// Always there when the card is a library row (`Feedback.subject`), done or not: rating a thing
+    /// you have not done yet is how you keep it from being drawn again, and one you just finished is
+    /// the usual time to say more than the five faces did.
+    private func rateNoteAction(_ quest: DailyQuest) -> CardAction? {
+        Feedback.subject(of: quest).map(rateNoteAction)
+    }
+
+    private func rateNoteAction(_ o: RoutineOccurrence) -> CardAction? {
+        Feedback.subject(of: o).map(rateNoteAction)
+    }
+
+    private func rateNoteAction(_ subject: Feedback.Subject) -> CardAction {
+        CardAction(title: "Rate / note", systemImage: "star.bubble") { feedbackFor = FeedbackRequest(subject: subject) }
+    }
+
+    /// The `⋯` of a row in the Completed stack: nothing but the way back to its rating and notes.
+    private func completedActions(_ item: CompletedItem) -> [CardAction] {
+        let action: CardAction? = switch item {
+        case .quest(let s): allQuests.first { $0.id == s.id }.flatMap { rateNoteAction($0) }
+        case .epic(let s): allQuests.first { $0.id == s.id }.flatMap { rateNoteAction($0) }
+        case .routine(let s): occurrences.first { $0.id == s.id }.flatMap { rateNoteAction($0) }
+        }
+        return action.map { [$0] } ?? []
     }
 
     /// Free (`Epic.replace`); gone once the epic is done or extended.

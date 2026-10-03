@@ -7,6 +7,30 @@ import SwiftData
 /// Nothing here overwrites or deletes a row — a changed opinion is a new row on a later day, and
 /// the old one stays as the record of what you thought then.
 public enum Feedback {
+    /// What a card can be rated and noted as: the library row it came from, and the one completion
+    /// the feedback links back to. Nil when there is no such row — a custom task, a micro-action
+    /// group (three templates in one card) — so the card offers nothing to file.
+    public struct Subject: Equatable, Sendable {
+        public let target: FeedbackTarget
+        /// The `QuestTemplate` or `RoutineTask` the feedback is filed under.
+        public let id: UUID
+        public let text: String
+        /// The `DailyQuest` or `RoutineOccurrence` itself.
+        public let instanceID: UUID
+    }
+
+    public static func subject(of quest: DailyQuest) -> Subject? {
+        guard !quest.isTrivialGroup, let id = quest.templateID else { return nil }
+        return Subject(target: .quest, id: id, text: quest.textSnapshot, instanceID: quest.id)
+    }
+
+    /// A routine picked from the library through "+" is still that routine
+    /// (`adHocSourceRoutineID`, as `Schedule.doneThisWeek` counts it).
+    public static func subject(of occurrence: RoutineOccurrence) -> Subject? {
+        guard let id = occurrence.routineID ?? occurrence.adHocSourceRoutineID else { return nil }
+        return Subject(target: .routine, id: id, text: occurrence.displayText, instanceID: occurrence.id)
+    }
+
     @discardableResult
     public static func rate(_ context: ModelContext,
                             target: FeedbackTarget,

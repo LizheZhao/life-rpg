@@ -128,6 +128,8 @@ template's cooldown, and neither is reversed: a reversible checkbox would turn t
 something you can re-roll until the number is good. A genuine mistake is corrected with an `adjust`
 ledger entry, which stays visible in the history. Every completion tap is therefore confirmed once.
 
+The one exception is a micro-action group (§3): its first two ticks write the tick and nothing else — no roll, no ledger entry, no cooldown — so they take effect on one tap, and are final like everything else (decided with the user; revisit if mis-ticks turn out to matter). The tick that finishes the group is the completion, and is confirmed once (`Completion.tickWillPay`).
+
 ### Parameterized templates
 
 Entries phrased as an open prompt (a color, learning about something, a journal prompt) draw a random value from a `variants` array — one entry does the work of ten.
@@ -681,7 +683,7 @@ No week view for now. A stats page can wait until there's been actual usage over
 
 Export the whole DB as JSON via `fileExporter` to iCloud Drive, filename dated; confirm before overwriting on import.
 
-What the JSON has to carry is exactly what the seed CSVs in `doc/` cannot rebuild: the history tables, and the `QuestRating` / `QuestComment` logs. Templates and routines are deliberately left out — they come back from the CSVs. What the CSVs can't give back rides along as `library`: each row's old id with its text, so restored history is re-pointed at the reseeded rows by text, and its cooldown / schedule stamps. The hand-entered rewards are exported whole. There is a second, smaller export beside it that writes the two feedback logs out as CSV, because their destination is a spreadsheet or a diff against `doc/*.csv`, not an importer.
+What the JSON has to carry is exactly what the seed CSVs in `doc/` cannot rebuild: the history tables, and the `QuestRating` / `QuestComment` logs. Templates and routines are deliberately left out — they come back from the CSVs. What the CSVs can't give back rides along as `library`: the old id and text of each row history points at, so restored history is re-pointed at the reseeded rows by text, and the cooldown / schedule stamps. A row nothing refers to and nothing stamped is left out — with a backup a day the list is copied into every file, so it is kept to what is needed (the file is also written compact, not indented: about 89 KB → 60 KB for eleven days of history). The hand-entered rewards are exported whole. There is a second, smaller export beside it that writes the two feedback logs out as CSV, because their destination is a spreadsheet or a diff against `doc/*.csv`, not an importer.
 
 The JSON carries its own integer `schemaVersion`, incremented only on model changes, decoupled from the GitHub release tag (things like v0.1). Tags will jump ahead due to UI changes, so import only looks at schemaVersion.
 

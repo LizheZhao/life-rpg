@@ -91,6 +91,15 @@ public enum Completion {
         return points
     }
 
+    /// Whether ticking `index` is the tick that finishes the group — the only one that rolls and
+    /// pays. The two before it write the tick and nothing else (no ledger entry, no cooldown), so
+    /// the page asks for confirmation only on this one.
+    public static func tickWillPay(_ quest: DailyQuest, at index: Int) -> Bool {
+        guard quest.isTrivialGroup, quest.completedAt == nil,
+              quest.trivialDone.indices.contains(index), !quest.trivialDone[index] else { return false }
+        return quest.trivialDone.enumerated().allSatisfy { $0.offset == index || $0.element }
+    }
+
     /// Ticks one item of a T group; the group scores only once all three are ticked, which is what
     /// `complete` then does. Returns the points if that tick finished the group.
     @discardableResult

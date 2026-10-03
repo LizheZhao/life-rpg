@@ -301,22 +301,32 @@ struct InkPillButtonStyle: ButtonStyle {
     }
 }
 
-/// The one full-width ink pill at the bottom of the sheet.
+/// The one full-width ink pill at the bottom of the sheet. It is the only confirmation: `note` says
+/// what the tap does and that it is final, and shows once there is something to confirm.
 struct ConfirmBar: View {
     let title: String
     let enabled: Bool
+    var note: String?
     let action: () -> Void
 
     var body: some View {
-        Button(action: action) {
-            Text(title).lr(.bodyStrong).foregroundStyle(LR.Color.onFill)
-                .frame(maxWidth: .infinity, minHeight: 52)
-                .background(Capsule().fill(LR.Color.fill))
-                .contentShape(Capsule())
+        VStack(spacing: 8) {
+            if enabled, let note {
+                Text(note).lr(.caption).foregroundStyle(LR.Color.inkSecondary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, 8)
+            }
+            Button(action: action) {
+                Text(title).lr(.bodyStrong).foregroundStyle(LR.Color.onFill)
+                    .frame(maxWidth: .infinity, minHeight: 52)
+                    .background(Capsule().fill(LR.Color.fill))
+                    .contentShape(Capsule())
+            }
+            .buttonStyle(PressableCardStyle())
+            .disabled(!enabled)
+            .opacity(enabled ? 1 : 0.35)
         }
-        .buttonStyle(PressableCardStyle())
-        .disabled(!enabled)
-        .opacity(enabled ? 1 : 0.35)
         .padding(.horizontal, 16)
         .padding(.top, 10)
         .padding(.bottom, 8)

@@ -253,32 +253,17 @@ private struct LibraryEntry {
     }
 }
 
-/// Rate it again, or leave a note. Both only ever append.
+/// One library row: what it is and when it comes, then the rating and notes (`FeedbackPanel`).
 private struct LibraryDetailView: View {
     let entry: LibraryEntry
     let today: String
-
-    @Environment(\.modelContext) private var context
-    @Query private var ratings: [QuestRating]
-    @Query private var comments: [QuestComment]
-
-    @State private var note = ""
-    @State private var error: String?
-
-    private var history: [QuestRating] { Feedback.ratings(ratings, for: entry.id) }
-    private var notes: [QuestComment] { Feedback.comments(comments, for: entry.id) }
-    private var canAddNote: Bool { !note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: LR.Spacing.sectionGap) {
                 summaryCard
                 if let schedule = entry.schedule { scheduleSection(schedule) }
-                ratingSection
-                noteSection
-                if let error { BannerView(message: error) }
-                if !notes.isEmpty { notesSection }
-                if !history.isEmpty { ratingsSection }
+                FeedbackPanel(target: entry.target, id: entry.id, text: entry.text, today: today)
             }
             .padding(.horizontal, 16)
             .padding(.bottom, 8)
@@ -383,149 +368,10 @@ private struct LibraryDetailView: View {
         .accessibilityElement(children: .combine)
     }
 
-    // MARK: rating
-
-    private var ratingSection: some View {
-        section("How do you feel about it now?") {
-            card {
-                ViewThatFits(in: .horizontal) {
-                    HStack(spacing: 8) { ratingButtons }
-                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 3), spacing: 8) {
-                        ratingButtons
-                    }
-                }
-            }
-            if let last = history.first {
-                caption("Latest: \(label(last.rating)), \(last.dayKey). Rating again adds a new entry; the old ones stay.")
-            } else {
-                caption("Not rated yet.")
-            }
-        }
-    }
-
-    private var ratingButtons: some View {
-        ForEach(RatingScale.steps, id: \.value) { step in
-            let selected = history.first?.rating == step.value
-            Button {
-                Haptics.selection()
-                rate(step.value)
-            } label: {
-                Image(systemName: step.symbol)
-                    .font(.system(size: 17, weight: .semibold))
-                    .foregroundStyle(selected ? LR.Color.onFill : LR.Color.ink)
-                    .frame(maxWidth: .infinity, minHeight: 44)
-                    .background(Capsule().fill(selected ? LR.Color.fill : LR.Color.pillFill))
-                    .contentShape(Capsule())
-            }
-            .buttonStyle(PressableCardStyle())
-            .accessibilityLabel(step.label)
-            .accessibilityAddTraits(selected ? .isSelected : [])
-        }
-    }
-
-    // MARK: notes
-
-    private var noteSection: some View {
-        section("Add a note") {
-            card {
-                VStack(alignment: .leading, spacing: 8) {
-                    TextField("What worked, what didn't", text: $note,
-                              prompt: Text("What worked, what didn't").foregroundStyle(LR.Color.inkSecondary),
-                              axis: .vertical)
-                        .lr(.bodyStrong).foregroundStyle(LR.Color.ink)
-                        .frame(minHeight: 44, alignment: .topLeading)
-                    HStack(spacing: 0) {
-                        Spacer(minLength: 0)
-                        Button("Add note") { addNote() }
-                            .buttonStyle(PillButtonStyle())
-                            .disabled(!canAddNote)
-                            .opacity(canAddNote ? 1 : 0.4)
-                    }
-                }
-            }
-        }
-    }
-
-    private var notesSection: some View {
-        section("Notes") {
-            VStack(spacing: 0) {
-                ForEach(Array(notes.enumerated()), id: \.element.id) { index, c in
-                    if index > 0 { divider }
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(c.comment).lr(.bodyStrong).foregroundStyle(LR.Color.ink)
-                            .fixedSize(horizontal: false, vertical: true)
-                        Text(c.dayKey).lr(.caption).monospacedDigit().foregroundStyle(LR.Color.inkSecondary)
-                    }
-                    .padding(12)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .accessibilityElement(children: .ignore)
-                    .accessibilityLabel(c.comment)
-                    .accessibilityValue(c.dayKey)
-                }
-            }
-            .lrCard(.surface, radius: LR.Radius.row)
-        }
-    }
-
-    private var ratingsSection: some View {
-        section("Ratings") {
-            VStack(spacing: 0) {
-                ForEach(Array(history.enumerated()), id: \.element.id) { index, r in
-                    if index > 0 { divider }
-                    let when = r.questID == nil ? r.dayKey : "\(r.dayKey) · right after doing it"
-                    HStack(alignment: .center, spacing: 12) {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(label(r.rating)).lr(.bodyStrong).foregroundStyle(LR.Color.ink)
-                            Text(when).lr(.caption).monospacedDigit().foregroundStyle(LR.Color.inkSecondary)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        RatingBadge(value: r.rating)
-                    }
-                    .padding(12)
-                    .accessibilityElement(children: .ignore)
-                    .accessibilityLabel(label(r.rating))
-                    .accessibilityValue(when)
-                }
-            }
-            .lrCard(.surface, radius: LR.Radius.row)
-        }
-    }
-
-    // MARK: actions
-
-    private func label(_ value: Int) -> String {
-        RatingScale.label(for: value)
-    }
-
-    private func rate(_ value: Int) {
-        Feedback.rate(context, target: entry.target, id: entry.id, text: entry.text,
-                      rating: value, dayKey: today)
-        try? Affinity.sync(context)           // the next draw already weighs it
-        save()
-    }
-
-    private func addNote() {
-        Feedback.comment(context, target: entry.target, id: entry.id, text: entry.text,
-                         comment: note.trimmingCharacters(in: .whitespacesAndNewlines), dayKey: today)
-        if save() { note = "" }
-    }
-
-    @discardableResult
-    private func save() -> Bool {
-        do {
-            try context.save()
-            error = nil
-            return true
-        } catch {
-            self.error = "\(error)"
-            return false
-        }
-    }
 }
 
 /// `+2` on sage, `-1` on clay, `0` plain — the pill the ratings summary uses. The sign says it too.
-private struct RatingBadge: View {
+struct RatingBadge: View {
     let value: Int
 
     var body: some View {

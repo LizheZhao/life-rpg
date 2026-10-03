@@ -151,7 +151,8 @@ struct JSONImportTests {
 
     @Test func planSummarisesWithoutWriting() throws {
         let source = try sourceStore()
-        Fixtures.quest(source, "Removed from the CSV since")
+        // Stamped, so it is something the backup carries (a row nothing needs is left out of it).
+        Fixtures.quest(source, "Removed from the CSV since", served: saturday)
         try source.save()
         let target = try freshStore()
         let balanceBefore = try Economy.balance(target)
