@@ -166,3 +166,80 @@ struct JournalTurnTests {
         #expect(rows.first?.subjectText == quest.textSnapshot)
     }
 }
+
+// MARK: editing an answer
+
+struct JournalEditTests {
+    private let friday = "2026-09-18"
+
+    private func answered(_ ctx: ModelContext, kind: JournalPromptKind = .opening, answer: String = "first words",
+                          outcome: JournalOutcome = .answered) throws -> JournalTurn {
+        try JournalService.record(ctx, dayKey: friday, kind: kind, promptID: "open.keep", question: "What stayed with you?",
+                                  subject: JournalSubject(kind: .quest, id: UUID(), text: "A walk"),
+                                  answer: answer, outcome: outcome, source: .model, language: .zhHans,
+                                  askedAt: Fixtures.date(friday, hour: 21), answeredAt: Fixtures.date(friday, hour: 22))
+    }
+
+    @Test func anEditReplacesTheWordsAndTrimsThem() throws {
+        let ctx = try Fixtures.context()
+        let turn = try answered(ctx)
+        try JournalService.edit(turn, answer: "  second words\n\n")
+        #expect(turn.answer == "second words")
+    }
+
+    @Test func anEditChangesNothingButTheAnswer() throws {
+        let ctx = try Fixtures.context()
+        _ = try answered(ctx, kind: .opening)
+        let turn = try answered(ctx, kind: .good)
+        let id = turn.id, subjectID = turn.subjectID
+        try JournalService.edit(turn, answer: "changed")
+        #expect(turn.id == id)
+        #expect(turn.index == 1)
+        #expect(turn.dayKey == friday)
+        #expect(turn.kind == .good)
+        #expect(turn.promptID == "open.keep")
+        #expect(turn.questionText == "What stayed with you?")
+        #expect(turn.subjectID == subjectID)
+        #expect(turn.subjectText == "A walk")
+        #expect(turn.outcome == .answered)
+        #expect(turn.source == .model)
+        #expect(turn.language == .zhHans)
+        #expect(turn.askedAt == Fixtures.date(friday, hour: 21))
+        #expect(turn.answeredAt == Fixtures.date(friday, hour: 22))
+    }
+
+    @Test func aBlankResultIsRefusedAndTheAnswerStays() throws {
+        let ctx = try Fixtures.context()
+        let turn = try answered(ctx)
+        #expect(throws: JournalEditError.empty) { try JournalService.edit(turn, answer: "") }
+        #expect(throws: JournalEditError.empty) { try JournalService.edit(turn, answer: " \n\t ") }
+        #expect(turn.answer == "first words")
+    }
+
+    @Test func skippedMisfitAndSafetyTurnsAreNotEditable() throws {
+        let ctx = try Fixtures.context()
+        let skipped = try answered(ctx, answer: "", outcome: .skipped)
+        let misfit = try answered(ctx, answer: "left over", outcome: .misfit)
+        let safety = try answered(ctx, kind: .safety, answer: "ok")
+        for turn in [skipped, misfit, safety] {
+            #expect(throws: JournalEditError.notEditable) { try JournalService.edit(turn, answer: "new") }
+        }
+        #expect([skipped.answer, misfit.answer, safety.answer] == ["", "left over", "ok"])
+    }
+
+    @Test func theSameTextIsANoOpThatDoesNotThrow() throws {
+        let ctx = try Fixtures.context()
+        let turn = try answered(ctx)
+        try JournalService.edit(turn, answer: "first words")
+        try JournalService.edit(turn, answer: " first words ")
+        #expect(turn.answer == "first words")
+    }
+
+    @Test func anEditedAnswerIsWhatTheStoreReadsBack() throws {
+        let ctx = try Fixtures.context()
+        let turn = try answered(ctx)
+        try JournalService.edit(turn, answer: "second words")
+        try ctx.save()
+        #expect(try JournalService.turns(on: friday, in: ctx).map(\.answer) == ["second words"])
+    }
+}

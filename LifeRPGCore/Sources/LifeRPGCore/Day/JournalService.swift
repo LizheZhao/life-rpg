@@ -3,8 +3,9 @@ import SwiftData
 
 /// Reading and writing the journal log.
 ///
-/// Like the rating log it is append-only: a turn is inserted when the user responds and nothing
-/// here edits or deletes one. Does not save, as `Feedback.rate` does not; the caller saves once.
+/// A turn is inserted when the user responds and is written once. The only change afterwards is
+/// `edit`, which rewrites the words of an answered turn and nothing else; nothing here deletes one.
+/// Does not save, as `Feedback.rate` does not; the caller saves once.
 public enum JournalService {
     /// Appends the next turn of `dayKey`. The index continues from the day's last, so a turn
     /// recorded after an app kill lands after the ones already stored.
@@ -38,6 +39,19 @@ public enum JournalService {
         row.answeredAt = answeredAt
         context.insert(row)
         return row
+    }
+
+    /// Rewrites the words of an answered turn. The answer is trimmed; every other field stays, so the
+    /// turn keeps its place, its question and the time it was first answered. Clearing an answer is
+    /// not an edit (`.empty`), and the safety line was never the user's words (`.notEditable`, as is
+    /// a skipped or misfit turn, which has no words to change). The same text is a no-op.
+    @discardableResult
+    public static func edit(_ turn: JournalTurn, answer: String) throws -> JournalTurn {
+        guard turn.outcome == .answered, turn.kind != .safety else { throw JournalEditError.notEditable }
+        let words = answer.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !words.isEmpty else { throw JournalEditError.empty }
+        if words != turn.answer { turn.answer = words }
+        return turn
     }
 
     /// The day's turns in the order they were asked.
@@ -83,4 +97,11 @@ public enum JournalService {
                             today: try turns(on: dayKey, in: context),
                             language: language)
     }
+}
+
+public enum JournalEditError: Error, Equatable, Sendable {
+    /// The result has nothing in it.
+    case empty
+    /// A skipped or misfit turn, or the safety line.
+    case notEditable
 }

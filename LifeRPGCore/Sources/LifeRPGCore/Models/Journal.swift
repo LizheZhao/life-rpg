@@ -42,8 +42,9 @@ public struct JournalSubject: Equatable, Sendable {
 
 /// One question and the user's response to it, on one day.
 ///
-/// A row is inserted when the user responds and is never edited afterwards, so a day's journal is
-/// the ordered list of its turns; the question in flight lives in the UI. There is deliberately no
+/// A row is inserted when the user responds and is written once. Only `JournalService.edit` changes
+/// its words afterwards, and it keeps `answeredAt`, `outcome`, `index`, `questionText` and everything
+/// else, so a day's journal is the ordered list of its turns; the question in flight lives in the UI. There is deliberately no
 /// parent entry: the entry would only ever be a cache of "which turns share a `dayKey`".
 ///
 /// Like every history row the question and subject text are snapshots. `subjectID` is the
