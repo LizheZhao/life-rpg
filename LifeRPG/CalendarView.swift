@@ -3,7 +3,8 @@ import SwiftData
 import SwiftUI
 
 /// The month page (`PLAN.md` §9). Under each day number: up to three dots coloured by the tier of
-/// a random quest done (easiest first, `DayMarks.randomTiers`), a tick when every routine was done
+/// a random quest done (easiest first, `DayMarks.randomTiers`), a pencil when the day has journal
+/// writing (darker for a longer entry, `DayMarks.journalLevel`), a tick when every routine was done
 /// on the day, and a violet star for the hidden quest. A week whose epic was completed sits on a
 /// soft band in the epic's tint. Tap a day for its detail.
 struct CalendarView: View {
@@ -11,6 +12,7 @@ struct CalendarView: View {
 
     @Query private var quests: [DailyQuest]
     @Query private var occurrences: [RoutineOccurrence]
+    @Query private var journalTurns: [JournalTurn]
     /// Only the settlement's `skip` entries: what tells a routine it gave up on from one you cancelled.
     @Query(filter: #Predicate<LedgerEntry> { $0.kind == "skip" }) private var skips: [LedgerEntry]
 
@@ -32,11 +34,17 @@ struct CalendarView: View {
     private static let epicTint = QuestTint(.epic)
     private static let epicBandOpacity = 0.14
 
+    private let language = JournalLanguage.resolve(preferred: Locale.preferredLanguages)
+
+    /// The pencil's ink at each level: one step lighter than the next, the darkest at full ink.
+    private static let pencilOpacity: [Int: Double] = [1: 0.32, 2: 0.62, 3: 1]
+
     private let weekdays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 
     var body: some View {
         // Both rules live in Core; the page only hands over the rows its queries hold.
-        let marks = CalendarMarks.marks(quests: quests, occurrences: occurrences)
+        let journalLevels = JournalMarks.levels(days: JournalHistory.days(from: journalTurns, language: language))
+        let marks = CalendarMarks.marks(quests: quests, occurrences: occurrences, journalLevels: journalLevels)
         let epicWeeks = CalendarMarks.epicWeeks(quests)
         NavigationStack {
             ScrollView {
@@ -44,6 +52,7 @@ struct CalendarView: View {
                     header
                     gridCard(marks: marks, epicWeeks: epicWeeks)
                     legend
+                    tapHint
                     missedBlock
                     ratingsLink
                 }
@@ -177,7 +186,8 @@ struct CalendarView: View {
                     }
                 }
                 .frame(height: 6)
-                HStack(spacing: 4) {
+                HStack(spacing: 3) {
+                    if marks.journalLevel > 0 { pencil(level: marks.journalLevel, size: 10) }
                     if marks.routinesCleared {
                         Image(systemName: "checkmark")
                             .font(.system(size: 8, weight: .heavy))
@@ -210,6 +220,7 @@ struct CalendarView: View {
             parts.append("\(marks.randomsDone) quest\(marks.randomsDone == 1 ? "" : "s") done: "
                 + marks.randomTiers.map(\.rawValue).joined(separator: ", "))
         }
+        if marks.journalLevel > 0 { parts.append("journal entry") }
         if marks.routinesCleared { parts.append("routines cleared") }
         if marks.hiddenDone { parts.append("hidden quest done") }
         if epic { parts.append("epic week") }
@@ -224,6 +235,9 @@ struct CalendarView: View {
                 LegendChip(text: tierName(tint)) {
                     Circle().fill(tint.color).frame(width: 7, height: 7)
                 }
+            }
+            LegendChip(text: "Journal, darker is longer") {
+                pencil(level: 3, size: 10)
             }
             LegendChip(text: "Routines") {
                 Image(systemName: "checkmark").font(.system(size: 8, weight: .heavy))
@@ -241,7 +255,36 @@ struct CalendarView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Legend: dots are quests done, coloured trivial, easy, medium or hard. "
+            + "A pencil is a journal entry, darker for a longer one. "
             + "A tick is routines cleared, a star the hidden quest, a tinted row an epic week.")
+    }
+
+    private func pencil(level: Int, size: CGFloat) -> some View {
+        Image(systemName: "pencil")
+            .font(.system(size: size, weight: .heavy))
+            .foregroundStyle(LR.Color.ink.opacity(Self.pencilOpacity[level] ?? 1))
+    }
+
+    private var tapHint: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "book")
+                .font(.system(size: 15, weight: .medium))
+                .foregroundStyle(LR.Color.iconNeutral)
+                .frame(width: 32, height: 32)
+                .background(Circle().fill(LR.Color.tabPill))
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Tap any day").lr(.bodyStrong).foregroundStyle(LR.Color.ink)
+                Text("Quests done and what you wrote that night").lr(.caption)
+                    .foregroundStyle(LR.Color.inkSecondary)
+            }
+            Spacer(minLength: 8)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+        .lrCard(.surface, radius: LR.Radius.row)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Tap any day, quests done and what you wrote that night")
     }
 
     // MARK: did not finish
