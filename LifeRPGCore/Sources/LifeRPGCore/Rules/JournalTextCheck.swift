@@ -2,11 +2,13 @@ import Foundation
 
 /// Checks text the on-device model wrote before it is shown.
 ///
-/// The model only ever words a follow-up; this decides whether the wording is allowed. The rules
-/// are the voice rules of `doc/JOURNAL_PROMPTS.md` turned into patterns: the staged rhythms that
-/// make generated text recognisable (contrast, dramatic openers and closers, em dashes), more than
-/// one question, a question that opens with "why", a markdown marker, a wall of text. A failure
-/// means the caller falls back to the template (`JournalFollowUp.template`), never to a retry.
+/// The model words follow-ups and, from a brief, fresh questions; this decides whether the wording
+/// is allowed. The rules are the voice rules of `doc/JOURNAL_PROMPTS.md` turned into patterns: the
+/// staged rhythms that make generated text recognisable (contrast, dramatic openers and closers,
+/// em dashes), more than one question, a question that opens with "why", a markdown marker, a wall
+/// of text, and a copy of a pool row or of a recent question (`JournalNovelty`). A failure means
+/// the caller falls back to the pool row (`JournalQuestion.text`, `JournalFollowUp.template`),
+/// never to a retry.
 ///
 /// The pool itself has to pass, which `JournalTextCheckTests` asserts, so the check can't drift
 /// into rejecting the app's own questions.
@@ -75,15 +77,28 @@ public enum JournalTextCheck {
     }
 
     /// Whether the model's follow-up may be shown: a reflection and one question, both clean as a
-    /// whole, the question actually a question, and the reflection built from the user's own words
+    /// whole, the question actually a question, the reflection built from the user's own words
     /// (a verbatim run of at least two words, or three characters in Chinese) rather than a
-    /// paraphrase.
+    /// paraphrase, and the whole not a copy of anything in `avoiding` (`JournalNovelty`): the
+    /// follow-up examples it was shown and the follow-ups asked lately.
     public static func accept(reflection: String, question: String, answer: String,
-                              language: JournalLanguage) -> Bool {
+                              language: JournalLanguage, avoiding: [String] = []) -> Bool {
         let whole = reflection + " " + question
         return violations(of: whole, language: language).isEmpty
             && question.contains(where: { $0 == "?" || $0 == "？" })
             && reusesWords(reflection, from: answer, language: language)
+            && JournalNovelty.isFresh(whole, avoiding: avoiding, language: language)
+    }
+
+    /// Whether the model's wording of a question may be shown: clean, exactly one question mark, no
+    /// placeholder left unfilled, and below `JournalNovelty.threshold` against everything in
+    /// `avoiding`, which is the pool examples it was shown plus what was asked lately. A model
+    /// that echoes an example or yesterday's question is rejected the same as one that breaks a voice rule.
+    public static func acceptQuestion(_ text: String, language: JournalLanguage, avoiding: [String]) -> Bool {
+        violations(of: text, language: language).isEmpty
+            && text.filter({ $0 == "?" || $0 == "？" }).count == 1
+            && text.range(of: #"\{[^{}]*\}"#, options: .regularExpression) == nil
+            && JournalNovelty.isFresh(text, avoiding: avoiding, language: language)
     }
 
     /// A verbatim run of the answer inside `reflection`. Words are compared case-insensitively
@@ -104,7 +119,7 @@ public enum JournalTextCheck {
         return (0..<(mine.count - 1)).contains { pairs.contains("\(mine[$0]) \(mine[$0 + 1])") }
     }
 
-    private static func words(_ text: String) -> [String] {
+    static func words(_ text: String) -> [String] {
         text.lowercased()
             .replacingOccurrences(of: "\u{2019}", with: "'")
             .split(whereSeparator: { !($0.isLetter || $0.isNumber || $0 == "'") })
