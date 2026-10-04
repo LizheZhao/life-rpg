@@ -108,6 +108,8 @@ struct DesignGalleryView: View {
         case .hand: "day 3 · 4 day streak"
         case .handTitle: "October 2026"
         case .handDisplay: "+112"
+        case .journalBody: "Spent most of the morning not wanting to do anything."
+        case .chipLabel: "Grateful for"
         }
     }
 

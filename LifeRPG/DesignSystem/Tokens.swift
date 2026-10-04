@@ -42,6 +42,11 @@ enum LR {
         /// A pill on a tinted row: a solid chip.
         static let chip = color(Palette.chip)
         static let pillFill = color(Palette.pillFill)
+        /// The evening journal card on Today and what is drawn on it.
+        static let nightCard = color(Palette.nightCard)
+        static let onNight = color(Palette.onNight)
+        static let onNightSecondary = color(Palette.onNightSecondary)
+        static let nightAccent = color(Palette.nightAccent)
 
         /// What is drawn on a tint (title, caption, doodle, `⋯`, open ring): per tint.
         static func ink(on tint: QuestTint) -> SwiftUI.Color { color(Palette.ink(on: tint)) }
@@ -80,6 +85,8 @@ enum LR {
     enum Typography: CaseIterable {
         case displayGreeting, displayGreetingEmphasis, displayLevel, levelInline
         case titleCard, heading, bodyStrong, caption, pill, hand, handTitle, handDisplay
+        /// The text of a journal page, and the starter chips above its keyboard.
+        case journalBody, chipLabel
 
         struct Spec {
             let family: LRFonts.Family
@@ -88,6 +95,7 @@ enum LR {
             let textStyle: UIFont.TextStyle
             var maximumSize: CGFloat?
             var tracking: CGFloat = 0
+            var lineSpacing: CGFloat = 0
         }
 
         var spec: Spec {
@@ -116,6 +124,10 @@ enum LR {
                 Spec(family: .caveat, weight: 600, size: 34, textStyle: .title1, maximumSize: 52)
             case .handDisplay:
                 Spec(family: .caveat, weight: 600, size: 52, textStyle: .largeTitle, maximumSize: 72)
+            case .journalBody:
+                Spec(family: .jakarta, weight: 400, size: 18, textStyle: .body, maximumSize: 30, lineSpacing: 8)
+            case .chipLabel:
+                Spec(family: .jakarta, weight: 400, size: 14, textStyle: .subheadline, maximumSize: 24)
             }
         }
 
@@ -150,6 +162,8 @@ enum LR {
             case .hand: "hand"
             case .handTitle: "handTitle"
             case .handDisplay: "handDisplay"
+            case .journalBody: "journalBody"
+            case .chipLabel: "chipLabel"
             }
         }
     }
@@ -184,6 +198,7 @@ private struct LRTypographyModifier: ViewModifier {
         content
             .font(style.font(dynamicType: dynamicType, boldText: legibility == .bold))
             .tracking(style.spec.tracking)
+            .lineSpacing(style.spec.lineSpacing)
     }
 }
 

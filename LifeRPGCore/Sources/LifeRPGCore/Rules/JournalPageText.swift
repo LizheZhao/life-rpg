@@ -46,8 +46,10 @@ public enum JournalPageText {
 
     /// The chips under the reading heading: the user's words, what was done, what kind of day it
     /// was. "0 quests done" is left out (a quiet day is not a score), and so is a day with no context.
-    public static func chips(day: JournalDay, facts: JournalDayFacts) -> [String] {
+    /// With no facts (not read yet) only the words show.
+    public static func chips(day: JournalDay, facts: JournalDayFacts?) -> [String] {
         var chips = [words(day.wordCount)]
+        guard let facts else { return chips }
         if facts.completed > 0 { chips.append("\(facts.completed) \(facts.completed == 1 ? "quest" : "quests") done") }
         if let tier = facts.tierText { chips.append(tier) }
         return chips
