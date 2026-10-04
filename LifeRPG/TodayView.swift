@@ -363,7 +363,7 @@ struct TodayView: View {
         VStack(alignment: .leading, spacing: 0) {
             HandText(greeting.handLine, .hand).foregroundStyle(LR.Color.accent)
             Text(greeting.salutation).lr(.displayGreeting).foregroundStyle(LR.Color.ink)
-            HandUnderlineText(lead: "let's", emphasis: "level up")
+            HandUnderlineText(lead: "let's", emphasis: greeting.emphasis)
         }
         .padding(.vertical, 6)
     }

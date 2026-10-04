@@ -415,6 +415,8 @@ public struct TodayGreeting: Equatable, Sendable {
     /// `Fri · Oct 2 · 12 day streak`, the streak part left out at zero.
     public let handLine: String
     public let salutation: String
+    /// The underlined word after "let's": the day is wrapped up from the evening on, levelled up before.
+    public let emphasis: String
 
     /// `hour` is the wall clock's, not the app day's: the 05:00 day boundary does not apply to a
     /// greeting, so 02:00 still says morning.
@@ -427,6 +429,7 @@ public struct TodayGreeting: Equatable, Sendable {
         case ..<18: "Good afternoon,"
         default: "Good evening,"
         }
+        emphasis = hour >= 18 ? "wrap up" : "level up"
     }
 }
 

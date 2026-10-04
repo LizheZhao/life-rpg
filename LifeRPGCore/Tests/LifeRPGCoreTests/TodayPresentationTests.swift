@@ -547,6 +547,15 @@ struct TodayPresentationTests {
         #expect(line(23) == "Good evening,")
     }
 
+    @Test func theGreetingWrapsUpInTheEveningAndLevelsUpBefore() {
+        func emphasis(_ hour: Int) -> String { TodayGreeting(dayKey: friday, hour: hour, streak: 0).emphasis }
+        #expect(emphasis(0) == "level up")
+        #expect(emphasis(11) == "level up")
+        #expect(emphasis(17) == "level up")
+        #expect(emphasis(18) == "wrap up")
+        #expect(emphasis(23) == "wrap up")
+    }
+
     @Test func shortDateNamesTheWeekday() {
         #expect(PresentationText.shortDate("2026-10-04") == "Sun Oct 4")
         #expect(PresentationText.shortDate("2026-10-05") == "Mon Oct 5")
