@@ -14,6 +14,8 @@ struct DebugView: View {
     var refresh: () async -> Void = {}
     #if targetEnvironment(simulator)
     @AppStorage("debugDayOffset") private var dayOffset = 0
+    /// "evening" or "daytime" overrides the clock Today reads for the journal card; "" is the real one.
+    @AppStorage("debugJournalTiming") private var journalTiming = ""
     #else
     /// Time travel is simulator-only; on a device the day is today (as in `RootView`).
     private let dayOffset = 0
@@ -120,6 +122,10 @@ struct DebugView: View {
                         .buttonStyle(PillButtonStyle())
                         .disabled(dayOffset == 0)
                     }
+                }
+                section("Journal timing (simulator only)", footer: "Today shows the journal's evening card from 18:00 and a book icon with a dot in the daytime. This forces one of them so both can be seen at any hour.") {
+                    PillSegmentedControl(options: [("Real clock", ""), ("Evening", "evening"), ("Daytime", "daytime")],
+                                         selection: $journalTiming, accessibilityLabel: "Journal timing")
                 }
                 #endif
 

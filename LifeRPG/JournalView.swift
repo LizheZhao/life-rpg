@@ -21,6 +21,7 @@ struct JournalView: View {
     /// Writing with no question above it: recorded as the closing turn, which ends the day.
     @State private var freeWriting = false
     @State private var wording: (any JournalWording)?
+    @State private var confirmingResend = false
     @FocusState private var editing: Bool
 
     /// What was put in front of the user, kept so the response is recorded against it.
@@ -198,6 +199,8 @@ struct JournalView: View {
                     caption(message)
                 } else if runURL == nil {
                     caption("Name a Shortcut in Settings to also save into Apple Journal.")
+                } else if sendPlan == .nothing {
+                    caption("This is already in Apple Journal.")
                 }
             }
             Button(composed.isEmpty ? "Done" : "Save Journal") { saveJournal() }
@@ -206,6 +209,15 @@ struct JournalView: View {
         .onChange(of: shortcut.outcome) { _, outcome in
             if outcome == .saved { dismiss() }
         }
+        .confirmationDialog("This will add a second entry to Apple Journal. Send again?",
+                            isPresented: $confirmingResend, titleVisibility: .visible) {
+            Button("Send again") { runShortcut() }
+            Button("Not now", role: .cancel) {}
+        }
+    }
+
+    private var sendPlan: JournalSend.Plan {
+        shortcut.plan(dayKey: today, text: composed, shortcutName: shortcutName)
     }
 
     private var runURL: URL? { JournalShortcutLink.runURL(shortcutName: shortcutName) }
@@ -250,18 +262,24 @@ struct JournalView: View {
         }
     }
 
-    /// The turns are in the store already, so saving is only the hand-off to Apple Journal: with a
-    /// Shortcut configured it runs, and the sheet stays up for its answer (`.saved` closes it, a
-    /// cancel or an error leaves the words and Share here); without one there is nothing to run and
-    /// the button just closes. The text is not sent: the Shortcut asks the app for it
-    /// (`GetTodaysJournalTextIntent`).
+    /// The turns are in the store already, so saving is only the hand-off to Apple Journal, and
+    /// `JournalSend` decides it. With a Shortcut configured and new words it runs, and the sheet
+    /// stays up for its answer (`.saved` closes it, a cancel or an error leaves the words and Share
+    /// here). A day sent before and changed since asks first, because the Shortcut can only add an
+    /// entry. Otherwise there is nothing to run and the button just closes. The text is not sent:
+    /// the Shortcut asks the app for it (`GetTodaysJournalTextIntent`).
     private func saveJournal() {
-        guard !composed.isEmpty, let url = runURL else { dismiss(); return }
-        Haptics.selection()
-        shortcut.outcome = nil
-        openURL(url) { accepted in
-            if !accepted { shortcut.outcome = .failed }
+        guard !composed.isEmpty else { dismiss(); return }
+        switch sendPlan {
+        case .nothing: dismiss()
+        case .run: runShortcut()
+        case .askBeforeSendingAgain: confirmingResend = true
         }
+    }
+
+    private func runShortcut() {
+        Haptics.selection()
+        shortcut.run(dayKey: today, text: composed, shortcutName: shortcutName, openURL: openURL)
     }
 
     private func respond(_ outcome: JournalOutcome, to shown: Shown) {
@@ -285,58 +303,5 @@ struct JournalView: View {
             return
         }
         Task { await advance() }
-    }
-}
-
-/// The Today page's way in: what the journal says about tonight, and a tap to open it.
-struct JournalEntryCard: View {
-    let today: String
-    let open: () -> Void
-
-    @Query private var turns: [JournalTurn]
-
-    init(today: String, open: @escaping () -> Void) {
-        self.today = today
-        self.open = open
-        _turns = Query(filter: #Predicate<JournalTurn> { $0.dayKey == today })
-    }
-
-    private var state: String {
-        switch JournalProgress.of(turns) {
-        case .notStarted: "Not started"
-        case .inProgress(let answered): answered == 0 ? "Started" : "\(answered) answered today"
-        case .done: "Done for today"
-        }
-    }
-
-    var body: some View {
-        Button(action: open) {
-            HStack(spacing: 12) {
-                Image(systemName: "book.closed")
-                    .font(.system(size: 15, weight: .medium))
-                    .foregroundStyle(LR.Color.iconNeutral)
-                    .frame(width: 32, height: 32)
-                    .background(Circle().fill(LR.Color.sectionCircle(.hidden)))
-                    .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Journal").lr(.heading).foregroundStyle(LR.Color.ink)
-                    Text(state).lr(.caption).foregroundStyle(LR.Color.inkSecondary)
-                }
-                Spacer(minLength: 8)
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(LR.Color.iconNeutral)
-                    .accessibilityHidden(true)
-            }
-            .padding(14)
-            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-            .lrCard(.surface, radius: LR.Radius.row)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(PressableCardStyle())
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Journal")
-        .accessibilityValue(state)
-        .accessibilityHint("Opens tonight's questions")
     }
 }

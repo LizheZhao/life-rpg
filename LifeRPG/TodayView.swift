@@ -55,7 +55,29 @@ struct TodayView: View {
     @State private var adding = false
     @State private var actionError: String?
     @State private var showingTrack = false
-    @State private var journaling = false
+    /// Which journal page is up: the free-writing page, or the reading page of a day.
+    private enum JournalSheet: Identifiable {
+        case write
+        case read(String)
+
+        var id: String {
+            switch self {
+            case .write: "write"
+            case .read(let day): "read-\(day)"
+            }
+        }
+    }
+    @State private var journalSheet: JournalSheet?
+    /// Bumped when a journal sheet closes, so the evening card reads last night again.
+    @State private var journalReload = 0
+    /// When the page last came to the foreground: what decides evening, so the card appears at
+    /// 18:00 for someone who left the app open.
+    @State private var clock = Date()
+    @Environment(\.scenePhase) private var scenePhase
+    #if targetEnvironment(simulator)
+    /// Debug page: "evening" or "daytime" overrides the clock so both Today states can be seen.
+    @AppStorage("debugJournalTiming") private var debugJournalTiming = ""
+    #endif
     /// A card's `⋯ → Rate / note`: the sheet that files a rating or a note under what the card was.
     private struct FeedbackRequest: Identifiable {
         let subject: Feedback.Subject
@@ -271,6 +293,17 @@ struct TodayView: View {
         reduceMotion ? .opacity : .opacity.combined(with: .scale(scale: 0.96))
     }
 
+    private var isEvening: Bool {
+        #if targetEnvironment(simulator)
+        switch debugJournalTiming {
+        case "evening": return true
+        case "daytime": return false
+        default: break
+        }
+        #endif
+        return JournalTiming.isEvening(at: clock, timeZone: .current)
+    }
+
     private var greeting: TodayGreeting {
         TodayGreeting(dayKey: today, hour: LifeCalendar.gregorian().component(.hour, from: Date()), streak: streak)
     }
@@ -281,6 +314,12 @@ struct TodayView: View {
             LazyVStack(alignment: .leading, spacing: LR.Spacing.sectionGap) {
                 topBar
                 greetingBlock
+                if isEvening {
+                    JournalTonightCard(today: today, reloadToken: journalReload,
+                                       write: { journalSheet = .write },
+                                       read: { journalSheet = .read($0) })
+                }
+                JournalShortcutLine()
                 if let generationError { BannerView(title: "Today could not be generated", message: generationError) }
                 if let actionError { BannerView(message: actionError) }
                 LevelCardView(state: levelState) { showingTrack = true }
@@ -289,7 +328,6 @@ struct TodayView: View {
                 questsBlock
                 completedBlock
                 aheadBlock
-                JournalEntryCard(today: today) { journaling = true }
             }
             .padding(.horizontal, LR.Spacing.inset)
             .padding(.top, 8)
@@ -306,15 +344,18 @@ struct TodayView: View {
                 .accessibilityLabel("Levels")
                 .accessibilityHint("Shows what each level unlocks")
             Spacer()
-            Button { adding = true } label: {
-                Image(systemName: "plus")
-                    .font(.system(size: 20, weight: .semibold))
-                    .foregroundStyle(LR.Color.ink)
-                    .frame(width: 44, height: 44)
-                    .background(Circle().fill(LR.Color.surface))
+            HStack(spacing: 10) {
+                JournalBookButton(today: today) { journalSheet = .write }
+                Button { adding = true } label: {
+                    Image(systemName: "plus")
+                        .font(.system(size: 20, weight: .semibold))
+                        .foregroundStyle(LR.Color.ink)
+                        .frame(width: 44, height: 44)
+                        .background(Circle().fill(LR.Color.surface))
+                }
+                .buttonStyle(PressableCardStyle())
+                .accessibilityLabel("Add for today")
             }
-            .buttonStyle(PressableCardStyle())
-            .accessibilityLabel("Add for today")
         }
     }
 
@@ -500,6 +541,9 @@ struct TodayView: View {
                 LevelTrackSheet(level: level, totalEarned: totalEarned) { showingTrack = false }
             }
             .onAppear { checkMoments() }
+            .onChange(of: scenePhase) { _, phase in
+                if phase == .active { clock = Date() }
+            }
             .onChange(of: ledger.count) { checkMoments() }
             .onChange(of: overlay == nil) {
                 hidesTabBar.wrappedValue = overlay != nil
@@ -522,7 +566,12 @@ struct TodayView: View {
                 AdHocView(today: today, tier: tier, target: .routine(o, flexible: isFlexible(o)))
             }
             .sheet(item: $feedbackFor) { FeedbackSheet(subject: $0.subject, today: today) }
-            .sheet(isPresented: $journaling) { JournalView(today: today) }
+            .sheet(item: $journalSheet, onDismiss: { journalReload += 1 }) { sheet in
+                switch sheet {
+                case .write: JournalWritingView(today: today, evening: isEvening)
+                case .read(let day): JournalReadingView(startDay: day)
+                }
+            }
             .sheet(item: $replacingEpic) { epic in
                 EpicReplaceView(today: today, epic: epic)
             }
