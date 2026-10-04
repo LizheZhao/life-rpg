@@ -42,10 +42,16 @@ public enum JournalPlaceholder: String, CaseIterable, Sendable {
     case phrase
 }
 
-/// The question pool: the only source of question wording that does not come from the model.
+/// The question pool: examples and direction for the model, and the fallback when it can't help.
 ///
-/// A table rather than code, so a wording change is one edited row. Every row is also what the
-/// model is checked against (`JournalTextCheck`), and the fallback when it is unavailable.
+/// Rows are not what the user is meant to read every day. The planner decides what to ask and the
+/// model words a fresh question, with a few rows of the kind as tone anchors (`JournalExample`)
+/// that it must not copy (`JournalNovelty`). A row is shown as it stands only when the model is
+/// unavailable or its wording is rejected, and then the least recently used one of the kind, so the
+/// fallback rotates too. Each row's `approach` is the question shape it borrows.
+///
+/// A table rather than code, so a wording change is one edited row. Every row also has to pass
+/// `JournalTextCheck`, so the anchors follow the same voice rules the model is held to.
 public enum JournalPool {
     public static let all: [JournalPrompt] = [
         .init(id: "open.scale", kind: .opening, approach: .scale,
