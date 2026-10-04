@@ -39,6 +39,20 @@ struct PaletteTests {
         #expect(Palette.onTintDark == Palette.Token(light: 0x25232F, dark: 0x1B1A22))
     }
 
+    @Test func theNightCardIsTheDesignsDarkCardAndItsInks() {
+        #expect(Palette.nightCard.light == 0x25232F)
+        #expect(Palette.onNight.light == 0xFFFFFF)
+        #expect(Palette.onNightSecondary == Palette.Token(light: 0xC4C4CE, dark: 0xCFCFD8))
+        #expect(Palette.nightAccent == Palette.Token(light: 0xA9C2E4, dark: 0xB4CAEA))
+    }
+
+    @Test(arguments: Palette.Appearance.allCases)
+    func theNightCardsTextClearsItsBars(appearance: Palette.Appearance) {
+        let labels = Set(Palette.textPairs(appearance).map(\.label))
+        #expect(labels.isSuperset(of: ["onNight on nightCard", "onNightSecondary on nightCard", "nightCard on onNight"]))
+        #expect(Palette.largeTextPairs(appearance).contains { $0.label == "nightAccent on nightCard" })
+    }
+
     @Test func textOnATintIsChosenPerTint() {
         // Dark on the light amber, sage and routine beige; white on steel blue, crimson, violet and
         // the epic umber, both appearances.

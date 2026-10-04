@@ -50,6 +50,18 @@ public enum Palette {
     public static let dotEmpty = Token(light: 0xDDDED9, dark: 0x34333F)
     public static let dotFill = Token(light: 0x9CAF88, dark: 0x86987A)
 
+    // MARK: the journal's night card
+
+    /// The evening card on Today: dark in both appearances (the design's `#23232F`), a step lighter
+    /// than the page in dark so the card keeps its edge.
+    public static let nightCard = Token(light: 0x25232F, dark: 0x2D2B3D)
+    /// Title and the white button on the night card.
+    public static let onNight = Token(light: 0xFFFFFF, dark: 0xF4F2F8)
+    /// Subtitle and the "last night" line on the night card.
+    public static let onNightSecondary = Token(light: 0xC4C4CE, dark: 0xCFCFD8)
+    /// The hand "tonight" label and the moon on the night card.
+    public static let nightAccent = Token(light: 0xA9C2E4, dark: 0xB4CAEA)
+
     // MARK: tints (trivial, easy, medium, hard, hidden, routine, epic)
 
     public static let tintTrivial = Token(light: 0x9CAF88, dark: 0x86987A)   // sage
@@ -114,6 +126,8 @@ public enum Palette {
         ("onTintDark", onTintDark), ("onTintWhite", onTintWhite),
         ("chip", chip), ("pillFill", pillFill),
         ("clay", clay), ("clayBg", clayBg), ("avatarPink", avatarPink),
+        ("nightCard", nightCard), ("onNight", onNight), ("onNightSecondary", onNightSecondary),
+        ("nightAccent", nightAccent),
     ]
 
     /// Every tint in the order the gallery lists them (the order of `QuestTint.allCases`).
@@ -150,6 +164,10 @@ public enum Palette {
         pairs.append(TextPair(label: "ink on pillFill", foreground: v(ink), background: v(pillFill)))
         pairs.append(TextPair(label: "clay on clayBg", foreground: v(clay), background: v(clayBg)))
         pairs.append(TextPair(label: "onFill on fill", foreground: v(onFill), background: v(fill)))
+        pairs.append(TextPair(label: "onNight on nightCard", foreground: v(onNight), background: v(nightCard)))
+        pairs.append(TextPair(label: "onNightSecondary on nightCard", foreground: v(onNightSecondary),
+                              background: v(nightCard)))
+        pairs.append(TextPair(label: "nightCard on onNight", foreground: v(nightCard), background: v(onNight)))
         return pairs
     }
 
@@ -182,7 +200,9 @@ public enum Palette {
 
     public static func largeTextPairs(_ appearance: Appearance) -> [TextPair] {
         [TextPair(label: "accent on canvas", foreground: accent.value(appearance), background: canvas.value(appearance)),
-         TextPair(label: "accent on surface", foreground: accent.value(appearance), background: surface.value(appearance))]
+         TextPair(label: "accent on surface", foreground: accent.value(appearance), background: surface.value(appearance)),
+         TextPair(label: "nightAccent on nightCard", foreground: nightAccent.value(appearance),
+                  background: nightCard.value(appearance))]
     }
 
     // MARK: shadows
