@@ -69,6 +69,8 @@ struct JournalReadingPage: View {
     @State private var edits = TurnEdits()
     @State private var notice: String?
     @FocusState private var focused: Bool
+    /// The sent log, watched so a day handed over while the page is open shows at once.
+    @AppStorage(JournalSentLog.key) private var sentLog = Data()
 
     private let language = JournalLanguage.resolve(preferred: Locale.preferredLanguages)
 
@@ -143,10 +145,26 @@ struct JournalReadingPage: View {
             }
             .padding(.top, 8)
         }
+        if let day, !editing, let line = sentLine(for: day) {
+            Text(line).lr(.caption).foregroundStyle(LR.Color.inkSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, 8)
+        }
         if let notice {
             Text(notice).lr(.caption).foregroundStyle(LR.Color.inkSecondary)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.top, 8)
+        }
+    }
+
+    /// Whether this day went to Apple Journal, and if it was edited afterwards. Reading only: the
+    /// page has no send button, because Journal can not replace an entry (Share is the way out).
+    private func sentLine(for day: JournalDay) -> String? {
+        guard let entry = JournalSentLog.decode(sentLog)[day.dayKey] else { return nil }
+        switch JournalSend.sentState(text: day.text, lastSentFingerprint: entry.fingerprint) {
+        case .notSent: return nil
+        case .sent: return "Sent to Apple Journal, \(JournalSentLog.timeText(entry.sentAt))"
+        case .editedSince: return "Edited since it was sent; the copy in Apple Journal is the earlier version"
         }
     }
 

@@ -85,6 +85,21 @@ struct JournalSendTests {
                 .hasPrefix("日记 2026-10-03"))
     }
 
+    // MARK: sent, or changed since
+
+    @Test func aDayNeverHandedOverIsNotSent() {
+        #expect(JournalSend.sentState(text: composed, lastSentFingerprint: nil) == .notSent)
+    }
+
+    @Test func aDayWhoseTextIsTheOneHandedOverIsSent() {
+        #expect(JournalSend.sentState(text: composed, lastSentFingerprint: JournalSend.fingerprint(of: composed)) == .sent)
+    }
+
+    @Test func aDayEditedAfterItWasHandedOverSaysSo() {
+        let sent = JournalSend.fingerprint(of: composed)
+        #expect(JournalSend.sentState(text: composed + " More.", lastSentFingerprint: sent) == .editedSince)
+    }
+
     // MARK: the fingerprint
 
     /// The published FNV-1a 64 test vectors, so the hash can not drift from the algorithm.

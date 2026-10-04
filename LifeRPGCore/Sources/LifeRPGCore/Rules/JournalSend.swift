@@ -25,6 +25,21 @@ public enum JournalSend {
         return text
     }
 
+    public enum SentState: Equatable, Sendable {
+        case notSent
+        /// `text` is what was handed to the Shortcut.
+        case sent
+        /// A day was handed over and its text is different now. Apple Journal keeps the earlier one.
+        case editedSince
+    }
+
+    /// Where `text` stands against the fingerprint of what was last handed over for its day, for
+    /// the page that reads it back.
+    public static func sentState(text: String, lastSentFingerprint: String?) -> SentState {
+        guard let lastSentFingerprint else { return .notSent }
+        return fingerprint(of: text) == lastSentFingerprint ? .sent : .editedSince
+    }
+
     /// FNV-1a 64 over the UTF-8 bytes, as 16 hex digits. Stored between launches, so it can not be
     /// `hashValue`, which Swift seeds per process.
     public static func fingerprint(of text: String) -> String {
