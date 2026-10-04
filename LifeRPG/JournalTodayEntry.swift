@@ -71,7 +71,8 @@ struct JournalTonightCard: View {
         .padding(.top, 20).padding(.bottom, 18).padding(.horizontal, 20)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(RoundedRectangle(cornerRadius: LR.Radius.card, style: .continuous).fill(LR.Color.nightCard))
-        .task(id: reloadToken) { loadLastNight() }
+        // The day can change under an open page (the refresh at launch, midnight), and last night with it.
+        .task(id: "\(today)#\(reloadToken)") { loadLastNight() }
     }
 
     @ViewBuilder private var trailing: some View {
