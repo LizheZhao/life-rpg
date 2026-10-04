@@ -77,6 +77,47 @@ struct JournalHistoryTests {
         #expect(preview == String(repeating: "字", count: 80) + "…")
     }
 
+    // MARK: the longer cut the day sheet shows
+
+    private func excerpt(_ answer: String, limit: Int) throws -> String {
+        try #require(days([F.turn(.opening, answer)]).first).excerpt(limit: limit)
+    }
+
+    @Test func anExcerptShorterThanTheLimitIsTheWholeEntryOnOneLine() throws {
+        #expect(try excerpt("the walk\n\nhome,\t in the rain ", limit: 100) == "the walk home, in the rain")
+        #expect(try excerpt("alpha beta", limit: 10) == "alpha beta")
+    }
+
+    @Test func anExcerptIsCutAtAWordBoundaryWithAnEllipsis() throws {
+        // The limit falls inside "gamma": the whole word goes.
+        #expect(try excerpt("alpha beta gamma delta", limit: 12) == "alpha beta\u{2026}")
+        // The limit falls exactly on the space after "beta": nothing is lost but the rest.
+        #expect(try excerpt("alpha beta gamma", limit: 10) == "alpha beta\u{2026}")
+    }
+
+    @Test func aCommaOrColonBeforeTheCutDoesNotStayBesideTheEllipsis() throws {
+        #expect(try excerpt("one two, three four", limit: 9) == "one two\u{2026}")
+    }
+
+    @Test func textWithoutSpacesIsCutByCharacterAtTheLimit() throws {
+        #expect(try excerpt(String(repeating: "字", count: 30), limit: 20) == String(repeating: "字", count: 20) + "\u{2026}")
+    }
+
+    @Test func aBoundaryInTheFirstHalfDoesNotLeaveAnAlmostEmptyExcerpt() throws {
+        // Backing up to the only space would leave "a".
+        #expect(try excerpt("a " + String(repeating: "b", count: 30), limit: 10) == "a bbbbbbbb\u{2026}")
+    }
+
+    @Test func theExcerptReadsTheUsersAnswersInOrderAndNeverAQuestion() throws {
+        let turns = [
+            F.turn(.good, "second", index: 2),
+            F.turn(.heavy, "", index: 1, outcome: .skipped),
+            F.turn(.opening, "first", index: 0),
+            F.turn(.safety, "not mine", index: 3),
+        ]
+        #expect(try #require(days(turns).first).excerpt(limit: 100) == "first second")
+    }
+
     @Test func isClosedAndTextFollowTheProgressAndComposerRules() throws {
         let open = [F.turn(.opening, "hello", index: 0)]
         let closed = open + [F.turn(.closing, "bye", index: 1)]

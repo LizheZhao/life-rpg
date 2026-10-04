@@ -24,6 +24,23 @@ public struct JournalDay: Identifiable {
     public let writingSeconds: Int
 
     public var id: String { dayKey }
+
+    /// The beginning of what the user wrote, on one line, for a card that shows a few lines. Cut
+    /// at a word boundary when the cut has one past its first half (text with no spaces, as in
+    /// Chinese, is cut at `limit` characters), with an ellipsis only when something was left out.
+    public func excerpt(limit: Int) -> String {
+        let line = JournalComposer.written(turns).map(\.answer).joined(separator: " ")
+            .split(whereSeparator: \.isWhitespace).joined(separator: " ")
+        guard line.count > limit else { return line }
+        let head = line.prefix(limit)
+        var cut = head
+        if !line[line.index(line.startIndex, offsetBy: limit)].isWhitespace,
+           let space = head.lastIndex(of: " "), head.distance(from: head.startIndex, to: space) >= limit / 2 {
+            cut = head[..<space]
+        }
+        let loose = CharacterSet.whitespaces.union(CharacterSet(charactersIn: ",;:-"))
+        return String(cut).trimmingCharacters(in: loose) + "\u{2026}"
+    }
 }
 
 /// The days that have something written, newest first. Pure, like the planner: the list is a
