@@ -151,7 +151,7 @@ struct SettingsView: View {
         1. In Shortcuts, make a new shortcut and name it as above.
         2. Add the action Get Today's Journal Text, from LifeRPG.
         3. Add Create Journal Entry and give it that text.
-        "Save to Journal" on the finished journal then runs it. If you want it every night, add a Time of Day Personal Automation that runs the same shortcut. Not verified: whether an automation runs on its own while the phone is locked, or that these steps work as written on your device. Leave the name empty to only use Share.
+        "Save Journal" on the finished journal then runs it. If you want it every night, add a Time of Day Personal Automation that runs the same shortcut. Not verified: whether an automation runs on its own while the phone is locked, or that these steps work as written on your device. Leave the name empty to only use Share.
         """
 
     private var version: String { Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?" }

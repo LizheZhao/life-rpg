@@ -193,21 +193,22 @@ struct JournalView: View {
                     }
                     .buttonStyle(PillButtonStyle())
                     Spacer(minLength: 0)
-                    if let url = JournalShortcutLink.runURL(shortcutName: shortcutName) {
-                        Button("Save to Journal") { save(through: url) }
-                            .buttonStyle(InkPillButtonStyle())
-                    }
                 }
                 if let message = shortcut.message {
                     caption(message)
-                } else if JournalShortcutLink.runURL(shortcutName: shortcutName) == nil {
-                    caption("Name a Shortcut in Settings to save to Journal from here.")
+                } else if runURL == nil {
+                    caption("Name a Shortcut in Settings to also save into Apple Journal.")
                 }
             }
-            Button("Done") { dismiss() }
+            Button(composed.isEmpty ? "Done" : "Save Journal") { saveJournal() }
                 .buttonStyle(SheetPrimaryButtonStyle())
         }
+        .onChange(of: shortcut.outcome) { _, outcome in
+            if outcome == .saved { dismiss() }
+        }
     }
+
+    private var runURL: URL? { JournalShortcutLink.runURL(shortcutName: shortcutName) }
 
     // MARK: the loop
 
@@ -249,8 +250,13 @@ struct JournalView: View {
         }
     }
 
-    /// The text is not sent: the Shortcut asks the app for it (`GetTodaysJournalTextIntent`).
-    private func save(through url: URL) {
+    /// The turns are in the store already, so saving is only the hand-off to Apple Journal: with a
+    /// Shortcut configured it runs, and the sheet stays up for its answer (`.saved` closes it, a
+    /// cancel or an error leaves the words and Share here); without one there is nothing to run and
+    /// the button just closes. The text is not sent: the Shortcut asks the app for it
+    /// (`GetTodaysJournalTextIntent`).
+    private func saveJournal() {
+        guard !composed.isEmpty, let url = runURL else { dismiss(); return }
         Haptics.selection()
         shortcut.outcome = nil
         openURL(url) { accepted in
