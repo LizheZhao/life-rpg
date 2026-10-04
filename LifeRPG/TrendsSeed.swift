@@ -61,7 +61,9 @@ enum TrendsSeed {
             // About one night in seven has nothing written, and a few days are a single line.
             if back % 7 != 3 {
                 var lines: [String] = []
-                let length = back % 9 == 0 ? 1 : Int.random(in: 3...(isRecent ? 14 : 9), using: &rng)
+                // Every third night is a page (about 400 words), the rest a few lines.
+                let length = back % 9 == 0 ? 1 : back % 3 == 0 ? Int.random(in: 25...40, using: &rng)
+                                                             : Int.random(in: 3...(isRecent ? 14 : 9), using: &rng)
                 for _ in 0..<length {
                     let pool = Int.random(in: 0..<10, using: &rng)
                     lines.append(pool < 6 ? (isRecent ? recent : older).randomElement(using: &rng)!

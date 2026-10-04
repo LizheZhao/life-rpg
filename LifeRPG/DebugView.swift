@@ -130,11 +130,17 @@ struct DebugView: View {
                     PillSegmentedControl(options: [("Real clock", ""), ("Evening", "evening"), ("Daytime", "daytime")],
                                          selection: $journalTiming, accessibilityLabel: "Journal timing")
                 }
-                section("Trends fixture (simulator only)", footer: "Writes journal entries for the 60 days before the app's day, with a day setting and some done quests and routines to go with them, so the Trends page has something to show. None of it came from using the app; pressing it again rewrites the same entries.") {
-                    Button { seedTrends() } label: {
-                        Label("Seed 60 journal days", systemImage: "text.badge.plus")
+                section("Trends fixture (simulator only)", footer: "Writes journal entries for the 60 (or 365) days before the app's day, with a day setting and some done quests and routines to go with them, so the Trends page has something to show. None of it came from using the app; pressing it again rewrites the same entries.") {
+                    FlowRow(spacing: 8) {
+                        Button { seedTrends(days: 60) } label: {
+                            Label("Seed 60 journal days", systemImage: "text.badge.plus")
+                        }
+                        .buttonStyle(PillButtonStyle())
+                        Button { seedTrends(days: 365) } label: {
+                            Label("Seed a year", systemImage: "text.badge.plus")
+                        }
+                        .buttonStyle(PillButtonStyle())
                     }
-                    .buttonStyle(PillButtonStyle())
                     if let trendsSeedText { note(trendsSeedText) }
                 }
                 section("Journal hand-off (simulator only)", footer: "The Shortcut can not be run here. This calls what Get Journal Text to Send calls, at the shifted clock above, so a press with the day written one day behind returns that day and marks it sent; a second press returns nothing.") {
@@ -350,9 +356,9 @@ struct DebugView: View {
     }
 
     #if targetEnvironment(simulator)
-    private func seedTrends() {
+    private func seedTrends(days: Int) {
         do {
-            let seeded = try TrendsSeed.seed(days: 60, endingBefore: today, in: modelContext)
+            let seeded = try TrendsSeed.seed(days: days, endingBefore: today, in: modelContext)
             trendsSeedText = "Wrote \(seeded.entries) entries, \(seeded.contexts) day settings, "
                 + "\(seeded.quests) quests and \(seeded.routines) routines before \(today)."
         } catch {
