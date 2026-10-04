@@ -33,11 +33,14 @@ enum JournalSentLog {
         entries.values.max { $0.sentAt < $1.sentAt }
     }
 
-    /// "Oct 4, 11:14 PM" in the user's locale and clock style.
+    /// "Oct 4, 11:14 PM" in the user's locale and clock style. Two templates joined by a comma,
+    /// because one combined template reads "Oct 4 at 11:14 PM" on current systems.
     static func timeText(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.setLocalizedDateFormatFromTemplate("MMMdjmm")
-        return formatter.string(from: date)
+        let day = DateFormatter()
+        day.setLocalizedDateFormatFromTemplate("MMMd")
+        let time = DateFormatter()
+        time.setLocalizedDateFormatFromTemplate("jmm")
+        return "\(day.string(from: date)), \(time.string(from: date))"
     }
 
     static func statusLine(_ latest: Entry?) -> String {
