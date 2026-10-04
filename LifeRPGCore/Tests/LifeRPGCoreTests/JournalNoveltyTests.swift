@@ -105,8 +105,8 @@ struct JournalNoveltyTests {
     // MARK: follow-ups
 
     @Test func aFollowUpThatRestatesAnExampleIsRejected() {
-        let answer = "I walked home and it was quiet and nice"
-        let shown = "You said \"I walked home and it was quiet and nice\". What stands out to you about that?"
+        let answer = "I walked home and it was quiet and nice after the long day"
+        let shown = "You said \"I walked home and it was quiet\". What stands out to you about that?"
         #expect(JournalTextCheck.accept(reflection: "You said I walked home and it was quiet.",
                                         question: "What stands out to you about that?",
                                         answer: answer, language: .en))

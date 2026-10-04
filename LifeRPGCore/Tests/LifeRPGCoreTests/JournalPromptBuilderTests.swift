@@ -9,12 +9,12 @@ struct JournalPromptBuilderTests {
     /// A softened or dropped rule fails here, which is the point: the model is held to these.
     private let englishMarkers = [
         "one question at a time", "no advice", "no diagnosis", "never start with why", "no praise or guilt",
-        "user's own words", "no contrast staging", "no closing one-liner", "no triads", "no long dashes", "no markdown",
+        "user's own words", "quote only a few words, never the whole answer", "no contrast staging", "no closing one-liner", "no triads", "no long dashes", "no markdown",
         "examples are anchors for tone, not templates", "never reuse their wording or sentence structure",
     ]
     private let chineseMarkers = [
         "一次只问一个问题", "不给建议", "不做诊断", "不要以“为什么”开头", "不夸奖，也不让人内疚",
-        "沿用用户自己的话", "不要用“不是……而是……”", "不要用一句话收尾", "不要为了节奏凑三项并列", "不要用破折号", "不要用 markdown",
+        "沿用用户自己的话", "只引用其中几个字，不要整段照抄", "不要用“不是……而是……”", "不要用一句话收尾", "不要为了节奏凑三项并列", "不要用破折号", "不要用 markdown",
         "示例只是语气的参照，不是模板", "不要沿用它们的措辞和句式",
     ]
 
@@ -93,13 +93,15 @@ struct JournalPromptBuilderTests {
 
     @Test func theQuestionInstructionsKeepTheRulesButNotTheOneAboutQuotingTheUser() {
         let en = JournalPromptBuilder.questionInstructions(language: .en).lowercased()
-        for marker in englishMarkers where marker != "user's own words" { #expect(en.contains(marker), "\(marker)") }
+        for marker in englishMarkers where marker != "user's own words" && marker != "quote only a few words, never the whole answer" { #expect(en.contains(marker), "\(marker)") }
         #expect(!en.contains("user's own words"))
+        #expect(!en.contains("never the whole answer"))
         #expect(en.contains("one short, fresh question and nothing else"))
         #expect(!en.contains("reflection"))
         let zh = JournalPromptBuilder.questionInstructions(language: .zhHans)
-        for marker in chineseMarkers where marker != "沿用用户自己的话" { #expect(zh.contains(marker), "\(marker)") }
+        for marker in chineseMarkers where marker != "沿用用户自己的话" && marker != "只引用其中几个字，不要整段照抄" { #expect(zh.contains(marker), "\(marker)") }
         #expect(!zh.contains("沿用用户自己的话"))
+        #expect(!zh.contains("整段照抄"))
         #expect(!zh.contains("Never"))
     }
 

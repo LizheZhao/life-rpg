@@ -138,4 +138,47 @@ struct JournalTextCheckTests {
                                          question: "Tell me more about the quiet.",
                                          answer: "I walked home and it was quiet and nice", language: .en))
     }
+
+    // MARK: parroting
+
+    private let twelveWords = "It was a quiet day and I felt good about the walk"
+    private let fifteenCharacters = "今天下午我一个人安静地走路回家"
+
+    private func accepted(_ reflection: String, answer: String, _ language: JournalLanguage = .en) -> Bool {
+        JournalTextCheck.accept(reflection: reflection,
+                                question: language == .zhHans ? "最在意什么？" : "What stands out?",
+                                answer: answer, language: language)
+    }
+
+    @Test func aReflectionThatRepeatsTheWholeAnswerIsRejected() {
+        #expect(!accepted("It was a quiet day and I felt good about the walk.", answer: twelveWords))
+        #expect(!accepted("You said it was a quiet day and I felt good about the walk.", answer: twelveWords))
+        #expect(!accepted("今天下午我一个人安静地走路回家。", answer: fifteenCharacters, .zhHans))
+    }
+
+    @Test func aReflectionThatQuotesAFewWordsOfALongAnswerIsAccepted() {
+        #expect(accepted("You said it was a quiet day.", answer: twelveWords))
+        #expect(accepted("You called it a quiet day.", answer: twelveWords))
+        #expect(accepted("你说安静地走路。", answer: fifteenCharacters, .zhHans))
+    }
+
+    @Test func theLongestRunMustStayAtOrBelowSixtyPercent() {
+        // 7 of 12 words is 58%, 8 of 12 is 67%.
+        #expect(accepted("You said it was a quiet day and I.", answer: twelveWords))
+        #expect(!accepted("You said it was a quiet day and I felt.", answer: twelveWords))
+        // 9 of 15 characters is exactly 60%, 10 of 15 is 67%.
+        #expect(accepted("你说今天下午我一个人安。", answer: fifteenCharacters, .zhHans))
+        #expect(!accepted("你说今天下午我一个人安静。", answer: fifteenCharacters, .zhHans))
+    }
+
+    @Test func aShortAnswerCanBeQuotedWhole() {
+        #expect(accepted("You said it was quiet and nice.", answer: "It was quiet and nice"))
+        #expect(accepted("你说今天走路回家，很安静。", answer: "今天走路回家，很安静", .zhHans))
+        // Five words is below the six-word floor; six is held to the rule.
+        #expect(!accepted("It was quiet and very nice.", answer: "It was quiet and very nice"))
+    }
+
+    @Test func aRunIsContiguousSoScatteredWordsDoNotCount() {
+        #expect(accepted("Quiet, with the walk, felt good, and it was a day.", answer: twelveWords))
+    }
 }

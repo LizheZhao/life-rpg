@@ -79,7 +79,7 @@ public enum JournalTextCheck {
     /// Whether the model's follow-up may be shown: a reflection and one question, both clean as a
     /// whole, the question actually a question, the reflection built from the user's own words
     /// (a verbatim run of at least two words, or three characters in Chinese) rather than a
-    /// paraphrase, and the whole not a copy of anything in `avoiding` (`JournalNovelty`): the
+    /// paraphrase, not a repeat of most of the answer (`parrotsAnswer`), and the whole not a copy of anything in `avoiding` (`JournalNovelty`): the
     /// follow-up examples it was shown and the follow-ups asked lately.
     public static func accept(reflection: String, question: String, answer: String,
                               language: JournalLanguage, avoiding: [String] = []) -> Bool {
@@ -87,6 +87,7 @@ public enum JournalTextCheck {
         return violations(of: whole, language: language).isEmpty
             && question.contains(where: { $0 == "?" || $0 == "？" })
             && reusesWords(reflection, from: answer, language: language)
+            && !parrotsAnswer(reflection, answer: answer, language: language)
             && JournalNovelty.isFresh(whole, avoiding: avoiding, language: language)
     }
 
@@ -117,6 +118,48 @@ public enum JournalTextCheck {
         guard theirs.count >= 2, mine.count >= 2 else { return false }
         let pairs = Set((0..<(theirs.count - 1)).map { "\(theirs[$0]) \(theirs[$0 + 1])" })
         return (0..<(mine.count - 1)).contains { pairs.contains("\(mine[$0]) \(mine[$0 + 1])") }
+    }
+
+    /// A reflection that quotes a few words is listening; one that gives the answer back is not.
+    /// Only an answer of at least this many words (characters in Chinese) is held to it, because a
+    /// shorter one can only be quoted whole.
+    static let parrotMinAnswerWords = 6
+    static let parrotMinAnswerCharacters = 12
+    /// The longest verbatim run may cover at most 3/5 of the answer's tokens; more is parroting.
+    static let parrotMaxShareNumerator = 3
+    static let parrotMaxShareDenominator = 5
+
+    /// Whether the longest verbatim run `reflection` shares with `answer` is more than 60% of the
+    /// answer. Tokens are words in English and letters or digits in Chinese (punctuation dropped),
+    /// the same as `reusesWords`.
+    static func parrotsAnswer(_ reflection: String, answer: String, language: JournalLanguage) -> Bool {
+        let theirs: [String], mine: [String]
+        let minimum: Int
+        if language == .zhHans {
+            theirs = answer.filter { $0.isLetter || $0.isNumber }.map(String.init)
+            mine = reflection.filter { $0.isLetter || $0.isNumber }.map(String.init)
+            minimum = parrotMinAnswerCharacters
+        } else {
+            theirs = words(answer)
+            mine = words(reflection)
+            minimum = parrotMinAnswerWords
+        }
+        guard theirs.count >= minimum else { return false }
+        return longestSharedRun(mine, theirs) * parrotMaxShareDenominator > theirs.count * parrotMaxShareNumerator
+    }
+
+    private static func longestSharedRun(_ a: [String], _ b: [String]) -> Int {
+        var best = 0
+        var previous = [Int](repeating: 0, count: b.count + 1)
+        for x in a {
+            var current = [Int](repeating: 0, count: b.count + 1)
+            for (j, y) in b.enumerated() where x == y {
+                current[j + 1] = previous[j] + 1
+                best = max(best, current[j + 1])
+            }
+            previous = current
+        }
+        return best
     }
 
     static func words(_ text: String) -> [String] {
