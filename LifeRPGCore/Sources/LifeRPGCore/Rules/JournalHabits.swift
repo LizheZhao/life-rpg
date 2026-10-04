@@ -34,16 +34,21 @@ public struct JournalHabits: Equatable, Sendable {
     /// What was asked in the last `recentQuestionDays` days, newest first, blanks left out. Model
     /// wording is included: the point is that nothing repeats, whoever wrote it.
     public let recentQuestionTexts: [String]
+    /// Starter id (`JournalStarters`) to the dayKey it was last used on: a paragraph of some turn
+    /// that begins with its text. Starters are not turns, so use is read from the writing.
+    public let starterLastUsedDay: [String: String]
 
     public init(medianAnswerLength: Int?, typicalHour: Int?, usesEmoji: Bool,
                 weights: [JournalPromptKind: Double],
-                lastUsedDay: [String: String] = [:], recentQuestionTexts: [String] = []) {
+                lastUsedDay: [String: String] = [:], recentQuestionTexts: [String] = [],
+                starterLastUsedDay: [String: String] = [:]) {
         self.medianAnswerLength = medianAnswerLength
         self.typicalHour = typicalHour
         self.usesEmoji = usesEmoji
         self.weights = weights
         self.lastUsedDay = lastUsedDay
         self.recentQuestionTexts = recentQuestionTexts
+        self.starterLastUsedDay = starterLastUsedDay
     }
 
     public static let none = JournalHabits(medianAnswerLength: nil, typicalHour: nil, usesEmoji: false, weights: [:])
@@ -92,9 +97,18 @@ public struct JournalHabits: Equatable, Sendable {
             .sorted { ($0.dayKey, $0.index) > ($1.dayKey, $1.index) }
             .map(\.questionText)
 
+        var starters: [String: String] = [:]
+        for turn in history where turn.outcome == .answered {
+            for paragraph in turn.answer.split(whereSeparator: \.isNewline) {
+                guard let id = JournalStarters.starter(beginning: String(paragraph)) else { continue }
+                starters[id] = max(starters[id] ?? "", turn.dayKey)
+            }
+        }
+
         return JournalHabits(medianAnswerLength: median, typicalHour: hour,
                              usesEmoji: history.contains { $0.answer.contains(where: Self.isEmoji) },
-                             weights: weights, lastUsedDay: lastUsed, recentQuestionTexts: recent)
+                             weights: weights, lastUsedDay: lastUsed, recentQuestionTexts: recent,
+                             starterLastUsedDay: starters)
     }
 
     private static func isEmoji(_ character: Character) -> Bool {
