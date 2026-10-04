@@ -25,6 +25,16 @@ struct TrendsView: View {
     @State private var reload = 0
     @State private var writing = false
 
+    @Environment(\.dynamicTypeSize) private var dynamicType
+    @Environment(\.legibilityWeight) private var legibility
+
+    /// `chipLabel`'s size at `bodyStrong`'s weight, for the number in a sentence.
+    private var emphasisFont: Font {
+        let size = LR.Typography.chipLabel.pointSize(dynamicType: dynamicType)
+        let weight = LR.Typography.bodyStrong.spec.weight + (legibility == .bold ? 100 : 0)
+        return Font(LRFonts.uiFont(LR.Typography.bodyStrong.spec.family, weight: weight, size: size) as CTFont)
+    }
+
     private let language = JournalLanguage.resolve(preferred: Locale.preferredLanguages)
 
     /// What the page reads. A row count is enough to notice an added entry or completion; an edit
@@ -378,7 +388,8 @@ struct TrendsView: View {
                     legend(LR.Color.trendGold, "low energy day")
                 }
                 if let percent = energy.lowDayPercent {
-                    Text("On low days you still finished **\(percent)%** of what a normal day gets. The light versions are doing their job.")
+                    // The percent is its own run: the page's fonts are fixed-weight, so markdown bold is lost.
+                    Text("On low days you still finished \(Text("\(percent)%").font(emphasisFont)) of what a normal day gets. The light versions are doing their job.")
                         .lr(.chipLabel).lineSpacing(3).foregroundStyle(LR.Color.ink)
                         .fixedSize(horizontal: false, vertical: true)
                         .padding(.vertical, 12).padding(.horizontal, 14)
