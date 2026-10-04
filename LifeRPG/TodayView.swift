@@ -319,7 +319,6 @@ struct TodayView: View {
                                        write: { journalSheet = .write },
                                        read: { journalSheet = .read($0) })
                 }
-                JournalShortcutLine()
                 if let generationError { BannerView(title: "Today could not be generated", message: generationError) }
                 if let actionError { BannerView(message: actionError) }
                 LevelCardView(state: levelState) { showingTrack = true }

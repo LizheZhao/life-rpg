@@ -211,22 +211,18 @@ struct JournalWritingView: View {
 }
 
 /// Free writing: a page of text and a row of phrases to start a sentence with, autosaved. Done
-/// closes it and hands the day to the user's Shortcut when there is one and the text is new.
+/// closes it. Nothing is sent to Apple Journal from here: the day is sent once, after it ends.
 struct JournalWritingPage: View {
     let today: String
     let evening: Bool
 
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.openURL) private var openURL
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.modelContext) private var context
-    @Environment(JournalShortcutStatus.self) private var shortcut
-    @AppStorage(JournalShortcutLink.nameKey) private var shortcutName = ""
 
     @State private var model: FreeWritingModel
     @State private var starters: [JournalStarter]
     @State private var guiding = false
-    @State private var confirmingResend = false
     @FocusState private var focused: Bool
 
     private let language = JournalLanguage.resolve(preferred: Locale.preferredLanguages)
@@ -267,11 +263,6 @@ struct JournalWritingPage: View {
         .sheet(isPresented: $guiding, onDismiss: { model.reload(); focused = true }) {
             JournalView(today: today)
         }
-        .confirmationDialog("This will add a second entry to Apple Journal. Send again?",
-                            isPresented: $confirmingResend, titleVisibility: .visible) {
-            Button("Send again") { sendAndClose() }
-            Button("Not now") { dismiss() }
-        }
     }
 
     private var topBar: some View {
@@ -280,7 +271,7 @@ struct JournalWritingPage: View {
             Spacer(minLength: 8)
             FreeWritingStatusLabel(model: model)
             Spacer(minLength: 8)
-            Button("Done") { done() }.buttonStyle(InkPillButtonStyle())
+            Button("Done") { close() }.buttonStyle(InkPillButtonStyle())
         }
         .padding(.horizontal, 20)
         .padding(.top, 12)
@@ -315,29 +306,10 @@ struct JournalWritingPage: View {
 
     // MARK: leaving
 
+    /// Close and Done are the same: save, then leave.
     private func close() {
         guard model.flush() else { return }
         dismiss()
-    }
-
-    /// Save, then close; with a Shortcut set and something new to send, hand the day over (or ask,
-    /// when it was sent before and would become a second entry).
-    private func done() {
-        guard model.flush() else { return }
-        switch shortcut.plan(dayKey: today, text: composed, shortcutName: shortcutName) {
-        case .nothing: dismiss()
-        case .run: sendAndClose()
-        case .askBeforeSendingAgain: confirmingResend = true
-        }
-    }
-
-    private func sendAndClose() {
-        shortcut.run(dayKey: today, text: composed, shortcutName: shortcutName, openURL: openURL)
-        dismiss()
-    }
-
-    private var composed: String {
-        JournalComposer.text(turns: (try? JournalService.turns(on: today, in: context)) ?? [], language: language)
     }
 
     /// The question flow is a second way to write the same day: what is typed is saved first, and

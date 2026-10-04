@@ -141,16 +141,3 @@ struct JournalBookButton: View {
         .accessibilityHint("Opens the page to write")
     }
 }
-
-/// What the user's Shortcut last answered, kept on Today after the sheet that started it has gone.
-struct JournalShortcutLine: View {
-    @Environment(JournalShortcutStatus.self) private var shortcut
-
-    var body: some View {
-        if let message = shortcut.message {
-            Text(message).lr(.caption).foregroundStyle(LR.Color.inkSecondary)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.horizontal, 6)
-        }
-    }
-}

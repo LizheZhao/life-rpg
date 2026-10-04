@@ -11,9 +11,6 @@ struct JournalView: View {
 
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.openURL) private var openURL
-    @Environment(JournalShortcutStatus.self) private var shortcut
-    @AppStorage(JournalShortcutLink.nameKey) private var shortcutName = ""
     @Query private var turns: [JournalTurn]
 
     @State private var phase = Phase.thinking
@@ -21,7 +18,6 @@ struct JournalView: View {
     /// Writing with no question above it: recorded as the closing turn, which ends the day.
     @State private var freeWriting = false
     @State private var wording: (any JournalWording)?
-    @State private var confirmingResend = false
     @FocusState private var editing: Bool
 
     /// What was put in front of the user, kept so the response is recorded against it.
@@ -74,7 +70,6 @@ struct JournalView: View {
             }
         }
         .task {
-            shortcut.outcome = nil
             wording = JournalWordingProvider.current(language: language)
             await advance()
         }
@@ -195,32 +190,11 @@ struct JournalView: View {
                     .buttonStyle(PillButtonStyle())
                     Spacer(minLength: 0)
                 }
-                if let message = shortcut.message {
-                    caption(message)
-                } else if runURL == nil {
-                    caption("Name a Shortcut in Settings to also save into Apple Journal.")
-                } else if sendPlan == .nothing {
-                    caption("This is already in Apple Journal.")
-                }
             }
-            Button(composed.isEmpty ? "Done" : "Save Journal") { saveJournal() }
+            Button("Done") { dismiss() }
                 .buttonStyle(SheetPrimaryButtonStyle())
         }
-        .onChange(of: shortcut.outcome) { _, outcome in
-            if outcome == .saved { dismiss() }
-        }
-        .confirmationDialog("This will add a second entry to Apple Journal. Send again?",
-                            isPresented: $confirmingResend, titleVisibility: .visible) {
-            Button("Send again") { runShortcut() }
-            Button("Not now", role: .cancel) {}
-        }
     }
-
-    private var sendPlan: JournalSend.Plan {
-        shortcut.plan(dayKey: today, text: composed, shortcutName: shortcutName)
-    }
-
-    private var runURL: URL? { JournalShortcutLink.runURL(shortcutName: shortcutName) }
 
     // MARK: the loop
 
@@ -260,26 +234,6 @@ struct JournalView: View {
         } catch {
             phase = .failed("\(error)")
         }
-    }
-
-    /// The turns are in the store already, so saving is only the hand-off to Apple Journal, and
-    /// `JournalSend` decides it. With a Shortcut configured and new words it runs, and the sheet
-    /// stays up for its answer (`.saved` closes it, a cancel or an error leaves the words and Share
-    /// here). A day sent before and changed since asks first, because the Shortcut can only add an
-    /// entry. Otherwise there is nothing to run and the button just closes. The text is not sent:
-    /// the Shortcut asks the app for it (`GetTodaysJournalTextIntent`).
-    private func saveJournal() {
-        guard !composed.isEmpty else { dismiss(); return }
-        switch sendPlan {
-        case .nothing: dismiss()
-        case .run: runShortcut()
-        case .askBeforeSendingAgain: confirmingResend = true
-        }
-    }
-
-    private func runShortcut() {
-        Haptics.selection()
-        shortcut.run(dayKey: today, text: composed, shortcutName: shortcutName, openURL: openURL)
     }
 
     private func respond(_ outcome: JournalOutcome, to shown: Shown) {

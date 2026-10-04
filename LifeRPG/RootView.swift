@@ -23,7 +23,6 @@ struct RootView: View {
     /// A re-read that disagrees with the day already on screen, waiting to be confirmed.
     @State private var replan: Replan.Change?
     @State private var replanInputs: DayInputs?
-    @State private var journalShortcut = JournalShortcutStatus()
     @State private var health = HealthService()
     @State private var calendar = CalendarService()
     #if targetEnvironment(simulator)
@@ -54,8 +53,6 @@ struct RootView: View {
                 .tag(RootTab.settings)
         }
         .overlay(alignment: .bottom) { FloatingTabBar(selection: $tab, hidden: tabBarHidden) }
-        .environment(journalShortcut)
-        .onOpenURL { journalShortcut.receive($0) }
         .task { await refresh() }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { Task { await refresh() } }
