@@ -46,4 +46,41 @@ public enum JournalService {
             predicate: #Predicate { $0.dayKey == dayKey },
             sortBy: [SortDescriptor(\.index)]))
     }
+
+    /// The day's facts, read from the history rows the same way `DayRecord` reads them.
+    public static func signals(on dayKey: String, in context: ModelContext,
+                               timeZone: TimeZone = .current) throws -> JournalSignals {
+        let skipKind = Economy.Kind.skip.rawValue
+        let flexible = Set(try context.fetch(FetchDescriptor<RoutineTask>()).filter(\.flexibleWithinWeek).map(\.id))
+        return JournalSignals(
+            dayKey: dayKey,
+            quests: try DayService.quests(on: dayKey, in: context),
+            occurrences: try context.fetch(FetchDescriptor<RoutineOccurrence>()),
+            context: try DayService.dailyContext(for: dayKey, in: context),
+            ratings: try context.fetch(FetchDescriptor<QuestRating>()),
+            comments: try context.fetch(FetchDescriptor<QuestComment>(
+                predicate: #Predicate { $0.dayKey == dayKey })),
+            ledger: try context.fetch(FetchDescriptor<LedgerEntry>(
+                predicate: #Predicate { $0.kind == skipKind && $0.dayKey == dayKey })),
+            flexible: flexible,
+            timeZone: timeZone)
+    }
+
+    /// What past turns say about how the user writes, as of the start of `dayKey`.
+    public static func habits(asOf dayKey: String, in context: ModelContext,
+                              timeZone: TimeZone = .current) throws -> JournalHabits {
+        let since = DayKey.adding(-JournalHabits.windowDays, to: dayKey, in: timeZone) ?? dayKey
+        let history = try context.fetch(FetchDescriptor<JournalTurn>(
+            predicate: #Predicate { $0.dayKey >= since && $0.dayKey < dayKey }))
+        return JournalHabits.derive(from: history, asOf: dayKey, timeZone: timeZone)
+    }
+
+    /// What to ask next on `dayKey`, from the store alone.
+    public static func next(on dayKey: String, in context: ModelContext, language: JournalLanguage,
+                            timeZone: TimeZone = .current) throws -> JournalStep {
+        JournalPlanner.next(signals: try signals(on: dayKey, in: context, timeZone: timeZone),
+                            habits: try habits(asOf: dayKey, in: context, timeZone: timeZone),
+                            today: try turns(on: dayKey, in: context),
+                            language: language)
+    }
 }
