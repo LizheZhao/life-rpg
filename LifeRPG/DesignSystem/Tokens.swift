@@ -48,6 +48,18 @@ enum LR {
         static let onNightSecondary = color(Palette.onNightSecondary)
         static let nightAccent = color(Palette.nightAccent)
 
+        /// The Trends page: a three-step blue ramp for bars, heat cells and month circles, gold for
+        /// a low-energy day and a filled star, and the three rank circles.
+        static let trendLight = color(Palette.trendLight)
+        static let trendMid = color(Palette.trendMid)
+        static let trendDeep = color(Palette.trendDeep)
+        static let trendGold = color(Palette.trendGold)
+        static let rankGold = color(Palette.rankGold)
+        static let rankSilver = color(Palette.rankSilver)
+        static let rankBronze = color(Palette.rankBronze)
+        /// What is drawn on `trendMid` and on `rankGold`.
+        static let onTintDark = color(Palette.onTintDark)
+
         /// What is drawn on a tint (title, caption, doodle, `⋯`, open ring): per tint.
         static func ink(on tint: QuestTint) -> SwiftUI.Color { color(Palette.ink(on: tint)) }
 
@@ -74,6 +86,8 @@ enum LR {
         static let row: CGFloat = 24
         static let pill: CGFloat = 12
         static let tabBar: CGFloat = 34
+        /// A Trends stat tile and a "what you'll see" row.
+        static let stat: CGFloat = 20
     }
 
     enum Spacing {
@@ -89,6 +103,9 @@ enum LR {
         case journalBody, chipLabel
         /// The beginning of an entry on the day sheet's night card.
         case journalExcerpt
+        /// The Trends page: its title, the number on a stat tile, and the two larger sizes of the
+        /// grateful-for chips (the smallest is `chipLabel`).
+        case pageTitle, statNumber, chipTop, chipMid
 
         struct Spec {
             let family: LRFonts.Family
@@ -132,6 +149,14 @@ enum LR {
                 Spec(family: .jakarta, weight: 400, size: 14, textStyle: .subheadline, maximumSize: 24)
             case .journalExcerpt:
                 Spec(family: .jakarta, weight: 400, size: 16, textStyle: .callout, maximumSize: 26, lineSpacing: 6)
+            case .pageTitle:
+                Spec(family: .jakarta, weight: 800, size: 40, textStyle: .largeTitle, maximumSize: 56, tracking: -0.8)
+            case .statNumber:
+                Spec(family: .jakarta, weight: 700, size: 26, textStyle: .title1, maximumSize: 38, tracking: -0.5)
+            case .chipTop:
+                Spec(family: .jakarta, weight: 500, size: 17, textStyle: .body, maximumSize: 28)
+            case .chipMid:
+                Spec(family: .jakarta, weight: 500, size: 15, textStyle: .subheadline, maximumSize: 26)
             }
         }
 
@@ -169,6 +194,10 @@ enum LR {
             case .journalBody: "journalBody"
             case .chipLabel: "chipLabel"
             case .journalExcerpt: "journalExcerpt"
+            case .pageTitle: "pageTitle"
+            case .statNumber: "statNumber"
+            case .chipTop: "chipTop"
+            case .chipMid: "chipMid"
             }
         }
     }

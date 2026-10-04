@@ -229,6 +229,19 @@ struct PaletteTests {
         }
     }
 
+    @Test func theTrendsRampGrowsStrongerAgainstTheCardInBothAppearances() {
+        for appearance in Palette.Appearance.allCases {
+            let card = Palette.surface.value(appearance)
+            let steps = [Palette.trendLight, Palette.trendMid, Palette.trendDeep].map { ratio($0.value(appearance), card) }
+            #expect(steps[0] > 1.3 && steps[0] < steps[1] && steps[1] < steps[2], "\(appearance): \(steps)")
+            // Dark ink on the filled night-card pill and the gold rank circle.
+            #expect(ratio(Palette.onTintDark.value(appearance), Palette.trendMid.value(appearance)) >= 4.5)
+            #expect(ratio(Palette.onTintDark.value(appearance), Palette.rankGold.value(appearance)) >= 4.5)
+            #expect(ratio(Palette.ink.value(appearance), Palette.rankSilver.value(appearance)) >= 4.5)
+            #expect(ratio(Palette.ink.value(appearance), Palette.rankBronze.value(appearance)) >= 4.5)
+        }
+    }
+
     // MARK: edges and pills
 
     @Test func aNeutralCardSitsOneStepOffThePageInBothAppearances() {

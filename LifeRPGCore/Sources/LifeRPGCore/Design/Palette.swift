@@ -62,6 +62,20 @@ public enum Palette {
     /// The hand "tonight" label and the moon on the night card.
     public static let nightAccent = Token(light: 0xA9C2E4, dark: 0xB4CAEA)
 
+    // MARK: the Trends page
+
+    /// The blue ramp of the Trends bars, heat grid and month circles, lightest to darkest in light
+    /// and dimmest to brightest in dark, so a longer entry always reads stronger against the card.
+    public static let trendLight = Token(light: 0xC9D7EA, dark: 0x34465F)
+    public static let trendMid = Token(light: 0x7FA3D1, dark: 0x5F85B8)
+    public static let trendDeep = Token(light: 0x3F6AA3, dark: 0x8FB2E0)
+    /// A low-energy day's bar and a filled star.
+    public static let trendGold = Token(light: 0xD9A441, dark: 0xD8A645)
+    /// The rank circles of Favorite quests, and the empty star under silver.
+    public static let rankGold = Token(light: 0xE6B94C, dark: 0xC9A04A)
+    public static let rankSilver = Token(light: 0xE4E4DE, dark: 0x3C3B48)
+    public static let rankBronze = Token(light: 0xEDD9C0, dark: 0x5C4C3A)
+
     // MARK: tints (trivial, easy, medium, hard, hidden, routine, epic)
 
     public static let tintTrivial = Token(light: 0x9CAF88, dark: 0x86987A)   // sage
@@ -128,6 +142,9 @@ public enum Palette {
         ("clay", clay), ("clayBg", clayBg), ("avatarPink", avatarPink),
         ("nightCard", nightCard), ("onNight", onNight), ("onNightSecondary", onNightSecondary),
         ("nightAccent", nightAccent),
+        ("trendLight", trendLight), ("trendMid", trendMid), ("trendDeep", trendDeep),
+        ("trendGold", trendGold), ("rankGold", rankGold), ("rankSilver", rankSilver),
+        ("rankBronze", rankBronze),
     ]
 
     /// Every tint in the order the gallery lists them (the order of `QuestTint.allCases`).

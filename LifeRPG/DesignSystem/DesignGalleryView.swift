@@ -111,6 +111,10 @@ struct DesignGalleryView: View {
         case .journalBody: "Spent most of the morning not wanting to do anything."
         case .chipLabel: "Grateful for"
         case .journalExcerpt: "Long day but the good kind. The 1:1 went somewhere I didn't expect."
+        case .pageTitle: "Trends"
+        case .statNumber: "9,870"
+        case .chipTop: "the walk"
+        case .chipMid: "a good 1:1"
         }
     }
 
