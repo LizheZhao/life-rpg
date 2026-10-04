@@ -16,7 +16,7 @@ struct DayDetailView: View {
     private let language = JournalLanguage.resolve(preferred: Locale.preferredLanguages)
 
     /// Characters of the entry the night card shows: about three lines at the card's width.
-    private static let excerptLength = 110
+    private static let excerptLength = 120
 
     init(dayKey: String) {
         self.dayKey = dayKey
