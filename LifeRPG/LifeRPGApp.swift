@@ -9,13 +9,12 @@ import SwiftUI
 
     init() {
         LRFonts.register()
-        do {
-            let container = try ModelContainer(for: LifeRPGSchema.current,
-                                               migrationPlan: LifeRPGMigrationPlan.self)
+        switch AppStore.opened {
+        case .success(let container):
             self.container = container
             startupError = nil
             seedStatus = Self.seed(container.mainContext)
-        } catch {
+        case .failure(let error):
             // Never delete or rebuild the store here: the file is the only copy of the history.
             container = nil
             startupError = error
