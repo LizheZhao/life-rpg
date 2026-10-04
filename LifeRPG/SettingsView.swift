@@ -23,7 +23,6 @@ struct SettingsView: View {
     @Environment(\.modelContext) private var context
     @State private var transfer = DataTransfer()
     @State private var path: [Page] = []
-    @AppStorage(JournalShortcutLink.nameKey) private var shortcutName = ""
 
     var body: some View {
         NavigationStack(path: $path) {
@@ -73,12 +72,9 @@ struct SettingsView: View {
 
                 Section {
                     row("Shortcut name", systemImage: "book.closed", tint: .hidden) {
-                        TextField("Shortcut name", text: $shortcutName,
-                                  prompt: Text("e.g. Save Journal").foregroundStyle(LR.Color.inkSecondary))
-                            .lr(.bodyStrong).foregroundStyle(LR.Color.ink)
+                        CommittedTextField("Shortcut name", prompt: "e.g. Save Journal",
+                                           key: JournalShortcutLink.nameKey)
                             .multilineTextAlignment(.trailing)
-                            .textInputAutocapitalization(.never)
-                            .autocorrectionDisabled()
                     }
                 } header: {
                     header("Journal")

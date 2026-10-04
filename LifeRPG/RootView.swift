@@ -26,8 +26,6 @@ struct RootView: View {
     @State private var journalShortcut = JournalShortcutStatus()
     @State private var health = HealthService()
     @State private var calendar = CalendarService()
-    @AppStorage("workoutCalendarID") private var workoutCalendarSetting = ""
-    @AppStorage("workoutKeywords") private var workoutKeywords = ""
     #if targetEnvironment(simulator)
     // Debug time travel: days added to the real clock. Simulator only — it writes future-dated
     // rows that never go away, which must never happen to the real store on the phone.
@@ -141,7 +139,8 @@ struct RootView: View {
         let floor = DayKey.adding(-14, to: todayKey) ?? todayKey
         let firstKey = max((try? DayService.lastProcessedDayKey(context)) ?? todayKey, floor)
         let from = LifeCalendar.gregorian().startOfDay(for: DayKey.date(min(firstKey, todayKey)) ?? now)
-        let selection = CalendarSelection(setting: workoutCalendarSetting)
+        let defaults = UserDefaults.standard
+        let selection = CalendarSelection(setting: defaults.string(forKey: WorkoutSettings.calendarKey) ?? "")
         let events = calendar.events(selection: selection, from: from, to: now)
         var mindful: [MindfulSession] = []
         if HealthService.isAvailable {
@@ -149,7 +148,7 @@ struct RootView: View {
             catch { report.append("Mindful read failed: \(error.localizedDescription)") }
         }
         let filter = WorkoutFilter(calendars: selection,
-                                   keywords: WorkoutFilter.keywords(from: workoutKeywords))
+                                   keywords: WorkoutFilter.keywords(from: defaults.string(forKey: WorkoutSettings.keywordsKey) ?? ""))
         let evidence = AutoVerify.evidence(events: events, mindful: mindful, filter: filter)
         let todayEvidence = evidence[todayKey] ?? DayEvidence()
         report.append("Today: \(Int(todayEvidence.mindfulMinutes)) mindful min, workouts "

@@ -2,17 +2,22 @@ import EventKit
 import LifeRPGCore
 import SwiftUI
 
+/// `UserDefaults` keys of the two workout settings. `RootView` reads them from `UserDefaults` on
+/// every refresh instead of holding them, so typing in a field here never re-renders the root.
+enum WorkoutSettings {
+    static let calendarKey = "workoutCalendarID"
+    static let keywordsKey = "workoutKeywords"
+}
+
 /// Which calendars are read for workouts, and the words a title must contain (`PLAN.md` §5).
-/// Pushed from Settings. The two settings are stored under the keys `RootView` reads on every
-/// refresh, so a change here is picked up the next time the app comes to the foreground, or at
-/// once through "Check for workouts now".
+/// Pushed from Settings. A change here is picked up the next time the app comes to the foreground,
+/// or at once through "Check for workouts now".
 struct WorkoutDetectionView: View {
     /// The last check `RootView` ran, from a foreground or from the button.
     let check: WorkoutCheck?
     let refresh: () async -> Void
 
-    @AppStorage("workoutCalendarID") private var calendarSetting = ""
-    @AppStorage("workoutKeywords") private var keywords = ""
+    @AppStorage(WorkoutSettings.calendarKey) private var calendarSetting = ""
     @Environment(\.scenePhase) private var scenePhase
     @State private var authorization = CalendarService.authorization
     @State private var calendars: [CalendarService.Info] = []
@@ -68,6 +73,7 @@ struct WorkoutDetectionView: View {
     }
 
     private func runCheck() async {
+        endEditing()
         checking = true
         await refresh()
         checking = false
@@ -138,12 +144,7 @@ struct WorkoutDetectionView: View {
 
     private var keywordsSection: some View {
         Section {
-            TextField("Title keywords, comma separated", text: $keywords,
-                      prompt: Text("Title keywords, comma separated").foregroundStyle(LR.Color.inkSecondary))
-                .lr(.bodyStrong)
-                .foregroundStyle(LR.Color.ink)
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
+            CommittedTextField("Title keywords, comma separated", key: WorkoutSettings.keywordsKey)
                 .frame(minHeight: 44)
         } header: {
             header("Keywords")
