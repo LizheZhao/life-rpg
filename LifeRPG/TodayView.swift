@@ -55,6 +55,7 @@ struct TodayView: View {
     @State private var adding = false
     @State private var actionError: String?
     @State private var showingTrack = false
+    @State private var journaling = false
     /// A card's `⋯ → Rate / note`: the sheet that files a rating or a note under what the card was.
     private struct FeedbackRequest: Identifiable {
         let subject: Feedback.Subject
@@ -288,6 +289,7 @@ struct TodayView: View {
                 questsBlock
                 completedBlock
                 aheadBlock
+                JournalEntryCard(today: today) { journaling = true }
             }
             .padding(.horizontal, LR.Spacing.inset)
             .padding(.top, 8)
@@ -520,6 +522,7 @@ struct TodayView: View {
                 AdHocView(today: today, tier: tier, target: .routine(o, flexible: isFlexible(o)))
             }
             .sheet(item: $feedbackFor) { FeedbackSheet(subject: $0.subject, today: today) }
+            .sheet(isPresented: $journaling) { JournalView(today: today) }
             .sheet(item: $replacingEpic) { epic in
                 EpicReplaceView(today: today, epic: epic)
             }

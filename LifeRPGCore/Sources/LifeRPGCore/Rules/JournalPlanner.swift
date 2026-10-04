@@ -91,7 +91,7 @@ public enum JournalPlanner {
         if triggered, !turns.contains(where: { $0.kind == .safety }) { return .safety }
 
         // Free writing is recorded as a closing turn, so it ends the day wherever it comes.
-        if turns.contains(where: { $0.kind == .closing }) { return .done }
+        if JournalProgress.isClosed(turns) { return .done }
         guard turns.contains(where: { $0.kind == .opening }) else {
             return question(of: .opening, signals: signals, recency: recency, language: language) ?? .done
         }

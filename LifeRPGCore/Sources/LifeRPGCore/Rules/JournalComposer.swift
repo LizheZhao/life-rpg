@@ -13,10 +13,7 @@ public enum JournalComposer {
 
     /// Empty when no turn has an answer, so the caller has nothing to offer to save.
     public static func text(turns: [JournalTurn], language: JournalLanguage) -> String {
-        let written = turns
-            .sorted { ($0.dayKey, $0.index) < ($1.dayKey, $1.index) }
-            .filter { $0.outcome == .answered && $0.kind != .safety
-                && !$0.answer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+        let written = written(turns)
         guard let first = written.first else { return "" }
 
         var blocks = [title(dayKey: first.dayKey, language: language)]
@@ -25,5 +22,13 @@ public enum JournalComposer {
             blocks.append(turn.questionText.isEmpty ? turn.answer : turn.questionText + "\n" + turn.answer)
         }
         return blocks.joined(separator: "\n\n")
+    }
+
+    /// The turns that make it into the text, in order: answered, not the safety line, not blank.
+    static func written(_ turns: [JournalTurn]) -> [JournalTurn] {
+        turns
+            .sorted { ($0.dayKey, $0.index) < ($1.dayKey, $1.index) }
+            .filter { $0.outcome == .answered && $0.kind != .safety
+                && !$0.answer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
     }
 }
