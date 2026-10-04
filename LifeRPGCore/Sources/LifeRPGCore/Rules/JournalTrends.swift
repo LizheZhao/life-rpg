@@ -58,3 +58,119 @@ public enum JournalTrends {
         return range(of: period, containing: before, in: timeZone)
     }
 }
+
+extension JournalTrends {
+    /// The Trends page's "when and how much": the writing days of one period, plus the all-time
+    /// facts (streak, nights written) that a period filter would get wrong.
+    public struct Writing {
+        /// A week of entries before any pattern means anything. Short entries count.
+        public static let unlockNights = 7
+
+        public struct DayWords: Equatable, Sendable {
+            public let dayKey: String
+            public let words: Int
+            /// 0 for a day with no writing, 1 to 3 for the rest, 3 the longest third
+            /// (`Year.level(forWords:among:)`), for both the bars and the heat grid.
+            public let level: Int
+        }
+
+        private let all: [JournalDay]
+        private let range: DayRange
+        private let timeZone: TimeZone
+
+        /// `days` may be the whole history: the period is cut here.
+        public init(days: [JournalDay], range: DayRange, timeZone: TimeZone = .current) {
+            self.all = days
+            self.range = range
+            self.timeZone = timeZone
+        }
+
+        private var inRange: [JournalDay] { all.filter { range.contains($0.dayKey) } }
+
+        public var entries: Int { inRange.count }
+
+        public var totalWords: Int { inRange.reduce(0) { $0 + $1.wordCount } }
+
+        /// Over written days, rounded to the nearest word. 0 with none.
+        public var averageWords: Int {
+            let n = entries
+            return n == 0 ? 0 : (totalWords + n / 2) / n
+        }
+
+        /// Every day of the period in order, 0 words for a day with none.
+        public var wordsByDay: [DayWords] {
+            let words = Dictionary(inRange.map { ($0.dayKey, $0.wordCount) }, uniquingKeysWith: +)
+            let written = Array(words.values)
+            return range.days(in: timeZone).map { key in
+                let count = words[key] ?? 0
+                return DayWords(dayKey: key, words: count, level: Year.level(forWords: count, among: written))
+            }
+        }
+
+        /// The darkest bars: the longest third of the written days, ties included, at least one.
+        public var longestDayKeys: Set<String> {
+            Set(wordsByDay.filter { $0.level == 3 }.map(\.dayKey))
+        }
+
+        /// Consecutive written days ending today, or ending yesterday while today is still unwritten,
+        /// so a streak is not lost before the evening.
+        public func writingStreak(asOf today: String) -> Int {
+            let written = Set(all.map(\.dayKey))
+            var cursor = today
+            if !written.contains(cursor) {
+                guard let yesterday = DayKey.adding(-1, to: today, in: timeZone) else { return 0 }
+                cursor = yesterday
+            }
+            var streak = 0
+            while written.contains(cursor), let before = DayKey.adding(-1, to: cursor, in: timeZone) {
+                streak += 1
+                cursor = before
+            }
+            return streak
+        }
+
+        /// The hour (0-23) the period's entries were usually written, by `JournalHabits`' rule.
+        public var usualHour: Int? {
+            JournalHabits.typicalHour(of: inRange.map(\.writtenAt), in: timeZone)
+        }
+
+        /// Over all time, not the period.
+        public var nightsWritten: Int { Set(all.map(\.dayKey)).count }
+
+        public var isUnlocked: Bool { nightsWritten >= Self.unlockNights }
+    }
+
+    public enum Year {
+        /// Entries per month of `year`, January first.
+        public static func monthCounts(of days: [JournalDay], year: Int) -> [Int] {
+            var counts = Array(repeating: 0, count: 12)
+            for key in Set(days.map(\.dayKey)) {
+                guard let month = MonthKey(dayKey: key), month.year == year else { continue }
+                counts[month.month - 1] += 1
+            }
+            return counts
+        }
+
+        /// The shade of a month circle: 0 none, 1 for 1 to 9 entries, 2 for 10 to 21, 3 for 22 or more.
+        public static func level(for count: Int) -> Int {
+            switch count {
+            case ..<1: 0
+            case 1..<10: 1
+            case 10..<22: 2
+            default: 3
+            }
+        }
+
+        /// 0 for no words. Otherwise 1 to 3 by thirds of the written days' words, the longest third
+        /// darkest and a tie with the cutoff going to the darker shade. A third of the days rounds
+        /// down but never below one, so any writing at all has a darkest day.
+        public static func level(forWords words: Int, among written: [Int]) -> Int {
+            guard words > 0 else { return 0 }
+            guard !written.isEmpty else { return 1 }
+            let descending = written.sorted(by: >)
+            func cutoff(_ share: Int) -> Int { descending[max(1, written.count * share / 3) - 1] }
+            if words >= cutoff(1) { return 3 }
+            return words >= cutoff(2) ? 2 : 1
+        }
+    }
+}
