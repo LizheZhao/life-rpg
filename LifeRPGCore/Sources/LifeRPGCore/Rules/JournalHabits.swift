@@ -69,13 +69,7 @@ public struct JournalHabits: Equatable, Sendable {
             .sorted()
         let median = lengths.isEmpty ? nil : (lengths[(lengths.count - 1) / 2] + lengths[lengths.count / 2]) / 2
 
-        var hour: Int?
-        if history.count >= minimumTurnsForHour {
-            let calendar = LifeCalendar.gregorian(timeZone)
-            let start = LifeCalendar.dayStartHour
-            let shifted = history.map { (calendar.component(.hour, from: $0.answeredAt) - start + 24) % 24 }.sorted()
-            hour = (shifted[(shifted.count - 1) / 2] + start) % 24
-        }
+        let hour = typicalHour(of: history.map(\.answeredAt), in: timeZone)
 
         var weights: [JournalPromptKind: Double] = [:]
         for (kind, rows) in Dictionary(grouping: history, by: \.kind) {
@@ -109,6 +103,16 @@ public struct JournalHabits: Equatable, Sendable {
                              usesEmoji: history.contains { $0.answer.contains(where: Self.isEmoji) },
                              weights: weights, lastUsedDay: lastUsed, recentQuestionTexts: recent,
                              starterLastUsedDay: starters)
+    }
+
+    /// The median hour (0-23) of `times`, counted from the day boundary, or nil with fewer than
+    /// `minimumTurnsForHour`. The Trends page's "usual hour" reads the same rule over days.
+    static func typicalHour(of times: [Date], in timeZone: TimeZone) -> Int? {
+        guard times.count >= minimumTurnsForHour else { return nil }
+        let calendar = LifeCalendar.gregorian(timeZone)
+        let start = LifeCalendar.dayStartHour
+        let shifted = times.map { (calendar.component(.hour, from: $0) - start + 24) % 24 }.sorted()
+        return (shifted[(shifted.count - 1) / 2] + start) % 24
     }
 
     private static func isEmoji(_ character: Character) -> Bool {
