@@ -16,6 +16,8 @@ struct DebugView: View {
     @AppStorage("debugDayOffset") private var dayOffset = 0
     /// "evening" or "daytime" overrides the clock Today reads for the journal card; "" is the real one.
     @AppStorage("debugJournalTiming") private var journalTiming = ""
+    /// What the last press of the hand-off button returned: "" is a text that came back empty.
+    @State private var handOffText: String?
     #else
     /// Time travel is simulator-only; on a device the day is today (as in `RootView`).
     private let dayOffset = 0
@@ -126,6 +128,17 @@ struct DebugView: View {
                 section("Journal timing (simulator only)", footer: "Today shows the journal's evening card from 18:00 and a book icon with a dot in the daytime. This forces one of them so both can be seen at any hour.") {
                     PillSegmentedControl(options: [("Real clock", ""), ("Evening", "evening"), ("Daytime", "daytime")],
                                          selection: $journalTiming, accessibilityLabel: "Journal timing")
+                }
+                section("Journal hand-off (simulator only)", footer: "The Shortcut can not be run here. This calls what Get Journal Text to Send calls, at the shifted clock above, so a press with the day written one day behind returns that day and marks it sent; a second press returns nothing.") {
+                    Button { runHandOff() } label: {
+                        Label("Run Get Journal Text to Send now", systemImage: "paperplane")
+                    }
+                    .buttonStyle(PillButtonStyle())
+                    if let handOffText {
+                        Text(handOffText.isEmpty ? "(empty text)" : handOffText)
+                            .font(Self.mono).foregroundStyle(LR.Color.ink)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
                 #endif
 
@@ -327,6 +340,14 @@ struct DebugView: View {
             resetResult = "Reset failed: \(error)"
         }
     }
+
+    #if targetEnvironment(simulator)
+    private func runHandOff() {
+        let now = LifeCalendar.gregorian().date(byAdding: .day, value: dayOffset, to: Date()) ?? Date()
+        do { handOffText = try JournalHandOff.textToSend(now: now, in: modelContext) }
+        catch { handOffText = "Failed: \(error)" }
+    }
+    #endif
 
     private func reopenToday() {
         do {
