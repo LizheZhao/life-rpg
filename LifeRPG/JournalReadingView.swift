@@ -208,6 +208,8 @@ struct JournalReadingPage: View {
                 .padding(.bottom, 24)
             }
             .scrollDismissesKeyboard(.interactively)
+            // The cards' shadows reach past the text column; the scroll view would cut them square.
+            .scrollClipDisabled()
         }
     }
 
