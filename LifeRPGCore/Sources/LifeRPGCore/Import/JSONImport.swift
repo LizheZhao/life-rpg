@@ -221,6 +221,7 @@ public enum JSONImport {
             row.subjectID = t.subjectID; row.subjectText = t.subjectText; row.answer = t.answer
             row.outcomeRaw = t.outcome; row.sourceRaw = t.source; row.languageRaw = t.language
             row.askedAt = t.askedAt; row.answeredAt = t.answeredAt
+            row.writingSeconds = t.writingSeconds ?? 0
             context.insert(row)
         }
 

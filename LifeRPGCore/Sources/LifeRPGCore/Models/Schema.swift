@@ -22,8 +22,11 @@ import SwiftData
 /// 5 with the user's rows in a block of their own, and import still reads v3 and v4. V6 added
 /// `JournalTurn`, a whole new model, which lightweight migration also infers; the export goes to
 /// 6 with a `journal` block, and import still reads v3 to v5, whose files simply have no journal.
-public enum SchemaV6: VersionedSchema {
-    public static var versionIdentifier = Schema.Version(6, 0, 0)
+/// V7 added `JournalTurn.writingSeconds`, defaulted to 0, so existing turns read as no time
+/// recorded; the export goes to 7 with the field on each turn, and import still reads v3 to v6,
+/// where a turn without it decodes as 0.
+public enum SchemaV7: VersionedSchema {
+    public static var versionIdentifier = Schema.Version(7, 0, 0)
 
     public static var models: [any PersistentModel.Type] = [
         QuestTemplate.self,
@@ -40,13 +43,13 @@ public enum SchemaV6: VersionedSchema {
 }
 
 public enum LifeRPGMigrationPlan: SchemaMigrationPlan {
-    public static var schemas: [any VersionedSchema.Type] = [SchemaV6.self]
+    public static var schemas: [any VersionedSchema.Type] = [SchemaV7.self]
     public static var stages: [MigrationStage] = []
 }
 
 public enum LifeRPGSchema {
-    public static let current = Schema(versionedSchema: SchemaV6.self)
+    public static let current = Schema(versionedSchema: SchemaV7.self)
 
     /// For `#Preview` and tests that just need the model list.
-    public static let models = SchemaV6.models
+    public static let models = SchemaV7.models
 }

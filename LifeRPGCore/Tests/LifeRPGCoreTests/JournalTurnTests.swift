@@ -34,6 +34,12 @@ struct JournalTurnTests {
         #expect(try JournalService.turns(on: "2026-09-19", in: ctx).map(\.index) == [0])
     }
 
+    @Test func aNewRowHasWrittenNoTime() throws {
+        let ctx = try Fixtures.context()
+        let row = try turn(ctx, friday, .opening, answer: "x")
+        #expect(row.writingSeconds == 0)
+    }
+
     @Test func aRowReadsBackWithEveryFieldItWasWrittenWith() throws {
         let ctx = try Fixtures.context()
         let subject = JournalSubject(kind: .routine, id: UUID(), text: "Take out the trash")
@@ -56,7 +62,7 @@ struct JournalTurnTests {
     private func sourceWithJournal() throws -> (ModelContext, JournalSubject) {
         let ctx = try Fixtures.context()
         let subject = JournalSubject(kind: .quest, id: UUID(), text: "Take a photo of the sky")
-        try turn(ctx, friday, .opening, answer: "Quiet day, I liked the walk home.")
+        try turn(ctx, friday, .opening, answer: "Quiet day, I liked the walk home.").writingSeconds = 754
         try turn(ctx, friday, .choice, answer: "The one with the crane in it.", subject: subject)
         try turn(ctx, friday, .closing, answer: "", outcome: .skipped)
         try ctx.save()
@@ -67,8 +73,9 @@ struct JournalTurnTests {
         let (ctx, subject) = try sourceWithJournal()
         let snapshot = try JSONExport.snapshot(ctx, now: Fixtures.date(friday))
         let turns = try #require(snapshot.journal?.turns)
-        #expect(snapshot.schemaVersion == 6)
+        #expect(snapshot.schemaVersion == 7)
         #expect(turns.map(\.index) == [0, 1, 2])
+        #expect(turns.map(\.writingSeconds) == [754, 0, 0])
         #expect(turns[1].kind == "choice")
         #expect(turns[1].subjectKind == "quest")
         #expect(turns[1].subjectID == subject.id)
@@ -96,6 +103,7 @@ struct JournalTurnTests {
         #expect(rows[1].subjectKind == .quest)
         #expect(rows.allSatisfy { $0.dayKey == friday })
         #expect(rows[0].answeredAt == Fixtures.date(friday, hour: 22))
+        #expect(rows.map(\.writingSeconds) == [754, 0, 0])
         #expect(try StoreAudit.issues(target).isEmpty)
     }
 
@@ -110,6 +118,26 @@ struct JournalTurnTests {
         #expect(String(decoding: data, as: UTF8.self).contains(#""journal":{"turns":[]}"#))
         try JSONImport.apply(try JSONImport.plan(data, against: target), to: target)
         #expect(try target.fetchCount(FetchDescriptor<JournalTurn>()) == 0)
+    }
+
+    /// A schema 6 file has turns but no `writingSeconds` on them; they restore reading 0.
+    @Test func aVersion6ExportStillImportsWithNoWritingTime() throws {
+        let (source, _) = try sourceWithJournal()
+        var json = try #require(try JSONSerialization.jsonObject(with: try JSONExport.data(source)) as? [String: Any])
+        json["schemaVersion"] = 6
+        var journal = try #require(json["journal"] as? [String: Any])
+        var turns = try #require(journal["turns"] as? [[String: Any]])
+        for i in turns.indices { turns[i].removeValue(forKey: "writingSeconds") }
+        journal["turns"] = turns
+        json["journal"] = journal
+        let data = try JSONSerialization.data(withJSONObject: json)
+        #expect(!String(decoding: data, as: UTF8.self).contains("writingSeconds"))
+
+        let target = try Fixtures.context()
+        try JSONImport.apply(try JSONImport.plan(data, against: target), to: target)
+        let rows = try target.fetch(FetchDescriptor<JournalTurn>()).sorted { $0.index < $1.index }
+        #expect(rows.map(\.answer) == ["Quiet day, I liked the walk home.", "The one with the crane in it.", ""])
+        #expect(rows.map(\.writingSeconds) == [0, 0, 0])
     }
 
     /// A schema 5 file has no journal block. It restores, and the turns written since stay.

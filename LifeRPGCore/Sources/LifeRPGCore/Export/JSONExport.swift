@@ -17,8 +17,8 @@ import SwiftData
 public enum JSONExport {
     /// Bumped when the model changes shape, independently of the GitHub tag. Import reads this
     /// and nothing else. 4 added `Occurrence.iconKey`, 5 the user's own library rows
-    /// (`userLibrary`), 6 the journal; an older file simply lacks them.
-    public static let schemaVersion = 6
+    /// (`userLibrary`), 6 the journal, 7 `Turn.writingSeconds`; an older file simply lacks them.
+    public static let schemaVersion = 7
 
     /// The oldest export import still reads. Anything between this and `schemaVersion` decodes into
     /// the current shape, the fields added since being optional.
@@ -260,6 +260,8 @@ public enum JSONExport {
         public var language: String
         public var askedAt: Date
         public var answeredAt: Date
+        /// Nil in a file written before schema 7, which restores as 0.
+        public var writingSeconds: Int?
     }
 
     /// The ids of every library row the history tables point at — what `library` has to be able to
@@ -398,7 +400,7 @@ public enum JSONExport {
                          promptID: $0.promptID, question: $0.questionText, subjectKind: $0.subjectKindRaw,
                          subjectID: $0.subjectID, subjectText: $0.subjectText, answer: $0.answer,
                          outcome: $0.outcomeRaw, source: $0.sourceRaw, language: $0.languageRaw,
-                         askedAt: $0.askedAt, answeredAt: $0.answeredAt)
+                         askedAt: $0.askedAt, answeredAt: $0.answeredAt, writingSeconds: $0.writingSeconds)
                 }))
     }
 

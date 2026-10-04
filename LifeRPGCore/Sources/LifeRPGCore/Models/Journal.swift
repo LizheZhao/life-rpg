@@ -69,6 +69,13 @@ public struct JournalSubject: Equatable, Sendable {
     public var languageRaw: String = JournalLanguage.en.rawValue
     public var askedAt: Date = Date()
     public var answeredAt: Date = Date()
+    /// Seconds spent actively writing this turn's words (`JournalWritingClock`), the running total
+    /// of the free-writing page. Only free writing sets it; a questioned turn stays 0.
+    ///
+    /// Impact on existing data: a new attribute with a default value, which lightweight migration
+    /// infers (`SchemaV7`), so every stored turn reads 0 ("no time recorded") and nothing is
+    /// rewritten. CloudKit-ready: defaulted, not unique.
+    public var writingSeconds: Int = 0
 
     public init() {}
 
