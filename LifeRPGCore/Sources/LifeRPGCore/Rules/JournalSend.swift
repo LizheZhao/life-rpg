@@ -3,6 +3,26 @@ import Foundation
 /// When to run the user's Shortcut. The Shortcut can only create an Apple Journal entry, never
 /// change one, so running it again for a text that is already there would duplicate it.
 public enum JournalSend {
+    /// The app day before the current one. At 04:59 on Oct 5 the app day is still Oct 4, so the
+    /// finished day is Oct 3; at 05:00 the app day is Oct 5 and the finished day is Oct 4. Today's
+    /// own page is not the answer: at the very moment the automation runs, today is already empty.
+    public static func finishedDayKey(now: Date, timeZone: TimeZone) -> String {
+        let today = now.dayKey(in: timeZone)
+        return DayKey.adding(-1, to: today, in: timeZone) ?? today
+    }
+
+    /// The composed text of `turns` (one day's), or the empty string when there is nothing to
+    /// send: nothing written, or the very text that was last sent. Empty is what lets the
+    /// automation run twice without a second entry. A text edited after it was sent comes back
+    /// again here; this rule only says whether the text is new, and the app decides whether to ask.
+    public static func textToSend(turns: [JournalTurn], language: JournalLanguage,
+                                  lastSentFingerprint: String?) -> String {
+        let text = JournalComposer.text(turns: turns, language: language)
+        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              fingerprint(of: text) != lastSentFingerprint else { return "" }
+        return text
+    }
+
     /// False with no shortcut set, with nothing written, and for the very text that was last sent.
     ///
     /// A text that changed since it was sent is true: this is only "is there something new to
