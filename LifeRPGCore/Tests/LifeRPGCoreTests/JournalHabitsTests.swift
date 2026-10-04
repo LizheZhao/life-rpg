@@ -90,6 +90,54 @@ struct JournalHabitsTests {
         #expect(habits == .none)
     }
 
+    // MARK: recency
+
+    private func asked(_ promptID: String, _ text: String = "question", day: String, index: Int = 0,
+                       kind: JournalPromptKind = .opening) -> JournalTurn {
+        let t = F.turn(kind, index: index, on: day)
+        t.promptID = promptID
+        t.questionText = text
+        return t
+    }
+
+    @Test func aRowIsLastUsedOnTheNewestDayItWasAsked() {
+        let habits = derive([
+            asked("open.keep", day: "2026-09-10"),
+            asked("open.keep", day: "2026-09-15"),
+            asked("open.feel", day: "2026-09-12"),
+            asked("heavy.body", day: today, kind: .heavy),         // today is not history
+            asked("open.scale", day: "2026-07-01"),                // outside the 60 days
+        ])
+        #expect(habits.lastUsedDay == ["open.keep": "2026-09-15", "open.feel": "2026-09-12"])
+    }
+
+    @Test func aModelWordedTurnLeavesNoRowMarkedAsUsed() {
+        let model = asked("", "What stayed with you this evening?", day: "2026-09-16")
+        model.source = .model
+        let habits = derive([model])
+        #expect(habits.lastUsedDay == [:])
+        #expect(habits.recentQuestionTexts == ["What stayed with you this evening?"])
+    }
+
+    @Test func recentQuestionsAreTheLastFourteenDaysNewestFirstWithoutBlanks() {
+        let habits = derive([
+            asked("a", "oldest in window", day: "2026-09-04"),     // 14 days back: in
+            asked("b", "too old", day: "2026-09-03"),              // 15 days back: out
+            asked("c", "yesterday first", day: "2026-09-17", index: 0),
+            asked("d", "yesterday second", day: "2026-09-17", index: 1),
+            asked("e", "", day: "2026-09-17", index: 2),           // free writing has no question
+            asked("f", "a week ago", day: "2026-09-11"),
+            asked("g", "today", day: today),
+        ])
+        #expect(habits.recentQuestionTexts == ["yesterday second", "yesterday first", "a week ago", "oldest in window"])
+        #expect(JournalHabits.recentQuestionDays == 14)
+    }
+
+    @Test func aSafetyLineIsNeverRecentOrUsed() {
+        let line = asked("safety", "That sounds heavy.", day: "2026-09-17", kind: .safety)
+        #expect(derive([line]) == .none)
+    }
+
     // MARK: the style hint
 
     @Test func theHintFollowsTheMedianLengthAndRegister() {

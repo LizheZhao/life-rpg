@@ -28,6 +28,22 @@ struct JournalPoolTests {
         #expect(Set(JournalPool.all.map(\.id)).count == JournalPool.all.count)
     }
 
+    /// The shape each row borrows, from the "Question shapes" paragraph of the draft: scaling and
+    /// open questions, self-compassion, savoring, values, exceptions, reflective listening.
+    @Test func everyRowCarriesTheShapeItBorrows() {
+        let expected: [String: JournalApproach] = [
+            "open.scale": .scale, "open.feel": .open, "open.keep": .savoring,
+            "heavy.done": .selfCompassion, "heavy.weight": .open, "heavy.friend": .selfCompassion,
+            "heavy.body": .selfCompassion,
+            "good.moment": .savoring, "good.repeat": .values, "good.who": .savoring,
+            "choice.photo": .savoring, "choice.item": .values, "choice.notice": .savoring,
+            "skip.block": .open, "skip.exception": .exceptions, "skip.small": .exceptions,
+            "follow.stand": .reflection, "follow.more": .reflection, "follow.need": .reflection,
+            "close.more": .open, "close.carry": .values, "safety": .open,
+        ]
+        #expect(Dictionary(uniqueKeysWithValues: JournalPool.all.map { ($0.id, $0.approach) }) == expected)
+    }
+
     @Test func bothLanguagesAskForTheSamePlaceholders() {
         for row in JournalPool.all {
             #expect(JournalPool.placeholders(in: row.en) == JournalPool.placeholders(in: row.zh), "\(row.id)")

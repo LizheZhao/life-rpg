@@ -15,6 +15,9 @@ public struct JournalHabits: Equatable, Sendable {
     /// No kind is ever weighted below this, so a run of skipped questions quietens a kind
     /// without making it disappear.
     public static let weightFloor = 0.25
+    /// How far back question texts are kept to avoid repeating: two weeks reads as a fresh
+    /// question, a month back is forgotten.
+    public static let recentQuestionDays = 14
 
     /// Median length, in characters, of the answers that say something. Nil with none.
     public let medianAnswerLength: Int?
@@ -24,6 +27,23 @@ public struct JournalHabits: Equatable, Sendable {
     public let usesEmoji: Bool
     /// Smoothed answered-rate per kind that has history; `weight(for:)` fills in the rest.
     public let weights: [JournalPromptKind: Double]
+    /// Pool row id to the dayKey it was last asked on. A row the model reworded is not in it
+    /// (its turn has no `promptID`), so only rows the user actually saw count as used.
+    public let lastUsedDay: [String: String]
+    /// What was asked in the last `recentQuestionDays` days, newest first, blanks left out. Model
+    /// wording is included: the point is that nothing repeats, whoever wrote it.
+    public let recentQuestionTexts: [String]
+
+    public init(medianAnswerLength: Int?, typicalHour: Int?, usesEmoji: Bool,
+                weights: [JournalPromptKind: Double],
+                lastUsedDay: [String: String] = [:], recentQuestionTexts: [String] = []) {
+        self.medianAnswerLength = medianAnswerLength
+        self.typicalHour = typicalHour
+        self.usesEmoji = usesEmoji
+        self.weights = weights
+        self.lastUsedDay = lastUsedDay
+        self.recentQuestionTexts = recentQuestionTexts
+    }
 
     public static let none = JournalHabits(medianAnswerLength: nil, typicalHour: nil, usesEmoji: false, weights: [:])
 
@@ -60,9 +80,19 @@ public struct JournalHabits: Equatable, Sendable {
             weights[kind] = max(weightFloor, Double(answered + 1) / Double(answered + skipped + 2 * misfit + 1))
         }
 
+        var lastUsed: [String: String] = [:]
+        for turn in history where !turn.promptID.isEmpty {
+            lastUsed[turn.promptID] = max(lastUsed[turn.promptID] ?? "", turn.dayKey)
+        }
+        let recentSince = DayKey.adding(-recentQuestionDays, to: dayKey, in: timeZone) ?? dayKey
+        let recent = history
+            .filter { $0.dayKey >= recentSince && !$0.questionText.isEmpty }
+            .sorted { ($0.dayKey, $0.index) > ($1.dayKey, $1.index) }
+            .map(\.questionText)
+
         return JournalHabits(medianAnswerLength: median, typicalHour: hour,
                              usesEmoji: history.contains { $0.answer.contains(where: Self.isEmoji) },
-                             weights: weights)
+                             weights: weights, lastUsedDay: lastUsed, recentQuestionTexts: recent)
     }
 
     private static func isEmoji(_ character: Character) -> Bool {
