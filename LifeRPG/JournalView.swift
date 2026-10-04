@@ -11,6 +11,9 @@ struct JournalView: View {
 
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.openURL) private var openURL
+    @Environment(JournalShortcutStatus.self) private var shortcut
+    @AppStorage(JournalShortcutLink.nameKey) private var shortcutName = ""
     @Query private var turns: [JournalTurn]
 
     @State private var phase = Phase.thinking
@@ -70,6 +73,7 @@ struct JournalView: View {
             }
         }
         .task {
+            shortcut.outcome = nil
             wording = JournalWordingProvider.current(language: language)
             await advance()
         }
@@ -189,6 +193,15 @@ struct JournalView: View {
                     }
                     .buttonStyle(PillButtonStyle())
                     Spacer(minLength: 0)
+                    if let url = JournalShortcutLink.runURL(shortcutName: shortcutName) {
+                        Button("Save to Journal") { save(through: url) }
+                            .buttonStyle(InkPillButtonStyle())
+                    }
+                }
+                if let message = shortcut.message {
+                    caption(message)
+                } else if JournalShortcutLink.runURL(shortcutName: shortcutName) == nil {
+                    caption("Name a Shortcut in Settings to save to Journal from here.")
                 }
             }
             Button("Done") { dismiss() }
@@ -233,6 +246,15 @@ struct JournalView: View {
             }
         } catch {
             phase = .failed("\(error)")
+        }
+    }
+
+    /// The text is not sent: the Shortcut asks the app for it (`GetTodaysJournalTextIntent`).
+    private func save(through url: URL) {
+        Haptics.selection()
+        shortcut.outcome = nil
+        openURL(url) { accepted in
+            if !accepted { shortcut.outcome = .failed }
         }
     }
 

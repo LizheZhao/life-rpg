@@ -23,6 +23,7 @@ struct SettingsView: View {
     @Environment(\.modelContext) private var context
     @State private var transfer = DataTransfer()
     @State private var path: [Page] = []
+    @AppStorage(JournalShortcutLink.nameKey) private var shortcutName = ""
 
     var body: some View {
         NavigationStack(path: $path) {
@@ -67,6 +68,25 @@ struct SettingsView: View {
                     }
                 } header: {
                     header("Data")
+                }
+                .listRowBackground(LR.Color.surface)
+
+                Section {
+                    row("Shortcut name", systemImage: "book.closed", tint: .hidden) {
+                        TextField("Shortcut name", text: $shortcutName,
+                                  prompt: Text("e.g. Save Journal").foregroundStyle(LR.Color.inkSecondary))
+                            .lr(.bodyStrong).foregroundStyle(LR.Color.ink)
+                            .multilineTextAlignment(.trailing)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                    }
+                } header: {
+                    header("Journal")
+                } footer: {
+                    Text(Self.journalSteps)
+                        .lr(.caption).foregroundStyle(LR.Color.inkSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .textCase(nil)
                 }
                 .listRowBackground(LR.Color.surface)
 
@@ -124,6 +144,16 @@ struct SettingsView: View {
         .reservingTabBarSpace()
     }
 
+    /// What the user builds once in Shortcuts. Written plainly about what was not tried: neither the
+    /// run from this app nor an unattended automation has been checked on a device.
+    private static let journalSteps = """
+        To save a finished journal into Apple Journal, build one Shortcut and type its name above.
+        1. In Shortcuts, make a new shortcut and name it as above.
+        2. Add the action Get Today's Journal Text, from LifeRPG.
+        3. Add Create Journal Entry and give it that text.
+        "Save to Journal" on the finished journal then runs it. If you want it every night, add a Time of Day Personal Automation that runs the same shortcut. Not verified: whether an automation runs on its own while the phone is locked, or that these steps work as written on your device. Leave the name empty to only use Share.
+        """
+
     private var version: String { Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?" }
     private var build: String { Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "?" }
     private var about: String { "LifeRPG \(version) (\(build))" }
@@ -152,6 +182,23 @@ struct SettingsView: View {
         }
         .frame(minHeight: 44)
         .contentShape(Rectangle())
+    }
+
+    private func row<Trailing: View>(_ title: LocalizedStringKey, systemImage: String, tint: QuestTint,
+                                     @ViewBuilder trailing: () -> Trailing) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: systemImage)
+                .font(.system(size: 15, weight: .medium))
+                .foregroundStyle(LR.Color.iconNeutral)
+                .frame(width: 32, height: 32)
+                .background(Circle().fill(LR.Color.sectionCircle(tint)))
+                .accessibilityHidden(true)
+            Text(title)
+                .lr(.bodyStrong)
+                .foregroundStyle(LR.Color.ink)
+            trailing()
+        }
+        .frame(minHeight: 44)
     }
 
     private func header(_ title: LocalizedStringKey) -> some View {

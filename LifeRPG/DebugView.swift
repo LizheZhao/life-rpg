@@ -49,6 +49,10 @@ struct DebugView: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 bodySection
+                section("Journal model") {
+                    Text(JournalWordingProvider.status()).font(Self.mono).foregroundStyle(LR.Color.ink)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
                 section("Tables") {
                     row("QuestTemplate", questTemplates.count,
                         detail: "\(questTemplates.filter(\.isActive).count) active")
