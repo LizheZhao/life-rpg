@@ -18,6 +18,7 @@ struct DebugView: View {
     @AppStorage("debugJournalTiming") private var journalTiming = ""
     /// What the last press of the hand-off button returned: "" is a text that came back empty.
     @State private var handOffText: String?
+    @State private var trendsSeedText: String?
     #else
     /// Time travel is simulator-only; on a device the day is today (as in `RootView`).
     private let dayOffset = 0
@@ -128,6 +129,13 @@ struct DebugView: View {
                 section("Journal timing (simulator only)", footer: "Today shows the journal's evening card from 18:00 and a book icon with a dot in the daytime. This forces one of them so both can be seen at any hour.") {
                     PillSegmentedControl(options: [("Real clock", ""), ("Evening", "evening"), ("Daytime", "daytime")],
                                          selection: $journalTiming, accessibilityLabel: "Journal timing")
+                }
+                section("Trends fixture (simulator only)", footer: "Writes journal entries for the 60 days before the app's day, with a day setting and some done quests and routines to go with them, so the Trends page has something to show. None of it came from using the app; pressing it again rewrites the same entries.") {
+                    Button { seedTrends() } label: {
+                        Label("Seed 60 journal days", systemImage: "text.badge.plus")
+                    }
+                    .buttonStyle(PillButtonStyle())
+                    if let trendsSeedText { note(trendsSeedText) }
                 }
                 section("Journal hand-off (simulator only)", footer: "The Shortcut can not be run here. This calls what Get Journal Text to Send calls, at the shifted clock above, so a press with the day written one day behind returns that day and marks it sent; a second press returns nothing.") {
                     Button { runHandOff() } label: {
@@ -342,6 +350,16 @@ struct DebugView: View {
     }
 
     #if targetEnvironment(simulator)
+    private func seedTrends() {
+        do {
+            let seeded = try TrendsSeed.seed(days: 60, endingBefore: today, in: modelContext)
+            trendsSeedText = "Wrote \(seeded.entries) entries, \(seeded.contexts) day settings, "
+                + "\(seeded.quests) quests and \(seeded.routines) routines before \(today)."
+        } catch {
+            trendsSeedText = "Seed failed: \(error)"
+        }
+    }
+
     private func runHandOff() {
         let now = LifeCalendar.gregorian().date(byAdding: .day, value: dayOffset, to: Date()) ?? Date()
         do { handOffText = try JournalHandOff.textToSend(now: now, in: modelContext) }
