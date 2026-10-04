@@ -135,19 +135,17 @@ struct JournalPlannerTests {
         #expect(q.promptID == "good.who")
     }
 
-    @Test func aChoiceQuestionUsesTheDrawnValueOrARowThatNeedsNone() {
-        func question(_ text: String, variant: String?, language: JournalLanguage = .en) -> JournalQuestion? {
+    @Test func aChoiceQuestionNeverClaimsTheUserPickedADrawnValue() {
+        func question(_ text: String, variant: String?) -> JournalQuestion? {
             let q = F.quest(text, variant: variant)
             let signals = F.signals(quests: [q])
             guard case .ask(let asked) = JournalPlanner.next(signals: signals, habits: .none,
-                                                             today: [F.turn(.opening, index: 0)], language: language)
+                                                             today: [F.turn(.opening, index: 0)], language: .en)
             else { return nil }
             return asked
         }
-        #expect(question("Photograph a set of things in a given color", variant: "Red")?.text
-                == "You picked Red. What made it the one?")
-        #expect(question("Photograph a set of things in a given color", variant: "Red", language: .zhHans)?.text
-                == "你选了Red。是什么让它成为那个？")
+        // The app draws "Red"; the user never picked it, so the row that says "You picked" stays unused.
+        #expect(question("Photograph a set of things in a given color", variant: "Red")?.promptID == "choice.photo")
         #expect(question("Take a photo of the sky", variant: nil)?.promptID == "choice.photo")
         #expect(question("Take a photo of the sky", variant: "")?.promptID == "choice.photo")
         #expect(question("Notice three green things", variant: nil)?.promptID == "choice.notice")

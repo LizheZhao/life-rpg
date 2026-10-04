@@ -66,10 +66,9 @@ public enum JournalPlanner {
              score: { $0.choiceItem == nil ? nil : 2 },
              candidates: { signals in
                  guard let item = signals.choiceItem else { return [] }
-                 // With a drawn value the row that names it; without one, a row that needs none.
-                 let variant = item.variant.flatMap { $0.isEmpty ? nil : $0 }
-                 let id = variant == nil ? (item.isPhoto ? "choice.photo" : "choice.notice") : "choice.item"
-                 return [Candidate(promptID: id, fills: variant.map { [.item: $0] } ?? [:], subject: item.subject)]
+                 // A variant is drawn by the app, not picked by the user, so no row may say "you picked" it.
+                 let id = item.isPhoto ? "choice.photo" : "choice.notice"
+                 return [Candidate(promptID: id, subject: item.subject)]
              }),
     ]
 
