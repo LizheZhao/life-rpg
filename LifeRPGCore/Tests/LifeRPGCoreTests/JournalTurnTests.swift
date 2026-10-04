@@ -235,6 +235,23 @@ struct JournalEditTests {
         #expect(turn.answer == "first words")
     }
 
+    @Test func anEditedAnswerSurvivesAnExportAndARestore() throws {
+        let source = try Fixtures.context()
+        let first = try answered(source, answer: "before")
+        let second = try answered(source, kind: .closing, answer: "also before")
+        try JournalService.edit(first, answer: "after the edit")
+        try source.save()
+
+        let target = try Fixtures.context()
+        try JSONImport.apply(try JSONImport.plan(try JSONExport.data(source), against: target), to: target)
+
+        let rows = try JournalService.turns(on: friday, in: target)
+        #expect(rows.map(\.answer) == ["after the edit", "also before"])
+        #expect(rows[0].id == first.id && rows[1].id == second.id)
+        #expect(rows[0].answeredAt == Fixtures.date(friday, hour: 22))
+        #expect(try StoreAudit.issues(target).isEmpty)
+    }
+
     @Test func anEditedAnswerIsWhatTheStoreReadsBack() throws {
         let ctx = try Fixtures.context()
         let turn = try answered(ctx)
