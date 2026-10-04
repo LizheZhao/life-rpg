@@ -13,17 +13,22 @@ public struct DayMarks: Equatable, Sendable {
     public var routinesCleared: Bool = false
     /// Star: the hidden quest was completed.
     public var hiddenDone: Bool = false
+    /// The journal mark under the day: 1 to 3, darker for a longer entry (`JournalMarks.levels`),
+    /// 0 when nothing was written.
+    public var journalLevel: Int = 0
 
-    public init(randomTiers: [Difficulty] = [], routinesCleared: Bool = false, hiddenDone: Bool = false) {
+    public init(randomTiers: [Difficulty] = [], routinesCleared: Bool = false, hiddenDone: Bool = false,
+                journalLevel: Int = 0) {
         self.randomTiers = randomTiers
         self.routinesCleared = routinesCleared
         self.hiddenDone = hiddenDone
+        self.journalLevel = journalLevel
     }
 
     /// Random quests shown as dots, 0…`CalendarMarks.maxRandomDots`.
     public var randomsDone: Int { randomTiers.count }
 
-    public var isEmpty: Bool { randomTiers.isEmpty && !routinesCleared && !hiddenDone }
+    public var isEmpty: Bool { randomTiers.isEmpty && !routinesCleared && !hiddenDone && journalLevel == 0 }
 }
 
 /// The month page's marks. The rules live only here; the page hands in the rows its `@Query`
@@ -31,9 +36,15 @@ public struct DayMarks: Equatable, Sendable {
 public enum CalendarMarks {
     public static let maxRandomDots = 3
 
-    /// Marks per `dayKey`. Days with nothing to mark are left out.
-    public static func marks(quests: [DailyQuest], occurrences: [RoutineOccurrence]) -> [String: DayMarks] {
+    /// Marks per `dayKey`. Days with nothing to mark are left out. `journalLevels` is
+    /// `JournalMarks.levels`, passed in because the journal is its own table: a day with only a
+    /// journal mark still gets an entry.
+    public static func marks(quests: [DailyQuest], occurrences: [RoutineOccurrence],
+                             journalLevels: [String: Int] = [:]) -> [String: DayMarks] {
         var out: [String: DayMarks] = [:]
+        for (dayKey, level) in journalLevels where level > 0 {
+            out[dayKey, default: DayMarks()].journalLevel = level
+        }
         var tiers: [String: [Difficulty]] = [:]
 
         for q in quests where q.completedAt != nil && !q.replaced && q.slot != .epic {
