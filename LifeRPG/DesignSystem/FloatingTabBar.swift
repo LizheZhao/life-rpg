@@ -2,7 +2,7 @@ import SwiftUI
 import UIKit
 
 enum RootTab: CaseIterable, Identifiable {
-    case today, calendar, rewards, settings
+    case today, calendar, trends, rewards, settings
 
     var id: Self { self }
 
@@ -10,15 +10,18 @@ enum RootTab: CaseIterable, Identifiable {
         switch self {
         case .today: "Today"
         case .calendar: "Calendar"
+        case .trends: "Trends"
         case .rewards: "Rewards"
         case .settings: "Settings"
         }
     }
 
-    var symbol: String {
+    /// Nil for Trends, whose four-bar glyph is drawn (`BarGlyph`): no SF Symbol is four upright bars.
+    var symbol: String? {
         switch self {
         case .today: "checklist"
         case .calendar: "calendar"
+        case .trends: nil
         case .rewards: "gift"
         case .settings: "gearshape"
         }
@@ -82,8 +85,7 @@ struct FloatingTabBar: View {
         return Button {
             select(tab)
         } label: {
-            Image(systemName: tab.symbol)
-                .font(.system(size: 22, weight: .semibold))
+            icon(for: tab)
                 .foregroundStyle(selected ? LR.Color.ink : LR.Color.iconNeutral)
                 .frame(width: Self.buttonSize, height: Self.buttonSize)
                 .background { indicatorCircle(selected: selected) }
@@ -92,6 +94,15 @@ struct FloatingTabBar: View {
         .buttonStyle(.plain)
         .accessibilityLabel(tab.title)
         .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+
+    @ViewBuilder
+    private func icon(for tab: RootTab) -> some View {
+        if let symbol = tab.symbol {
+            Image(systemName: symbol).font(.system(size: 22, weight: .semibold))
+        } else {
+            BarGlyph(lineWidth: 2.4).frame(width: 22, height: 22)
+        }
     }
 
     /// One circle that slides between the buttons; with Reduce Motion each button fades its own
@@ -111,6 +122,26 @@ struct FloatingTabBar: View {
         let animation: Animation = reduceMotion ? .easeInOut(duration: 0.2)
                                                 : .spring(response: 0.35, dampingFraction: 0.8)
         withAnimation(animation) { selection = tab }
+    }
+}
+
+/// Four upright bars of different heights, the Trends mark (the design's bar-chart glyph). Stroked in
+/// the current foreground style, scaled from the design's 24-unit square.
+struct BarGlyph: View {
+    var lineWidth: CGFloat = 1.8
+
+    var body: some View {
+        Canvas { context, size in
+            let unit = min(size.width, size.height) / 24
+            var path = Path()
+            for (x, top) in [(5.0, 12.0), (10.0, 5.0), (15.0, 9.0), (20.0, 14.0)] {
+                path.move(to: CGPoint(x: x * unit, y: 20 * unit))
+                path.addLine(to: CGPoint(x: x * unit, y: top * unit))
+            }
+            context.stroke(path, with: .foreground,
+                           style: StrokeStyle(lineWidth: lineWidth * unit, lineCap: .round))
+        }
+        .accessibilityHidden(true)
     }
 }
 

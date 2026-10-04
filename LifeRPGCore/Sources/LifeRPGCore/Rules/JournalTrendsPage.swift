@@ -140,7 +140,7 @@ extension TrendsPage {
         }
 
         let entries = writing.entries
-        let noun = noun(of: period)
+        let noun = period.noun
         let periodDays = days.filter { range.contains($0.dayKey) }
         let byDay = writing.wordsByDay
 
@@ -212,14 +212,6 @@ extension TrendsPage {
                           previousAnchor: previous, nextAnchor: next, content: .unlocked(unlocked))
     }
 
-    private static func noun(of period: JournalTrends.Period) -> String {
-        switch period {
-        case .week: "week"
-        case .month: "month"
-        case .year: "year"
-        }
-    }
-
     private static func detail(of favorite: JournalTrends.Quests.Favorite) -> String {
         var text = "\(favorite.times) \(favorite.times == 1 ? "time" : "times")"
         if favorite.lightCount > 0 { text += " \u{00B7} light version \(favorite.lightCount)" }
@@ -262,6 +254,17 @@ extension TrendsPage {
             var calendar = Calendar(identifier: .gregorian)
             calendar.locale = locale
             return calendar.shortStandaloneMonthSymbols[index]
+        }
+    }
+}
+
+extension JournalTrends.Period {
+    /// "week", "month" or "year": how the page's titles name the period.
+    public var noun: String {
+        switch self {
+        case .week: "week"
+        case .month: "month"
+        case .year: "year"
         }
     }
 }
