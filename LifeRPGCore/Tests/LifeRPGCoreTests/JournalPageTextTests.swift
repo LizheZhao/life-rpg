@@ -41,6 +41,10 @@ struct JournalPageTextTests {
         #expect(JournalPageText.shortDate(dayKey: "2026-09-30", language: .en, timeZone: tz) == "Sep 30")
     }
 
+    @Test func aDayWithNothingWrittenIsHeadedByItsDate() {
+        #expect(JournalPageText.dateHeading(dayKey: "2026-10-01", language: .en, timeZone: tz) == "Thursday, October 1")
+    }
+
     @Test func aMalformedKeyIsShownAsItIs() {
         #expect(JournalPageText.writingHeading(dayKey: "nope", evening: true, language: .en, timeZone: tz)
                 == "nope · tonight")

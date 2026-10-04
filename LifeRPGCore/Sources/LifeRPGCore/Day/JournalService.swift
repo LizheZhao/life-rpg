@@ -118,6 +118,15 @@ public enum JournalService {
         JournalHistory.days(from: try context.fetch(FetchDescriptor<JournalTurn>()), language: language)
     }
 
+    /// What the reading page says about `dayKey` around the writing (`JournalDayFacts`), from the
+    /// day's rows.
+    public static func facts(on dayKey: String, in context: ModelContext) throws -> JournalDayFacts {
+        JournalDayFacts.of(dayKey: dayKey,
+                           quests: try DayService.quests(on: dayKey, in: context),
+                           occurrences: try context.fetch(FetchDescriptor<RoutineOccurrence>()),
+                           context: try DayService.dailyContext(for: dayKey, in: context))
+    }
+
     /// The phrases above the keyboard of the free-writing page for `dayKey`.
     public static func starters(on dayKey: String, language: JournalLanguage, in context: ModelContext,
                                 timeZone: TimeZone = .current) throws -> [JournalStarter] {

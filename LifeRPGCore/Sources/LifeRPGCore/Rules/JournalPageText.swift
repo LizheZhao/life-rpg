@@ -34,6 +34,11 @@ public enum JournalPageText {
         return "\(dateText(dayKey: day.dayKey, language: language, timeZone: timeZone)) · \(clock.string(from: day.writtenAt))"
     }
 
+    /// The reading page's heading for a day with nothing written (none, or just cleared): the date alone.
+    public static func dateHeading(dayKey: String, language: JournalLanguage, timeZone: TimeZone = .current) -> String {
+        dateText(dayKey: dayKey, language: language, timeZone: timeZone)
+    }
+
     /// The short date of a neighbour button: "Sep 30".
     public static func shortDate(dayKey: String, language: JournalLanguage, timeZone: TimeZone = .current) -> String {
         format(dayKey: dayKey, template: "MMMd", language: language, timeZone: timeZone)
