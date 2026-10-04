@@ -96,6 +96,15 @@ public enum JournalStarters {
         }
     }
 
+    /// The paragraph without the starter it begins with: the starter is the app's text, not the
+    /// user's words, so anything that reads the writing for its content leaves it out.
+    static func strippingStarter(from paragraph: String) -> String {
+        for row in table {
+            for text in [row.en, row.zh] where paragraph.hasPrefix(text) { return String(paragraph.dropFirst(text.count)) }
+        }
+        return paragraph
+    }
+
     /// The starter a paragraph of the user's writing begins with, in either language.
     static func starter(beginning paragraph: String) -> String? {
         table.first { paragraph.hasPrefix($0.en) || paragraph.hasPrefix($0.zh) }?.id
