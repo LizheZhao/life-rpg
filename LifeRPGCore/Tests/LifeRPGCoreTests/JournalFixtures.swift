@@ -85,4 +85,14 @@ enum JournalFixtures {
         t.answeredAt = Fixtures.date(dayKey, hour: hour)
         return t
     }
+
+    /// The free-writing turn: a closing turn with no question and no prompt id.
+    static func freeWriting(_ answer: String, index: Int = 0, on dayKey: String = day, hour: Int = 22,
+                            writingSeconds: Int = 0) -> JournalTurn {
+        let t = turn(.closing, answer, index: index, on: dayKey, hour: hour)
+        t.questionText = ""
+        t.promptID = ""
+        t.writingSeconds = writingSeconds
+        return t
+    }
 }

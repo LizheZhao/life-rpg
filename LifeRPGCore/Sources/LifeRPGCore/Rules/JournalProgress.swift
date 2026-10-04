@@ -8,14 +8,17 @@ public enum JournalProgress: Equatable, Sendable {
     case inProgress(answered: Int)
     case done(answered: Int)
 
-    public static func of(_ turns: [JournalTurn]) -> JournalProgress {
+    public static func of(_ allTurns: [JournalTurn]) -> JournalProgress {
+        // A cleared free-writing page is not a day that was started.
+        let turns = allTurns.filter { !$0.isBlankFreeWriting }
         guard !turns.isEmpty else { return .notStarted }
         let answered = JournalComposer.written(turns).count
         return isClosed(turns) ? .done(answered: answered) : .inProgress(answered: answered)
     }
 
     /// The closing turn, whether it answers the closing question or is free writing, ends the day.
+    /// A free-writing turn that is blank (the page was cleared) has not closed anything.
     public static func isClosed(_ turns: [JournalTurn]) -> Bool {
-        turns.contains { $0.kind == .closing }
+        turns.contains { $0.kind == .closing && !$0.isBlankFreeWriting }
     }
 }

@@ -54,7 +54,8 @@ public struct JournalHabits: Equatable, Sendable {
     public static func derive(from turns: [JournalTurn], asOf dayKey: String,
                               timeZone: TimeZone = .current) -> JournalHabits {
         let since = DayKey.adding(-windowDays, to: dayKey, in: timeZone) ?? dayKey
-        let history = turns.filter { $0.dayKey < dayKey && $0.dayKey >= since && $0.kind != .safety }
+        let history = turns.filter { $0.dayKey < dayKey && $0.dayKey >= since && $0.kind != .safety
+            && !$0.isBlankFreeWriting }
         guard !history.isEmpty else { return .none }
 
         let lengths = history.filter { $0.outcome == .answered }

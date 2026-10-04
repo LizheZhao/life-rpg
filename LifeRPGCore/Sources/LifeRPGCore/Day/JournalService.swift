@@ -3,8 +3,9 @@ import SwiftData
 
 /// Reading and writing the journal log.
 ///
-/// A turn is inserted when the user responds and is written once. The only change afterwards is
-/// `edit`, which rewrites the words of an answered turn and nothing else; nothing here deletes one.
+/// A turn is inserted when the user responds and is written once. The only changes afterwards are
+/// `edit`, which rewrites the words of an answered turn and nothing else, and `saveFreeWriting`,
+/// the autosave of the free-writing page; nothing here deletes a turn.
 /// Does not save, as `Feedback.rate` does not; the caller saves once.
 public enum JournalService {
     /// Appends the next turn of `dayKey`. The index continues from the day's last, so a turn
@@ -64,6 +65,38 @@ public enum JournalService {
         guard !words.isEmpty else { throw JournalEditError.empty }
         return try record(context, dayKey: dayKey, kind: .closing, question: "", answer: words,
                           language: language, askedAt: now, answeredAt: now)
+    }
+
+    /// The free-writing page's autosave: the day's one free-writing turn (`JournalTurn.isFreeWriting`)
+    /// takes `text` as its whole answer and `writingSeconds` as its total, and `answeredAt` becomes
+    /// `now`, the time of the last save, which the reading page shows as the time written. The text is
+    /// trimmed at the two ends of the whole only; newlines and spaces inside it are the user's.
+    ///
+    /// This is the one place an answer is rewritten many times and may become blank, because the page
+    /// saves as the user types and a cleared page is a save like any other: the row then stays with an
+    /// empty answer (it composes to nothing, `JournalTurn.isBlankFreeWriting`) so the next keystroke
+    /// has a row to write. `edit` stays as it was for every other turn.
+    ///
+    /// With no free-writing turn yet, a non-empty text creates it at the next index and a blank one
+    /// does nothing (nil). If `appendFreeWriting` has made several, the last is the page's turn.
+    /// A negative total is stored as 0.
+    @discardableResult
+    public static func saveFreeWriting(_ text: String, writingSeconds: Int, on dayKey: String,
+                                       language: JournalLanguage, in context: ModelContext,
+                                       now: Date) throws -> JournalTurn? {
+        let words = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let existing = try turns(on: dayKey, in: context).last(where: \.isFreeWriting)
+        guard let turn = existing else {
+            guard !words.isEmpty else { return nil }
+            let created = try record(context, dayKey: dayKey, kind: .closing, question: "", answer: words,
+                                     language: language, askedAt: now, answeredAt: now)
+            created.writingSeconds = max(0, writingSeconds)
+            return created
+        }
+        turn.answer = words
+        turn.writingSeconds = max(0, writingSeconds)
+        turn.answeredAt = now
+        return turn
     }
 
     /// The day's turns in the order they were asked.

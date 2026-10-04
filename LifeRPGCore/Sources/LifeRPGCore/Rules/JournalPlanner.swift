@@ -82,7 +82,8 @@ public enum JournalPlanner {
                             habits: JournalHabits,
                             today turns: [JournalTurn],
                             language: JournalLanguage) -> JournalStep {
-        let turns = turns.sorted { $0.index < $1.index }
+        // A cleared free-writing page is a row for the autosave, not something that happened today.
+        let turns = turns.filter { !$0.isBlankFreeWriting }.sorted { $0.index < $1.index }
         let recency = Recency(habits: habits, today: turns)
         let answered = turns.filter { $0.outcome == .answered && $0.kind != .safety }
 

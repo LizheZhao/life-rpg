@@ -349,3 +349,167 @@ struct JournalFreeWritingTests {
                 == "Journal 2026-09-18\n\nQ0\nA0\n\nQ1\nA1\n\nmore")
     }
 }
+
+// MARK: the autosaved free-writing page
+
+struct JournalSaveFreeWritingTests {
+    typealias F = JournalFixtures
+    private let friday = "2026-09-18"
+    private let t1 = Fixtures.date("2026-09-18", hour: 21)
+    private let t2 = Fixtures.date("2026-09-18", hour: 22)
+
+    private func save(_ ctx: ModelContext, _ text: String, seconds: Int = 0, at now: Date? = nil,
+                      language: JournalLanguage = .en) throws -> JournalTurn? {
+        try JournalService.saveFreeWriting(text, writingSeconds: seconds, on: friday, language: language,
+                                           in: ctx, now: now ?? t1)
+    }
+
+    @Test func theFirstSaveCreatesTheClosingTurnWithNoQuestionAtTheNextIndex() throws {
+        let ctx = try Fixtures.context()
+        try JournalService.record(ctx, dayKey: friday, kind: .opening, promptID: "open.keep", question: "Q0",
+                                  answer: "A0", language: .en, askedAt: t1, answeredAt: t1)
+        let turn = try #require(try save(ctx, "  Grateful for rain.\n\nAnd tea.  \n", seconds: 42, language: .zhHans))
+        #expect(turn.index == 1)
+        #expect(turn.kind == .closing)
+        #expect(turn.questionText == "" && turn.promptID == "")
+        #expect(turn.outcome == .answered)
+        #expect(turn.language == .zhHans)
+        #expect(turn.answer == "Grateful for rain.\n\nAnd tea.")
+        #expect(turn.writingSeconds == 42)
+        #expect(turn.askedAt == t1 && turn.answeredAt == t1)
+    }
+
+    @Test func aLaterSaveRewritesTheSameRowKeepingInternalWhitespace() throws {
+        let ctx = try Fixtures.context()
+        let first = try #require(try save(ctx, "one", seconds: 5, at: t1))
+        let second = try #require(try save(ctx, "one\n\n  two  three \n", seconds: 90, at: t2))
+        #expect(first === second)
+        #expect(second.answer == "one\n\n  two  three")
+        #expect(second.writingSeconds == 90)
+        #expect(second.askedAt == t1)
+        #expect(second.answeredAt == t2)
+        #expect(try JournalService.turns(on: friday, in: ctx).count == 1)
+    }
+
+    @Test func blankTextOnADayWithoutOneStoresNothing() throws {
+        let ctx = try Fixtures.context()
+        #expect(try save(ctx, " \n\t ") == nil)
+        #expect(try ctx.fetchCount(FetchDescriptor<JournalTurn>()) == 0)
+    }
+
+    @Test func clearingThePageKeepsTheRowWithAnEmptyAnswerAndTheTimeOfTheSave() throws {
+        let ctx = try Fixtures.context()
+        _ = try save(ctx, "something", seconds: 30, at: t1)
+        let turn = try #require(try save(ctx, "  \n", seconds: 31, at: t2))
+        #expect(turn.answer == "")
+        #expect(turn.writingSeconds == 31)
+        #expect(turn.answeredAt == t2)
+        #expect(JournalComposer.text(turns: try JournalService.turns(on: friday, in: ctx), language: .en) == "")
+    }
+
+    @Test func aClearedPageCanBeWrittenAgainInTheSameRow() throws {
+        let ctx = try Fixtures.context()
+        let cleared = try #require(try save(ctx, "x", at: t1))
+        _ = try save(ctx, "", at: t2)
+        let again = try #require(try save(ctx, "back again", seconds: 8, at: t2))
+        #expect(again === cleared)
+        #expect(again.answer == "back again")
+    }
+
+    @Test func itFindsTheFreeWritingTurnAmongQuestionedOnesAndLeavesThemAlone() throws {
+        let ctx = try Fixtures.context()
+        let q = try JournalService.record(ctx, dayKey: friday, kind: .closing, promptID: "close.carry", question: "Q1",
+                                          answer: "A1", language: .en, askedAt: t1, answeredAt: t1)
+        let free = try #require(try save(ctx, "mine", at: t1))
+        #expect(free !== q)
+        _ = try save(ctx, "mine, longer", at: t2)
+        #expect(q.answer == "A1" && q.writingSeconds == 0)
+        #expect(try JournalService.turns(on: friday, in: ctx).map(\.answer) == ["A1", "mine, longer"])
+    }
+
+    @Test func withTwoFreeWritingTurnsTheLastOneIsTheOneRewritten() throws {
+        let ctx = try Fixtures.context()
+        let a = try JournalService.appendFreeWriting("early", on: friday, language: .en, in: ctx, now: t1)
+        let b = try JournalService.appendFreeWriting("late", on: friday, language: .en, in: ctx, now: t1)
+        _ = try save(ctx, "rewritten", at: t2)
+        #expect(a.answer == "early")
+        #expect(b.answer == "rewritten")
+    }
+
+    @Test func aNegativeTotalIsStoredAsZero() throws {
+        let ctx = try Fixtures.context()
+        #expect(try #require(try save(ctx, "x", seconds: -5)).writingSeconds == 0)
+    }
+
+    @Test func appendFreeWritingStillAppendsAClosingTurnWithNoWritingTime() throws {
+        let ctx = try Fixtures.context()
+        let turn = try JournalService.appendFreeWriting("more", on: friday, language: .en, in: ctx, now: t1)
+        #expect(turn.isFreeWriting)
+        #expect(turn.writingSeconds == 0)
+    }
+}
+
+// MARK: a blank free-writing turn is not written and does not close the day
+
+struct JournalBlankFreeWritingTests {
+    typealias F = JournalFixtures
+
+    @Test func aBlankFreeWritingTurnDoesNotCloseTheDay() {
+        #expect(!JournalProgress.isClosed([F.freeWriting("")]))
+        #expect(!JournalProgress.isClosed([F.turn(.opening, "ok then", index: 0), F.freeWriting("  \n", index: 1)]))
+    }
+
+    @Test func aWrittenFreeWritingTurnStillClosesIt() {
+        #expect(JournalProgress.isClosed([F.freeWriting("hello")]))
+    }
+
+    @Test func aSkippedQuestionedClosingTurnStillCloses() {
+        #expect(JournalProgress.isClosed([F.turn(.closing, "", index: 0, outcome: .skipped)]))
+        let blankButQuestioned = F.turn(.closing, "", index: 0)
+        #expect(JournalProgress.isClosed([blankButQuestioned]))
+    }
+
+    @Test func progressReadsAClearedPageAsNotStartedAndAnAnsweredDayAsInProgress() {
+        #expect(JournalProgress.of([F.freeWriting("")]) == .notStarted)
+        let turns = [F.turn(.opening, "ok then", index: 0), F.freeWriting("", index: 1)]
+        #expect(JournalProgress.of(turns) == .inProgress(answered: 1))
+    }
+
+    @Test func historyDoesNotCountAClearedPageAsClosingTheDay() throws {
+        let turns = [F.turn(.opening, "ok then", index: 0), F.freeWriting("", index: 1)]
+        let day = try #require(JournalHistory.days(from: turns, language: .en).first)
+        #expect(!day.isClosed)
+        #expect(day.answeredCount == 1)
+    }
+
+    @Test func historyLeavesOutADayWhosePageWasCleared() {
+        #expect(JournalHistory.days(from: [F.freeWriting("")], language: .en).isEmpty)
+    }
+
+    @Test func theNextQuestionIsAskedAsIfTheBlankTurnWerenotThere() {
+        let blank = F.freeWriting("", index: 0)
+        let step = JournalPlanner.next(signals: F.signals(), habits: .none, today: [blank], language: .en)
+        guard case .ask(let q) = step else { Issue.record("expected the opening, got \(step)"); return }
+        #expect(q.kind == .opening)
+    }
+
+    @Test func aFollowUpIsStillOfferedWhenTheBlankTurnIsTheLastRow() {
+        let opening = F.turn(.opening, "That one went better than I expected.", index: 0)
+        let blank = F.freeWriting("", index: 1)
+        let step = JournalPlanner.next(signals: F.signals(), habits: .none, today: [opening, blank], language: .en)
+        guard case .followUp = step else { Issue.record("expected a follow-up, got \(step)"); return }
+    }
+
+    @Test func aWrittenFreeWritingTurnStillEndsTheDayForThePlanner() {
+        let step = JournalPlanner.next(signals: F.signals(), habits: .none, today: [F.freeWriting("text")], language: .en)
+        #expect(step == .done)
+    }
+
+    @Test func aClearedPageIsNotAnAnsweredClosingQuestionInTheHabits() {
+        let turns = [F.turn(.closing, "", index: 0, on: "2026-09-17", outcome: .skipped),
+                     F.freeWriting("", index: 1, on: "2026-09-17")]
+        let habits = JournalHabits.derive(from: turns, asOf: "2026-09-18", timeZone: Fixtures.tokyo)
+        // One skip and no answers: (0 + 1) / (0 + 1 + 1) = 0.5. A counted blank would read 2/3.
+        #expect(habits.weight(for: .closing) == 0.5)
+    }
+}
