@@ -111,11 +111,11 @@ struct JournalHabitsTests {
         #expect(habits.lastUsedDay == ["open.keep": "2026-09-15", "open.feel": "2026-09-12"])
     }
 
-    @Test func aModelWordedTurnLeavesNoRowMarkedAsUsed() {
-        let model = asked("", "What stayed with you this evening?", day: "2026-09-16")
+    @Test func aModelWordedTurnMarksItsFallbackRowAsUsedAndKeepsItsTextForNovelty() {
+        let model = asked("open.keep", "What stayed with you this evening?", day: "2026-09-16")
         model.source = .model
         let habits = derive([model])
-        #expect(habits.lastUsedDay == [:])
+        #expect(habits.lastUsedDay == ["open.keep": "2026-09-16"])
         #expect(habits.recentQuestionTexts == ["What stayed with you this evening?"])
     }
 

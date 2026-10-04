@@ -93,13 +93,14 @@ struct JournalRecencyTests {
         }
     }
 
-    @Test func aModelWordedTurnDoesNotUseUpTheFallbackRow() {
+    @Test func aModelWordedTurnStillUsesUpTheRowItWasWordedFrom() {
         let model = F.turn(.opening, index: 0, on: "2026-09-17")
         model.questionText = "What stayed with you this evening?"
+        model.promptID = "open.keep"
         model.source = .model
         let h = JournalHabits.derive(from: [model], asOf: F.day, timeZone: Fixtures.tokyo)
-        #expect(h.lastUsedDay == [:])
-        #expect(ask(F.signals(), h)?.promptID == "open.keep")
+        #expect(h.lastUsedDay == ["open.keep": "2026-09-17"])
+        #expect(ask(F.signals(), h)?.promptID == "open.feel")
     }
 
     // MARK: follow-ups draw too

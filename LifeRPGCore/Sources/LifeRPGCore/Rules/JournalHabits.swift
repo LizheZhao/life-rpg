@@ -27,8 +27,9 @@ public struct JournalHabits: Equatable, Sendable {
     public let usesEmoji: Bool
     /// Smoothed answered-rate per kind that has history; `weight(for:)` fills in the rest.
     public let weights: [JournalPromptKind: Double]
-    /// Pool row id to the dayKey it was last asked on. A row the model reworded is not in it
-    /// (its turn has no `promptID`), so only rows the user actually saw count as used.
+    /// Pool row id to the dayKey it was last asked on. A model-worded turn counts for the row it
+    /// was worded from (its `promptID` is the fallback row), so the fallback and the anchors keep
+    /// rotating whoever wrote the text shown.
     public let lastUsedDay: [String: String]
     /// What was asked in the last `recentQuestionDays` days, newest first, blanks left out. Model
     /// wording is included: the point is that nothing repeats, whoever wrote it.

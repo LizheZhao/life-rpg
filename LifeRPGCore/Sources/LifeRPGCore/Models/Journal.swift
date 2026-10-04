@@ -54,7 +54,9 @@ public struct JournalSubject: Equatable, Sendable {
     public var dayKey: String = ""
     public var index: Int = 0                     // order within the day
     public var kindRaw: String = JournalPromptKind.opening.rawValue
-    /// The pool row, or "" for model-written text and free writing.
+    /// The pool row the question came from or, for a model-worded question, the fallback row it
+    /// stands in for (`source` says who wrote the text), so recency and anchor rotation work the
+    /// same either way. "" only for free writing, which has no question.
     public var promptID: String = ""
     public var questionText: String = ""
     public var subjectKindRaw: String?            // `FeedbackTarget`
