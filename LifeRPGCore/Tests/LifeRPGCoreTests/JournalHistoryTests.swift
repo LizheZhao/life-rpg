@@ -92,3 +92,120 @@ struct JournalHistoryTests {
         #expect(days([]).isEmpty)
     }
 }
+
+// MARK: what the reading page shows
+
+struct JournalReadingPageTests {
+    typealias F = JournalFixtures
+
+    private func day(_ turns: [JournalTurn]) throws -> JournalDay {
+        try #require(JournalHistory.days(from: turns, language: .en).first)
+    }
+
+    /// The title ("Journal 2026-09-18") and the question lines are not the user's words.
+    @Test func theWordCountIsTheUsersWordsAcrossTheWrittenAnswers() throws {
+        let turns = [
+            F.turn(.opening, "A walk home in the rain", index: 0),    // 6
+            F.turn(.heavy, "", index: 1, outcome: .skipped),
+            F.turn(.good, "今天 I walked 3 miles", index: 2),          // 6
+            F.turn(.safety, "one two three", index: 3),
+        ]
+        #expect(try day(turns).wordCount == 12)
+    }
+
+    @Test func aFreeWritingDayCountsTheSameWordsAsThePage() throws {
+        let text = "Grateful for rain.\n\nI don't mind it."
+        #expect(try day([F.freeWriting(text)]).wordCount == JournalWords.count(text))
+        #expect(try day([F.freeWriting(text)]).wordCount == 7)
+    }
+
+    @Test func writtenAtIsTheAnsweredTimeOfTheLastWrittenTurn() throws {
+        let turns = [
+            F.turn(.opening, "first", index: 0, hour: 20),
+            F.turn(.closing, "last", index: 1, hour: 22),
+            F.turn(.good, "", index: 2, outcome: .skipped, hour: 23),
+        ]
+        #expect(try day(turns).writtenAt == Fixtures.date(F.day, hour: 22))
+    }
+
+    @Test func writtenAtFollowsIndexOrderNotTheClock() throws {
+        let turns = [F.turn(.opening, "late", index: 0, hour: 23), F.turn(.good, "early", index: 1, hour: 19)]
+        #expect(try day(turns).writtenAt == Fixtures.date(F.day, hour: 19))
+    }
+
+    @Test func writingSecondsSumOverTheTurns() throws {
+        let turns = [F.turn(.opening, "a", index: 0), F.freeWriting("b", index: 1, writingSeconds: 754),
+                     F.freeWriting("c", index: 2, writingSeconds: 46)]
+        #expect(try day(turns).writingSeconds == 800)
+        #expect(try day([F.turn(.opening, "a")]).writingSeconds == 0)
+    }
+
+    // MARK: neighbors
+
+    private func days(_ keys: [String]) -> [JournalDay] {
+        JournalHistory.days(from: keys.map { F.turn(.opening, "x", on: $0) }, language: .en)
+    }
+
+    @Test func neighborsAreTheOlderAndTheNewerDayWithWriting() {
+        let list = days(["2026-09-02", "2026-09-10", "2026-09-17", "2026-09-19"])
+        let n = JournalHistory.neighbors(of: "2026-09-10", in: list)
+        #expect(n.previous == "2026-09-02")
+        #expect(n.next == "2026-09-17")
+    }
+
+    @Test func theNewestDayHasNoNextAndTheOldestNoPrevious() {
+        let list = days(["2026-09-02", "2026-09-10"])
+        let newest = JournalHistory.neighbors(of: "2026-09-10", in: list)
+        #expect(newest.previous == "2026-09-02" && newest.next == nil)
+        let oldest = JournalHistory.neighbors(of: "2026-09-02", in: list)
+        #expect(oldest.previous == nil && oldest.next == "2026-09-10")
+    }
+
+    @Test func aDayNotInTheListStillFindsItsNeighborsAndAnEmptyListFindsNone() {
+        let list = days(["2026-09-02", "2026-09-17"])
+        let n = JournalHistory.neighbors(of: "2026-09-10", in: list)
+        #expect(n.previous == "2026-09-02" && n.next == "2026-09-17")
+        let none = JournalHistory.neighbors(of: "2026-09-10", in: [])
+        #expect(none.previous == nil && none.next == nil)
+    }
+
+    @Test func theOrderOfTheListDoesNotMatter() {
+        let list = Array(days(["2026-09-02", "2026-09-10", "2026-09-17"]).reversed())
+        let n = JournalHistory.neighbors(of: "2026-09-10", in: list)
+        #expect(n.previous == "2026-09-02" && n.next == "2026-09-17")
+    }
+}
+
+struct JournalDayFactsTests {
+    typealias F = JournalFixtures
+
+    @Test func completedCountsQuestsAndRoutinesOfThatDayOnly() {
+        let quests = [F.quest("A"), F.quest("B"), F.quest("Open", done: false), F.quest("Swapped", replaced: true),
+                      F.quest("Yesterday", on: "2026-09-17")]
+        let routines = [F.routineDone("Gym"), F.routineDone("Old", on: "2026-09-17")]
+        let facts = JournalDayFacts.of(dayKey: F.day, quests: quests, occurrences: routines,
+                                       context: F.context(tier: .normal))
+        #expect(facts.completed == 3)
+    }
+
+    @Test func aDayWithNothingDoneIsZero() {
+        #expect(JournalDayFacts.of(dayKey: F.day, quests: [], occurrences: [], context: nil).completed == 0)
+    }
+
+    @Test func theTierTextIsTheTodayPagesWording() {
+        for (tier, text) in [(Tier.veryLow, "very low day"), (.low, "low day"), (.normal, "normal day"), (.high, "high day")] {
+            #expect(JournalDayFacts.of(dayKey: F.day, quests: [], occurrences: [],
+                                       context: F.context(tier: tier)).tierText == text)
+            #expect(tier.dayText == text)
+        }
+    }
+
+    @Test func aDayWithoutAContextHasNoTierText() {
+        #expect(JournalDayFacts.of(dayKey: F.day, quests: [], occurrences: [], context: nil).tierText == nil)
+    }
+
+    @Test func theTodayPageHudStillSaysTheSameThing() {
+        let hud = LevelCardState(totalEarned: 0, balance: 0, streak: 0, tier: .low, randomSlots: 1, goal: nil)
+        #expect(hud.tierText == "low day")
+    }
+}

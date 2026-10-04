@@ -389,12 +389,7 @@ public struct LevelCardState: Equatable, Sendable {
         dotCount = 20
         filledDots = Economy.levelDots(totalEarned: totalEarned, count: 20)
         streakText = streak > 0 ? "\(streak) day streak" : nil
-        switch tier {
-        case .veryLow: tierText = "very low day"
-        case .low: tierText = "low day"
-        case .normal: tierText = "normal day"
-        case .high: tierText = "high day"
-        }
+        tierText = tier.dayText
         slotsText = "\(randomSlots) random slot\(randomSlots == 1 ? "" : "s")"
         goal = progress.map { goal in
             let text: String
@@ -431,6 +426,18 @@ public struct TodayGreeting: Equatable, Sendable {
         case ..<12: "Good morning,"
         case ..<18: "Good afternoon,"
         default: "Good evening,"
+        }
+    }
+}
+
+extension Tier {
+    /// The tier as the Today page words it, and as the journal's reading page does, so one rule.
+    public var dayText: String {
+        switch self {
+        case .veryLow: "very low day"
+        case .low: "low day"
+        case .normal: "normal day"
+        case .high: "high day"
         }
     }
 }
