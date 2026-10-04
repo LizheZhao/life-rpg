@@ -13,7 +13,7 @@ This directory is the maintained source for verifying the user-facing behavior o
 ## Driving conventions
 
 - Drive by visible label and screenshot. Screenshot before and after every tap; convert shown px to points with ÷ 2.093 (921-px-wide image) or ÷ 3 (full 1320×2868).
-- The floating tab bar is at y = 880 pt; x = 130 / 189 / 250 / 309 for Today / Calendar / Rewards / Settings. Library, the design gallery and Debug are pages inside Settings.
+- The floating tab bar is at y = 880 pt; x = 100 / 160 / 220 / 280 / 340 for Today / Calendar / Trends / Rewards / Settings. Library, the design gallery and Debug are pages inside Settings.
 - Wait for sheet, card and alert dismissal (and for a card to finish opening) before the next tap; a tap during the animation is swallowed.
 - Scroll with a swipe that starts around y=760 pt and ends at 200–300 pt, away from the floating bar.
 - Never write to the store; read it with `V sql` / `V ledger`.

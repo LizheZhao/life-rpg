@@ -1,6 +1,6 @@
 ---
 name: verify
-description: Drive the LifeRPG iOS app (SwiftUI, four tabs behind a floating tab bar) on a dedicated iOS Simulator to prove a change works in the real app — launch, tap through a feature, and check the SwiftData store. Use after any change under LifeRPG/ (views, RootView, HealthService, import/export). Rules in LifeRPGCore are proven by `swift test`, not here.
+description: Drive the LifeRPG iOS app (SwiftUI, five tabs behind a floating tab bar) on a dedicated iOS Simulator to prove a change works in the real app — launch, tap through a feature, and check the SwiftData store. Use after any change under LifeRPG/ (views, RootView, HealthService, import/export). Rules in LifeRPGCore are proven by `swift test`, not here.
 ---
 
 # Verify LifeRPG on the simulator
@@ -47,7 +47,7 @@ Stable points on iPhone 17 Pro Max (440×956 pt):
 
 | Target | x, y |
 | --- | --- |
-| Floating tab bar: Today / Calendar / Rewards / Settings | y = 880; x = 130 / 189 / 250 / 309 |
+| Floating tab bar: Today / Calendar / Trends / Rewards / Settings | y = 880; x = 100 / 160 / 220 / 280 / 340 |
 | Today header: `+` (Add for today) top-right; avatar top-left opens the Levels sheet | 396, 92; 44, 92 |
 | Pushed page back button (Library, Debug, Design) | 40, 84 |
 | Sheet `Done` button (day detail) | 383, 104 |
