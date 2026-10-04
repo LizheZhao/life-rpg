@@ -41,4 +41,19 @@ struct JournalSendTests {
         let sent = JournalSend.fingerprint(of: text)
         #expect(JournalSend.shouldRunShortcut(shortcutConfigured: true, text: text + " More.", lastSentFingerprint: sent))
     }
+
+    @Test func aPlanRunsAFirstSendAndAsksBeforeASecond() {
+        let sent = JournalSend.fingerprint(of: text)
+        #expect(JournalSend.plan(shortcutConfigured: true, text: text, lastSentFingerprint: nil) == .run)
+        #expect(JournalSend.plan(shortcutConfigured: true, text: text + " More.", lastSentFingerprint: sent)
+                == .askBeforeSendingAgain)
+        #expect(JournalSend.plan(shortcutConfigured: true, text: text, lastSentFingerprint: sent) == .nothing)
+        #expect(JournalSend.plan(shortcutConfigured: false, text: text, lastSentFingerprint: nil) == .nothing)
+        #expect(JournalSend.plan(shortcutConfigured: true, text: "", lastSentFingerprint: sent) == .nothing)
+    }
+
+    @Test func theSentKeyIsPerDay() {
+        #expect(JournalSend.sentKey(dayKey: "2026-09-18") == "journalSent.2026-09-18")
+        #expect(JournalSend.sentKey(dayKey: "2026-09-18") != JournalSend.sentKey(dayKey: "2026-09-19"))
+    }
 }

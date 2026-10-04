@@ -154,3 +154,47 @@ struct JournalServiceTests {
         #expect(text.components(separatedBy: "\nmine").count - 1 == 4)
     }
 }
+
+// MARK: what the pages open with
+
+struct JournalPagesServiceTests {
+    private let friday = "2026-09-18"
+    private let now = Fixtures.date("2026-09-18", hour: 22)
+
+    @Test func theDraftOpensEmptyOnADayWithNoFreeWriting() throws {
+        let ctx = try Fixtures.context()
+        try JournalService.record(ctx, dayKey: friday, kind: .opening, promptID: "open.keep", question: "Q",
+                                  answer: "A", language: .en, askedAt: now, answeredAt: now)
+        #expect(try JournalService.freeWritingDraft(on: friday, in: ctx) == FreeWritingDraft())
+    }
+
+    @Test func theDraftOpensWithTheStoredTextAndTime() throws {
+        let ctx = try Fixtures.context()
+        try JournalService.saveFreeWriting("Rain, then tea.", writingSeconds: 75, on: friday, language: .en,
+                                           in: ctx, now: now)
+        try ctx.save()
+        let draft = try JournalService.freeWritingDraft(on: friday, in: ctx)
+        #expect(draft.text == "Rain, then tea.")
+        #expect(draft.writingSeconds == 75)
+        #expect(!draft.hasUnsavedChanges)
+    }
+
+    @Test func theHistoryListsEveryDayWithWritingNewestFirst() throws {
+        let ctx = try Fixtures.context()
+        try JournalService.saveFreeWriting("one", writingSeconds: 0, on: "2026-09-16", language: .en, in: ctx, now: now)
+        try JournalService.saveFreeWriting("two words", writingSeconds: 0, on: friday, language: .en, in: ctx, now: now)
+        try JournalService.record(ctx, dayKey: "2026-09-17", kind: .opening, question: "Q", answer: "",
+                                  outcome: .skipped, language: .en, askedAt: now, answeredAt: now)
+        try ctx.save()
+        let days = try JournalService.history(language: .en, in: ctx)
+        #expect(days.map(\.dayKey) == [friday, "2026-09-16"])
+        #expect(days.map(\.wordCount) == [2, 1])
+    }
+
+    @Test func theStartersOpenWithGratefulFor() throws {
+        let ctx = try Fixtures.context()
+        let starters = try JournalService.starters(on: friday, language: .en, in: ctx, timeZone: Fixtures.tokyo)
+        #expect(starters.first?.text == "Grateful for")
+        #expect(starters.count <= 4)
+    }
+}

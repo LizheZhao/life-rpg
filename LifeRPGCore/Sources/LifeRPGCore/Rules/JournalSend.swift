@@ -14,6 +14,25 @@ public enum JournalSend {
         return fingerprint(of: text) != lastSentFingerprint
     }
 
+    /// What to do when the user is done with the day's text.
+    public enum Plan: Equatable, Sendable {
+        /// No Shortcut, nothing written, or this very text is already in Apple Journal.
+        case nothing
+        /// Never sent, so run it.
+        case run
+        /// Sent before and changed since: the Shortcut would add a second entry, so ask first.
+        case askBeforeSendingAgain
+    }
+
+    public static func plan(shortcutConfigured: Bool, text: String, lastSentFingerprint: String?) -> Plan {
+        guard shouldRunShortcut(shortcutConfigured: shortcutConfigured, text: text,
+                                lastSentFingerprint: lastSentFingerprint) else { return .nothing }
+        return lastSentFingerprint == nil ? .run : .askBeforeSendingAgain
+    }
+
+    /// Where the fingerprint of what was last sent for `dayKey` is kept between launches.
+    public static func sentKey(dayKey: String) -> String { "journalSent.\(dayKey)" }
+
     /// FNV-1a 64 over the UTF-8 bytes, as 16 hex digits. Stored between launches, so it can not be
     /// `hashValue`, which Swift seeds per process.
     public static func fingerprint(of text: String) -> String {

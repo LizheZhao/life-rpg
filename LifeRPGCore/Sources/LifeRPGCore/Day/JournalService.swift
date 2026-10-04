@@ -106,6 +106,26 @@ public enum JournalService {
             sortBy: [SortDescriptor(\.index)]))
     }
 
+    /// What the free-writing page opens with: the day's free-writing turn (the last, as
+    /// `saveFreeWriting` picks it) as the stored text and time, or an empty draft.
+    public static func freeWritingDraft(on dayKey: String, in context: ModelContext) throws -> FreeWritingDraft {
+        guard let turn = try turns(on: dayKey, in: context).last(where: \.isFreeWriting) else { return FreeWritingDraft() }
+        return FreeWritingDraft(text: turn.answer, writingSeconds: turn.writingSeconds)
+    }
+
+    /// Every day that has something written, newest first (`JournalHistory.days`).
+    public static func history(language: JournalLanguage, in context: ModelContext) throws -> [JournalDay] {
+        JournalHistory.days(from: try context.fetch(FetchDescriptor<JournalTurn>()), language: language)
+    }
+
+    /// The phrases above the keyboard of the free-writing page for `dayKey`.
+    public static func starters(on dayKey: String, language: JournalLanguage, in context: ModelContext,
+                                timeZone: TimeZone = .current) throws -> [JournalStarter] {
+        JournalStarters.starters(signals: try signals(on: dayKey, in: context, timeZone: timeZone),
+                                 habits: try habits(asOf: dayKey, in: context, timeZone: timeZone),
+                                 language: language)
+    }
+
     /// The day's facts, read from the history rows the same way `DayRecord` reads them.
     public static func signals(on dayKey: String, in context: ModelContext,
                                timeZone: TimeZone = .current) throws -> JournalSignals {
