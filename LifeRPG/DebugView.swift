@@ -14,6 +14,9 @@ struct DebugView: View {
     var refresh: () async -> Void = {}
     #if targetEnvironment(simulator)
     @AppStorage("debugDayOffset") private var dayOffset = 0
+    #else
+    /// Time travel is simulator-only; on a device the day is today (as in `RootView`).
+    private let dayOffset = 0
     #endif
 
     @Environment(\.modelContext) private var modelContext
