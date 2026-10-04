@@ -2,13 +2,15 @@ import AppIntents
 import LifeRPGCore
 import SwiftData
 
-/// "Get Today's Journal Text", the action the user's Shortcut starts with: it hands the day's
-/// composed journal to whatever comes next (Create Journal Entry). It runs in the app's process
-/// without opening it, against the same container as the app (`AppStore`), and reads only.
-struct GetTodaysJournalTextIntent: AppIntent {
-    static let title: LocalizedStringResource = "Get Today's Journal Text"
+/// "Get Journal Text to Send", the action the user's nightly Shortcut starts with. The automation
+/// runs at the app's day boundary (05:00), when today is already the new day, so this reads the
+/// day before it (`JournalSend.finishedDayKey`) and hands its journal to whatever comes next
+/// (Create Journal Entry). It runs in the app's process without opening it, against the same
+/// container as the app (`AppStore`). The only thing it writes is the sent log.
+struct GetJournalTextToSendIntent: AppIntent {
+    static let title: LocalizedStringResource = "Get Journal Text to Send"
     static let description = IntentDescription(
-        "Returns what you wrote in today's journal, with each question above your answer. Empty when nothing was answered.")
+        "Returns the journal of the day that has just ended, with each question above your answer. Returns empty text when there is nothing new to send, so run it once a night and only create an entry when the text has a value.")
     static let openAppWhenRun = false
 
     enum Failure: Error, CustomLocalizedStringResourceConvertible {
@@ -22,8 +24,6 @@ struct GetTodaysJournalTextIntent: AppIntent {
     @MainActor
     func perform() async throws -> some IntentResult & ReturnsValue<String> {
         guard let container = try? AppStore.opened.get() else { throw Failure.storeUnavailable }
-        let turns = try JournalService.turns(on: Date().dayKey, in: container.mainContext)
-        let language = JournalLanguage.resolve(preferred: Locale.preferredLanguages)
-        return .result(value: JournalComposer.text(turns: turns, language: language))
+        return .result(value: try JournalHandOff.textToSend(now: Date(), in: container.mainContext))
     }
 }
