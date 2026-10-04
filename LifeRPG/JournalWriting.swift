@@ -15,6 +15,9 @@ final class FreeWritingModel {
     private(set) var draft: FreeWritingDraft
     private(set) var status: Status
     let dayKey: String
+    /// The text the model opened with, for an editor to start from. Not observed, so building the
+    /// editor inside its parent's body does not make the parent depend on every keystroke.
+    @ObservationIgnored private(set) var openingText: String
 
     @ObservationIgnored private let language: JournalLanguage
     @ObservationIgnored private let context: ModelContext
@@ -30,6 +33,7 @@ final class FreeWritingModel {
         self.context = context
         let stored = (try? JournalService.freeWritingDraft(on: dayKey, in: context)) ?? FreeWritingDraft()
         draft = stored
+        openingText = stored.text
         status = stored.text.isEmpty ? .blank : .saved
     }
 
@@ -60,6 +64,7 @@ final class FreeWritingModel {
         guard !draft.hasUnsavedChanges,
               let stored = try? JournalService.freeWritingDraft(on: dayKey, in: context) else { return }
         draft.reset(text: stored.text, writingSeconds: stored.writingSeconds)
+        openingText = stored.text
         set(draft.text.isEmpty ? .blank : .saved)
     }
 
@@ -104,15 +109,26 @@ final class FreeWritingModel {
 
 // MARK: the editor and what sits around it
 
-/// The text, with no chrome. Reads the draft here so a keystroke re-renders this view only.
+/// The text, with no chrome. The editor binds to its own `@State`, which keeps the cursor where
+/// the user put it, and tells the model about each change; a change the model makes itself (a
+/// starter) is copied back. Reading the draft here means a keystroke re-renders this view only.
 struct FreeWritingEditor: View {
     let model: FreeWritingModel
     var focus: FocusState<Bool>.Binding
     var placeholder = "Start anywhere."
 
+    @State private var text: String
+
+    init(model: FreeWritingModel, focus: FocusState<Bool>.Binding, placeholder: String = "Start anywhere.") {
+        self.model = model
+        self.focus = focus
+        self.placeholder = placeholder
+        _text = State(initialValue: model.openingText)
+    }
+
     var body: some View {
-        let text = model.draft.text
-        TextEditor(text: Binding(get: { text }, set: { model.edit($0) }))
+        let modelText = model.draft.text
+        TextEditor(text: $text)
             .lr(.journalBody).foregroundStyle(LR.Color.ink)
             .scrollContentBackground(.hidden)
             .focused(focus)
@@ -125,6 +141,8 @@ struct FreeWritingEditor: View {
                         .accessibilityHidden(true)
                 }
             }
+            .onChange(of: text) { _, new in model.edit(new) }
+            .onChange(of: modelText) { _, new in if new != text { text = new } }
             .accessibilityLabel("Free writing")
     }
 }
