@@ -32,6 +32,17 @@ enum JournalSentLog {
     static func latest(_ entries: [String: Entry]) -> Entry? {
         entries.values.max { $0.sentAt < $1.sentAt }
     }
+
+    /// "Oct 4, 11:14 PM" in the user's locale and clock style.
+    static func timeText(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.setLocalizedDateFormatFromTemplate("MMMdjmm")
+        return formatter.string(from: date)
+    }
+
+    static func statusLine(_ latest: Entry?) -> String {
+        latest.map { "Last sent: \(timeText($0.sentAt))" } ?? "Nothing sent yet"
+    }
 }
 
 /// The code path of `GetJournalTextToSendIntent`, apart from the intent itself so the simulator's

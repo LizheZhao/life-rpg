@@ -23,6 +23,8 @@ struct SettingsView: View {
     @Environment(\.modelContext) private var context
     @State private var transfer = DataTransfer()
     @State private var path: [Page] = []
+    /// The sent log, watched so the status line changes when the Shortcut hands a day over.
+    @AppStorage(JournalSentLog.key) private var sentLog = Data()
 
     var body: some View {
         NavigationStack(path: $path) {
@@ -71,11 +73,13 @@ struct SettingsView: View {
                 .listRowBackground(LR.Color.surface)
 
                 Section {
-                    row("Shortcut name", systemImage: "book.closed", tint: .hidden) {
-                        CommittedTextField("Shortcut name", prompt: "e.g. Save Journal",
-                                           key: JournalShortcutLink.nameKey)
-                            .multilineTextAlignment(.trailing)
-                    }
+                    row("Apple Journal", systemImage: "book.closed", tint: .hidden)
+                    Text(Self.journalExplanation)
+                        .lr(.caption).foregroundStyle(LR.Color.inkSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text(JournalSentLog.statusLine(JournalSentLog.latest(JournalSentLog.decode(sentLog))))
+                        .lr(.bodyStrong).foregroundStyle(LR.Color.ink)
+                        .frame(minHeight: 44, alignment: .leading)
                 } header: {
                     header("Journal")
                 } footer: {
@@ -140,14 +144,18 @@ struct SettingsView: View {
         .reservingTabBarSpace()
     }
 
-    /// What the user builds once in Shortcuts. Written plainly about what was not tried: neither the
-    /// run from this app nor an unattended automation has been checked on a device.
+    private static let journalExplanation = "Apple Journal only lets an app add an entry, never change one. So LifeRPG sends each day once, after it has ended, and nothing goes while you can still edit."
+
+    /// What the user builds once in Shortcuts. Written plainly about what was not tried: neither
+    /// the steps on a device nor an automation running unattended has been checked.
     private static let journalSteps = """
-        To save a finished journal into Apple Journal, build one Shortcut and type its name above.
-        1. In Shortcuts, make a new shortcut and name it as above.
-        2. Add the action Get Today's Journal Text, from LifeRPG.
-        3. Add Create Journal Entry and give it that text.
-        "Save Journal" on the finished journal then runs it. If you want it every night, add a Time of Day Personal Automation that runs the same shortcut. Not verified: whether an automation runs on its own while the phone is locked, or that these steps work as written on your device. Leave the name empty to only use Share.
+        Set up once.
+        1. In Shortcuts, make a new Shortcut and add Get Journal Text to Send, from LifeRPG.
+        2. Add If, and set it to that text has any value.
+        3. Inside the If, add Create Journal Entry and give it that text.
+        4. In Shortcuts, add a Personal Automation: Time of Day, 5:00 AM, Run Immediately, running that Shortcut.
+        5:00 AM is when LifeRPG's day ends. Each day is sent once, as it was at that moment. Changes you make afterwards stay in LifeRPG, and Share is how to send a changed day by hand.
+        Not verified: that the automation runs on its own while the phone is locked, and that these steps work as written on your device.
         """
 
     private var version: String { Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?" }
