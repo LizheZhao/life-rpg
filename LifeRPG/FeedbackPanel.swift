@@ -19,12 +19,10 @@ struct FeedbackPanel: View {
     @Query private var ratings: [QuestRating]
     @Query private var comments: [QuestComment]
 
-    @State private var note = ""
     @State private var error: String?
 
     private var history: [QuestRating] { Feedback.ratings(ratings, for: id) }
     private var notes: [QuestComment] { Feedback.comments(comments, for: id) }
-    private var canAddNote: Bool { !note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
 
     var body: some View {
         VStack(alignment: .leading, spacing: LR.Spacing.sectionGap) {
@@ -106,22 +104,7 @@ struct FeedbackPanel: View {
 
     private var noteSection: some View {
         section("Add a note") {
-            card {
-                VStack(alignment: .leading, spacing: 8) {
-                    TextField("What worked, what didn't", text: $note,
-                              prompt: Text("What worked, what didn't").foregroundStyle(LR.Color.inkSecondary),
-                              axis: .vertical)
-                        .lr(.bodyStrong).foregroundStyle(LR.Color.ink)
-                        .frame(minHeight: 44, alignment: .topLeading)
-                    HStack(spacing: 0) {
-                        Spacer(minLength: 0)
-                        Button("Add note") { addNote() }
-                            .buttonStyle(PillButtonStyle())
-                            .disabled(!canAddNote)
-                            .opacity(canAddNote ? 1 : 0.4)
-                    }
-                }
-            }
+            card { NoteComposer(add: addNote) }
         }
     }
 
@@ -184,10 +167,10 @@ struct FeedbackPanel: View {
         save()
     }
 
-    private func addNote() {
+    private func addNote(_ comment: String) -> Bool {
         Feedback.comment(context, target: target, id: id, questID: questID, text: text,
-                         comment: note.trimmingCharacters(in: .whitespacesAndNewlines), dayKey: today)
-        if save() { note = "" }
+                         comment: comment, dayKey: today)
+        return save()
     }
 
     @discardableResult
@@ -199,6 +182,34 @@ struct FeedbackPanel: View {
         } catch {
             self.error = "\(error)"
             return false
+        }
+    }
+}
+
+/// The note field and its button. It owns the draft, so a keystroke re-renders this and nothing
+/// above it: the panel's body reads every rating and comment of the page's `@Query`s.
+private struct NoteComposer: View {
+    /// Appends the trimmed note; true when it was saved, which clears the draft.
+    let add: (String) -> Bool
+
+    @State private var note = ""
+
+    private var trimmed: String { note.trimmingCharacters(in: .whitespacesAndNewlines) }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            TextField("What worked, what didn't", text: $note,
+                      prompt: Text("What worked, what didn't").foregroundStyle(LR.Color.inkSecondary),
+                      axis: .vertical)
+                .lr(.bodyStrong).foregroundStyle(LR.Color.ink)
+                .frame(minHeight: 44, alignment: .topLeading)
+            HStack(spacing: 0) {
+                Spacer(minLength: 0)
+                Button("Add note") { if add(trimmed) { note = "" } }
+                    .buttonStyle(PillButtonStyle())
+                    .disabled(trimmed.isEmpty)
+                    .opacity(trimmed.isEmpty ? 0.4 : 1)
+            }
         }
     }
 }

@@ -65,6 +65,7 @@ struct LibraryView: View {
     }
 
     var body: some View {
+        let latest = latest
         ScrollView {
             VStack(alignment: .leading, spacing: LR.Spacing.sectionGap) {
                 PillSegmentedControl(options: [("Quests", FeedbackTarget.quest), ("Routines", FeedbackTarget.routine)],
@@ -79,7 +80,7 @@ struct LibraryView: View {
                                                  tint: QuestTint(group.difficulty), count: group.rows.count,
                                                  noun: "quest", isOpen: open) { toggle($openTiers, key) }
                             if open {
-                                ForEach(group.rows) { link(LibraryEntry(template: $0)) }
+                                ForEach(group.rows) { link(LibraryEntry(template: $0), latest: latest) }
                                     .transition(.opacity)
                             }
                         }
@@ -94,7 +95,7 @@ struct LibraryView: View {
                                                  isOpen: open) { toggle($openGroups, key) }
                             if open {
                                 ForEach(section.rows, id: \.routine.id) {
-                                    link(LibraryEntry(routine: $0.routine, schedule: $0.schedule))
+                                    link(LibraryEntry(routine: $0.routine, schedule: $0.schedule), latest: latest)
                                 }
                                 .transition(.opacity)
                             }
@@ -116,7 +117,7 @@ struct LibraryView: View {
         .searchable(text: $search)
     }
 
-    private func link(_ entry: LibraryEntry) -> some View {
+    private func link(_ entry: LibraryEntry, latest: [UUID: QuestRating]) -> some View {
         let notes = Feedback.comments(comments, for: entry.id).count
         let rating = latest[entry.id]?.rating
         return NavigationLink {
