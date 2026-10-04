@@ -63,7 +63,7 @@ public struct TrendsPage: Equatable, Sendable {
         public struct Row: Equatable, Sendable {
             public let word: String
             public let count: Int
-            /// 0 to 1 against the top word.
+            /// 0 to 1 against the commonest word of the list.
             public let fraction: Double
         }
 
@@ -160,7 +160,8 @@ extension TrendsPage {
         let about: About? = {
             let others = days.filter { !range.contains($0.dayKey) }
             let words = JournalTrends.Words.distinctive(period: periodDays, others: others, language: language)
-            guard let top = words.first?.count else { return nil }
+            // The list is ranked by how much a word stands out, so its first row need not be the commonest.
+            guard let top = words.map(\.count).max() else { return nil }
             return About(title: "What this \(noun) was about",
                          subtitle: "Words that stood out versus your other \(noun)s",
                          rows: words.map { About.Row(word: $0.word, count: $0.count,

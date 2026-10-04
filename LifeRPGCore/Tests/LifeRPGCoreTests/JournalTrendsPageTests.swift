@@ -160,6 +160,16 @@ struct JournalTrendsPageTests {
         #expect(unlocked(page(.year, texts: texts)).about?.subtitle == "Words that stood out versus your other years")
     }
 
+    @Test func theBarsAreAgainstTheCommonestWordEvenWhenARarerOneRanksFirst() {
+        // "running" is said four times but every other month says it a lot too; "kayak" is new.
+        var texts = [("2026-09-10", "running running running running"), ("2026-09-11", "kayak kayak kayak")]
+        texts += zip(12...17, ["alpha", "bravo", "charlie", "delta", "echo", "foxtrot"]).map { (String(format: "2026-09-%02d", $0), $1) }
+        texts += (1...3).map { (String(format: "2026-08-%02d", $0), "running running running running running running") }
+        let about = try! #require(unlocked(page(.month, texts: texts)).about)
+        #expect(about.rows.map(\.word) == ["kayak", "running"])
+        #expect(about.rows.map(\.fraction) == [0.75, 1])
+    }
+
     @Test func chineseEntriesGetChineseWords() {
         let texts = (10...17).map { (String(format: "2026-09-%02d", $0), "今天去散步了，散步很开心，散步之后喝了茶") }
         let about = unlocked(page(.month, texts: texts, language: .zhHans)).about
