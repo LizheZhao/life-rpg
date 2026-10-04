@@ -19,9 +19,11 @@ import SwiftData
 /// to bump the export's `schemaVersion` (to 4); import still reads v3 files, whose occurrences
 /// simply carry no `iconKey`. V5 added `originRaw` to both libraries (seed or the user's own),
 /// defaulted to seed, so every existing row stays what it was; the export's `schemaVersion` goes to
-/// 5 with the user's rows in a block of their own, and import still reads v3 and v4.
-public enum SchemaV5: VersionedSchema {
-    public static var versionIdentifier = Schema.Version(5, 0, 0)
+/// 5 with the user's rows in a block of their own, and import still reads v3 and v4. V6 added
+/// `JournalTurn`, a whole new model, which lightweight migration also infers; the export goes to
+/// 6 with a `journal` block, and import still reads v3 to v5, whose files simply have no journal.
+public enum SchemaV6: VersionedSchema {
+    public static var versionIdentifier = Schema.Version(6, 0, 0)
 
     public static var models: [any PersistentModel.Type] = [
         QuestTemplate.self,
@@ -33,17 +35,18 @@ public enum SchemaV5: VersionedSchema {
         DailyContext.self,
         QuestRating.self,
         QuestComment.self,
+        JournalTurn.self,
     ]
 }
 
 public enum LifeRPGMigrationPlan: SchemaMigrationPlan {
-    public static var schemas: [any VersionedSchema.Type] = [SchemaV5.self]
+    public static var schemas: [any VersionedSchema.Type] = [SchemaV6.self]
     public static var stages: [MigrationStage] = []
 }
 
 public enum LifeRPGSchema {
-    public static let current = Schema(versionedSchema: SchemaV5.self)
+    public static let current = Schema(versionedSchema: SchemaV6.self)
 
     /// For `#Preview` and tests that just need the model list.
-    public static let models = SchemaV5.models
+    public static let models = SchemaV6.models
 }

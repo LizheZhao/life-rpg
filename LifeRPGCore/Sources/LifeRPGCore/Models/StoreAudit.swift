@@ -79,6 +79,15 @@ public enum StoreAudit {
             check("QuestComment", "dayKey", c.dayKey, { DayKey.isValid($0) })
         }
 
+        for t in try context.fetch(FetchDescriptor<JournalTurn>()) {
+            check("JournalTurn", "kindRaw", t.kindRaw, { JournalPromptKind(rawValue: $0) != nil })
+            check("JournalTurn", "outcomeRaw", t.outcomeRaw, { JournalOutcome(rawValue: $0) != nil })
+            check("JournalTurn", "sourceRaw", t.sourceRaw, { JournalSource(rawValue: $0) != nil })
+            check("JournalTurn", "languageRaw", t.languageRaw, { JournalLanguage(rawValue: $0) != nil })
+            check("JournalTurn", "subjectKindRaw", t.subjectKindRaw, feedbackTarget)
+            check("JournalTurn", "dayKey", t.dayKey, { DayKey.isValid($0) })
+        }
+
         for e in try context.fetch(FetchDescriptor<LedgerEntry>()) {
             check("LedgerEntry", "dayKey", e.dayKey, { DayKey.isValid($0) })
         }

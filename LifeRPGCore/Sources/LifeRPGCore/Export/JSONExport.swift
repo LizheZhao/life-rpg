@@ -17,8 +17,8 @@ import SwiftData
 public enum JSONExport {
     /// Bumped when the model changes shape, independently of the GitHub tag. Import reads this
     /// and nothing else. 4 added `Occurrence.iconKey`, 5 the user's own library rows
-    /// (`userLibrary`); an older file simply lacks them.
-    public static let schemaVersion = 5
+    /// (`userLibrary`), 6 the journal; an older file simply lacks them.
+    public static let schemaVersion = 6
 
     /// The oldest export import still reads. Anything between this and `schemaVersion` decodes into
     /// the current shape, the fields added since being optional.
@@ -42,6 +42,10 @@ public enum JSONExport {
         /// What the user changed on the seed rows (turned off or on, a routine's points): only the
         /// rows that differ from the CSV. Nil when nothing does, or when the CSVs weren't to hand.
         public var libraryChanges: LibraryChanges?
+        /// Nil only in a file written before the journal existed (schema 5 and older). From 6 on the
+        /// block is always written, empty or not, so import can tell "no journal in this backup" from
+        /// "a backup with nothing in its journal" and leave the first alone.
+        public var journal: Journal?
     }
 
     /// The seed CSVs' text, to tell what the user changed from what they started with.
@@ -234,6 +238,30 @@ public enum JSONExport {
         public var timestamp: Date
     }
 
+    public struct Journal: Codable, Equatable, Sendable {
+        public var turns: [Turn]
+    }
+
+    /// `subjectID` is a `DailyQuest` or `RoutineOccurrence` id, both kept through import, so it is
+    /// carried as it is, the same way a rating's `questID` is.
+    public struct Turn: Codable, Equatable, Sendable {
+        public var id: UUID
+        public var dayKey: String
+        public var index: Int
+        public var kind: String
+        public var promptID: String
+        public var question: String
+        public var subjectKind: String?
+        public var subjectID: UUID?
+        public var subjectText: String
+        public var answer: String
+        public var outcome: String
+        public var source: String
+        public var language: String
+        public var askedAt: Date
+        public var answeredAt: Date
+    }
+
     /// The ids of every library row the history tables point at — what `library` has to be able to
     /// re-point on import.
     static func referencedLibraryIDs(quests: [DailyQuest], occurrences: [RoutineOccurrence],
@@ -363,7 +391,15 @@ public enum JSONExport {
                           isGoal: $0.isGoal)
             },
             userLibrary: mine.quests.isEmpty && mine.routines.isEmpty ? nil : mine,
-            libraryChanges: seeds.flatMap { libraryChanges(templates: templates, routines: routines, seeds: $0) })
+            libraryChanges: seeds.flatMap { libraryChanges(templates: templates, routines: routines, seeds: $0) },
+            journal: Journal(turns: try context.fetch(FetchDescriptor<JournalTurn>())
+                .sorted { ($0.dayKey, $0.index) < ($1.dayKey, $1.index) }.map {
+                    Turn(id: $0.id, dayKey: $0.dayKey, index: $0.index, kind: $0.kindRaw,
+                         promptID: $0.promptID, question: $0.questionText, subjectKind: $0.subjectKindRaw,
+                         subjectID: $0.subjectID, subjectText: $0.subjectText, answer: $0.answer,
+                         outcome: $0.outcomeRaw, source: $0.sourceRaw, language: $0.languageRaw,
+                         askedAt: $0.askedAt, answeredAt: $0.answeredAt)
+                }))
     }
 
     public static func data(_ context: ModelContext, seeds: Seeds? = nil, now: Date = Date()) throws -> Data {

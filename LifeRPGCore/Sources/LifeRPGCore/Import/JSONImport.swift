@@ -48,6 +48,9 @@ public enum JSONImport {
         public var ledgerEntries: Int
         public var ratings: Int
         public var comments: Int
+        /// Journal turns in the backup; zero for a file written before the journal existed, in which
+        /// case the turns already on this store are kept.
+        public var journalTurns: Int
         public var rewards: Int
         /// What the balance will be once the backup is in.
         public var balance: Int
@@ -108,6 +111,7 @@ public enum JSONImport {
             ledgerEntries: snapshot.ledger.count,
             ratings: snapshot.ratings.count,
             comments: snapshot.comments.count,
+            journalTurns: snapshot.journal?.turns.count ?? 0,
             rewards: snapshot.rewards?.count ?? 0,
             balance: Economy.balance(snapshot.ledger),
             unmatchedLibrary: unmatched.sorted(),
@@ -138,6 +142,9 @@ public enum JSONImport {
         try deleteAll(QuestRating.self, in: context)
         try deleteAll(QuestComment.self, in: context)
         try deleteAll(Reward.self, in: context)
+        // A file from before the journal existed can't know about the turns written since, so it
+        // leaves them alone; one that has the block replaces them like every other table.
+        if plan.snapshot.journal != nil { try deleteAll(JournalTurn.self, in: context) }
 
         let s = plan.snapshot
         try restoreUserLibrary(s.userLibrary, in: context)
@@ -204,6 +211,16 @@ public enum JSONImport {
             row.id = c.id; row.targetID = c.targetID.map { target(c.targetKind, $0) }; row.questID = c.questID
             row.targetKindRaw = c.targetKind; row.textSnapshot = c.text; row.comment = c.comment
             row.dayKey = c.dayKey; row.timestamp = c.timestamp
+            context.insert(row)
+        }
+
+        for t in s.journal?.turns ?? [] {
+            let row = JournalTurn()
+            row.id = t.id; row.dayKey = t.dayKey; row.index = t.index; row.kindRaw = t.kind
+            row.promptID = t.promptID; row.questionText = t.question; row.subjectKindRaw = t.subjectKind
+            row.subjectID = t.subjectID; row.subjectText = t.subjectText; row.answer = t.answer
+            row.outcomeRaw = t.outcome; row.sourceRaw = t.source; row.languageRaw = t.language
+            row.askedAt = t.askedAt; row.answeredAt = t.answeredAt
             context.insert(row)
         }
 
