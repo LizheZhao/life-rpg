@@ -87,6 +87,8 @@ enum LR {
         case titleCard, heading, bodyStrong, caption, pill, hand, handTitle, handDisplay
         /// The text of a journal page, and the starter chips above its keyboard.
         case journalBody, chipLabel
+        /// The beginning of an entry on the day sheet's night card.
+        case journalExcerpt
 
         struct Spec {
             let family: LRFonts.Family
@@ -128,6 +130,8 @@ enum LR {
                 Spec(family: .jakarta, weight: 400, size: 18, textStyle: .body, maximumSize: 30, lineSpacing: 8)
             case .chipLabel:
                 Spec(family: .jakarta, weight: 400, size: 14, textStyle: .subheadline, maximumSize: 24)
+            case .journalExcerpt:
+                Spec(family: .jakarta, weight: 400, size: 16, textStyle: .callout, maximumSize: 26, lineSpacing: 6)
             }
         }
 
@@ -164,6 +168,7 @@ enum LR {
             case .handDisplay: "handDisplay"
             case .journalBody: "journalBody"
             case .chipLabel: "chipLabel"
+            case .journalExcerpt: "journalExcerpt"
             }
         }
     }

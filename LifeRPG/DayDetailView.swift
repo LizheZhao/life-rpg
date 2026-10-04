@@ -9,6 +9,19 @@ struct DayDetailView: View {
 
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
+    /// That day's journal turns only; Core turns them into the day's entry.
+    @Query private var journalTurns: [JournalTurn]
+    @State private var reading = false
+
+    private let language = JournalLanguage.resolve(preferred: Locale.preferredLanguages)
+
+    /// Characters of the entry the night card shows: about three lines at the card's width.
+    private static let excerptLength = 110
+
+    init(dayKey: String) {
+        self.dayKey = dayKey
+        _journalTurns = Query(filter: #Predicate<JournalTurn> { $0.dayKey == dayKey })
+    }
 
     var body: some View {
         NavigationStack {
@@ -28,6 +41,7 @@ struct DayDetailView: View {
                     Button("Done") { dismiss() }.foregroundStyle(LR.Color.ink)
                 }
             }
+            .sheet(isPresented: $reading) { JournalReadingView(startDay: dayKey) }
         }
     }
 
@@ -60,6 +74,10 @@ struct DayDetailView: View {
                         RecordRowView(title: "No quests this day", secondary: true) { EmptyView() }
                     }
                     ForEach(record.quests) { questRow($0) }
+                }
+
+                if let night = JournalHistory.days(from: journalTurns, language: language).first {
+                    nightCard(night)
                 }
 
                 if !record.otherLedger.isEmpty {
@@ -175,6 +193,44 @@ struct DayDetailView: View {
     private func cycleNote(_ c: DailyContext) -> String? {
         if let day = c.cycleDay { return "cycle day \(day)" }
         return c.onCycle ? "cycle" : nil
+    }
+
+    // MARK: that night
+
+    private func nightCard(_ day: JournalDay) -> some View {
+        let when = day.writtenAt.formatted(date: .omitted, time: .shortened)
+        let words = JournalPageText.words(day.wordCount)
+        return VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("THAT NIGHT").lr(.pill).tracking(1.2).foregroundStyle(LR.Color.inkSecondary)
+                Spacer(minLength: 8)
+                Text("\(when) · \(words)").lr(.caption).monospacedDigit().foregroundStyle(LR.Color.inkSecondary)
+            }
+            .accessibilityElement(children: .combine)
+            Button { reading = true } label: {
+                VStack(alignment: .leading, spacing: 14) {
+                    Text(day.excerpt(limit: Self.excerptLength)).lr(.journalExcerpt)
+                        .foregroundStyle(LR.Color.onNight)
+                        .lineLimit(3)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    HStack {
+                        Text("Read the whole entry").lr(.bodyStrong).foregroundStyle(LR.Color.nightAccent)
+                        Spacer(minLength: 8)
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(LR.Color.nightAccent)
+                            .accessibilityHidden(true)
+                    }
+                }
+                .padding(.horizontal, 20).padding(.vertical, 18)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(RoundedRectangle(cornerRadius: LR.Radius.row, style: .continuous).fill(LR.Color.nightCard))
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(PressableCardStyle())
+            .accessibilityLabel("That night, \(when), \(words). \(day.excerpt(limit: Self.excerptLength))")
+            .accessibilityHint("Opens the whole entry to read")
+        }
     }
 
     // MARK: quests

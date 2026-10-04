@@ -110,6 +110,7 @@ struct DesignGalleryView: View {
         case .handDisplay: "+112"
         case .journalBody: "Spent most of the morning not wanting to do anything."
         case .chipLabel: "Grateful for"
+        case .journalExcerpt: "Long day but the good kind. The 1:1 went somewhere I didn't expect."
         }
     }
 
