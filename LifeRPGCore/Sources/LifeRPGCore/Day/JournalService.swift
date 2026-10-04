@@ -54,6 +54,18 @@ public enum JournalService {
         return turn
     }
 
+    /// Free writing added to `dayKey`: a closing turn with no question, after whatever the day has,
+    /// including an earlier closing turn, so the user can come back and add more. The text is
+    /// trimmed and a blank one is refused.
+    @discardableResult
+    public static func appendFreeWriting(_ text: String, on dayKey: String, language: JournalLanguage,
+                                         in context: ModelContext, now: Date) throws -> JournalTurn {
+        let words = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !words.isEmpty else { throw JournalEditError.empty }
+        return try record(context, dayKey: dayKey, kind: .closing, question: "", answer: words,
+                          language: language, askedAt: now, answeredAt: now)
+    }
+
     /// The day's turns in the order they were asked.
     public static func turns(on dayKey: String, in context: ModelContext) throws -> [JournalTurn] {
         try context.fetch(FetchDescriptor<JournalTurn>(

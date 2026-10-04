@@ -243,3 +243,64 @@ struct JournalEditTests {
         #expect(try JournalService.turns(on: friday, in: ctx).map(\.answer) == ["second words"])
     }
 }
+
+// MARK: free writing added later
+
+struct JournalFreeWritingTests {
+    typealias F = JournalFixtures
+    private let friday = "2026-09-18"
+    private let now = Fixtures.date("2026-09-18", hour: 23)
+
+    private func closedDay(_ ctx: ModelContext) throws {
+        let at = Fixtures.date(friday, hour: 21)
+        try JournalService.record(ctx, dayKey: friday, kind: .opening, promptID: "open.keep", question: "Q0",
+                                  answer: "A0", language: .en, askedAt: at, answeredAt: at)
+        try JournalService.record(ctx, dayKey: friday, kind: .closing, promptID: "close.carry", question: "Q1",
+                                  answer: "A1", language: .en, askedAt: at, answeredAt: at)
+    }
+
+    @Test func itIsAClosingTurnWithNoQuestionAtTheNextIndex() throws {
+        let ctx = try Fixtures.context()
+        try closedDay(ctx)
+        let turn = try JournalService.appendFreeWriting("  one more thing\n", on: friday, language: .zhHans,
+                                                        in: ctx, now: now)
+        try ctx.save()
+        #expect(turn.index == 2)
+        #expect(turn.kind == .closing)
+        #expect(turn.questionText == "")
+        #expect(turn.promptID == "")
+        #expect(turn.source == .template)
+        #expect(turn.outcome == .answered)
+        #expect(turn.language == .zhHans)
+        #expect(turn.answer == "one more thing")
+        #expect(turn.askedAt == now && turn.answeredAt == now)
+        #expect(try JournalService.turns(on: friday, in: ctx).map(\.index) == [0, 1, 2])
+    }
+
+    @Test func aDayWithNoTurnsGetsIndexZero() throws {
+        let ctx = try Fixtures.context()
+        let turn = try JournalService.appendFreeWriting("just this", on: friday, language: .en, in: ctx, now: now)
+        #expect(turn.index == 0)
+    }
+
+    @Test func blankTextIsRefusedAndNothingIsStored() throws {
+        let ctx = try Fixtures.context()
+        #expect(throws: JournalEditError.empty) {
+            try JournalService.appendFreeWriting(" \n ", on: friday, language: .en, in: ctx, now: now)
+        }
+        #expect(try ctx.fetchCount(FetchDescriptor<JournalTurn>()) == 0)
+    }
+
+    @Test func twoClosingTurnsStillMeanTheDayIsDoneAndBothAreComposedInOrder() throws {
+        let ctx = try Fixtures.context()
+        try closedDay(ctx)
+        try JournalService.appendFreeWriting("more", on: friday, language: .en, in: ctx, now: now)
+        try ctx.save()
+        let turns = try JournalService.turns(on: friday, in: ctx)
+        #expect(turns.filter { $0.kind == .closing }.count == 2)
+        #expect(JournalProgress.of(turns) == .done(answered: 3))
+        #expect(JournalPlanner.next(signals: F.signals(), habits: .none, today: turns, language: .en) == .done)
+        #expect(JournalComposer.text(turns: turns, language: .en)
+                == "Journal 2026-09-18\n\nQ0\nA0\n\nQ1\nA1\n\nmore")
+    }
+}
