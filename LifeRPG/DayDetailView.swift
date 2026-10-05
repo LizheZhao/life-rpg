@@ -92,7 +92,10 @@ struct DayDetailView: View {
                 }
 
                 if !record.otherRatings.isEmpty {
-                    section("Other ratings this day") {
+                    // Both sources of `DayRecord.otherRatings`: a Library rating has no completion
+                    // to attach to, and a late `Rate / note` hangs off an earlier day's card.
+                    section("Other ratings this day",
+                            caption: "Ratings you gave this day from the Library, or for something you did on an earlier day.") {
                         plainCard {
                             ForEach(Array(record.otherRatings.enumerated()), id: \.element.id) { index, r in
                                 if index > 0 { divider }
@@ -107,9 +110,14 @@ struct DayDetailView: View {
         }
     }
 
-    private func section<Content: View>(_ title: String, @ViewBuilder _ rows: () -> Content) -> some View {
+    private func section<Content: View>(_ title: String, caption: String? = nil,
+                                        @ViewBuilder _ rows: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             SectionTitle(title: title)
+            if let caption {
+                Text(caption).lr(.caption).foregroundStyle(LR.Color.inkSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             rows()
         }
     }
