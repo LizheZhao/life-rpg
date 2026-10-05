@@ -8,16 +8,23 @@ public struct JournalEntryDay: Equatable, Sendable {
     public let isDone: Bool
     /// `JournalEntry.updatedAt`: the time the reader shows as written.
     public let writtenAt: Date
+    /// `JournalEntry.createdAt`: when the day's entry was started, which is the hour Trends calls
+    /// the usual one. Later edits do not move it.
+    public let createdAt: Date
 
-    public init(dayKey: String, document: JournalDocument, isDone: Bool, writtenAt: Date) {
+    /// `createdAt` left out reads as `writtenAt`, so a caller that only knows one time is not forced
+    /// to invent a second.
+    public init(dayKey: String, document: JournalDocument, isDone: Bool, writtenAt: Date, createdAt: Date? = nil) {
         self.dayKey = dayKey
         self.document = document
         self.isDone = isDone
         self.writtenAt = writtenAt
+        self.createdAt = createdAt ?? writtenAt
     }
 
     public init(_ entry: JournalEntry) {
-        self.init(dayKey: entry.dayKey, document: entry.document, isDone: entry.isDone, writtenAt: entry.updatedAt)
+        self.init(dayKey: entry.dayKey, document: entry.document, isDone: entry.isDone,
+                  writtenAt: entry.updatedAt, createdAt: entry.createdAt)
     }
 
     public var wordCount: Int { document.wordCount }

@@ -36,6 +36,14 @@ struct JournalEntryHistoryTests {
         #expect(day.plainText() == "one two three\n\nWhy?\nfour")
     }
 
+    @Test func aDayKeepsWhenItWasStartedApartFromWhenItWasLastSaved() {
+        let row = entry("2026-09-18", [F.text(1, "one")], hour: 23)
+        row.createdAt = Fixtures.date("2026-09-18", hour: 21)
+        let day = JournalEntryDay(row)
+        #expect(day.createdAt == Fixtures.date("2026-09-18", hour: 21))
+        #expect(day.writtenAt == Fixtures.date("2026-09-18", hour: 23))
+    }
+
     // MARK: the list
 
     @Test func daysAreNewestFirstAndOnlyEntriesWithSomethingWritten() {
