@@ -1,4 +1,5 @@
 import Foundation
+import SwiftData
 @testable import LifeRPGCore
 
 /// Plain rows for journal tests, built without a store: the planner and the signals are pure
@@ -94,5 +95,48 @@ enum JournalFixtures {
         t.promptID = ""
         t.writingSeconds = writingSeconds
         return t
+    }
+}
+
+/// Turn rows written the way the build before entries wrote them, for the tests of what is kept:
+/// the migration, the turn export and import, the store audit. The writer itself is gone from Core.
+enum TurnRows {
+    @discardableResult
+    static func record(_ context: ModelContext, dayKey: String, kind: JournalPromptKind, promptID: String = "",
+                       question: String, subject: JournalSubject? = nil, answer: String = "",
+                       outcome: JournalOutcome = .answered, source: JournalSource = .template,
+                       language: JournalLanguage, askedAt: Date, answeredAt: Date) throws -> JournalTurn {
+        let row = JournalTurn()
+        row.dayKey = dayKey
+        row.index = (try turns(on: dayKey, in: context).last?.index ?? -1) + 1
+        row.kind = kind
+        row.promptID = promptID
+        row.questionText = question
+        row.subjectKind = subject?.kind
+        row.subjectID = subject?.id
+        row.subjectText = subject?.text ?? ""
+        row.answer = answer
+        row.outcome = outcome
+        row.source = source
+        row.language = language
+        row.askedAt = askedAt
+        row.answeredAt = answeredAt
+        context.insert(row)
+        return row
+    }
+
+    /// The free-writing turn: a closing turn with no question and no prompt id, at the day's next index.
+    @discardableResult
+    static func freeWriting(_ context: ModelContext, _ text: String, on dayKey: String, at now: Date,
+                            writingSeconds: Int = 0) throws -> JournalTurn {
+        let row = try record(context, dayKey: dayKey, kind: .closing, question: "", answer: text,
+                             language: .en, askedAt: now, answeredAt: now)
+        row.writingSeconds = writingSeconds
+        return row
+    }
+
+    static func turns(on dayKey: String, in context: ModelContext) throws -> [JournalTurn] {
+        try context.fetch(FetchDescriptor<JournalTurn>(predicate: #Predicate { $0.dayKey == dayKey },
+                                                       sortBy: [SortDescriptor(\.index)]))
     }
 }

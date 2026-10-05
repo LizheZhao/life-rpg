@@ -1,16 +1,9 @@
 import Foundation
 @testable import LifeRPGCore
 
-/// Days for the Trends rules. `days` are the turn-based `JournalDay`s the old calendar marks still
-/// read; `entryDays` are the one-document-per-day `JournalEntryDay`s every Trends rule reads.
+/// Days for the Trends rules: the one-document-per-day `JournalEntryDay`s every Trends rule reads.
 enum TrendsFixtures {
     typealias F = JournalFixtures
-
-    /// Newest first, as `JournalHistory.days` returns them.
-    static func days(_ spec: [(String, Int)], hour: Int = 22) -> [JournalDay] {
-        let turns = spec.map { F.freeWriting(String(repeating: "word ", count: $0.1), on: $0.0, hour: hour) }
-        return JournalHistory.days(from: turns, language: .en)
-    }
 
     /// A day made of the given blocks, started and last saved at `hour:minute`.
     static func day(_ dayKey: String, _ blocks: [JournalBlock], hour: Int = 22, minute: Int = 0) -> JournalEntryDay {

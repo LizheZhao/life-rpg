@@ -134,10 +134,4 @@ struct JournalDocumentTests {
         #expect(F.doc(F.text(1, "今天天气很好我们去公园散步")).excerpt(limit: 6) == "今天天气很好\u{2026}")
         #expect(F.doc(F.text(1, "one, two, three")).excerpt(limit: 9) == "one, two\u{2026}")
     }
-
-    @Test func theTurnBasedDayAndTheDocumentCutTheSameWay() {
-        let text = "alpha beta gamma delta epsilon"
-        let day = JournalHistory.days(from: [JournalFixtures.freeWriting(text)], language: .en)[0]
-        #expect(day.excerpt(limit: 13) == F.doc(F.text(1, text)).excerpt(limit: 13))
-    }
 }

@@ -1,7 +1,7 @@
 import Foundation
 
 /// The beginning of what the user wrote, on one line, for a card that shows a few lines. One rule
-/// for the turn-based `JournalDay` and the document-based `JournalEntryDay`.
+/// for the document-based `JournalEntryDay` and `JournalDocument`.
 enum JournalExcerpt {
     /// Collapses runs of whitespace (newlines included) into single spaces.
     static func collapse(_ text: String) -> String {

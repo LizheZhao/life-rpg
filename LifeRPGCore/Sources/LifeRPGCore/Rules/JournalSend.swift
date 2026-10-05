@@ -13,20 +13,10 @@ public enum JournalSend {
         return DayKey.adding(-1, to: today, in: timeZone) ?? today
     }
 
-    /// The composed text of `turns` (one day's), or the empty string when there is nothing to
-    /// send: nothing written, or the very text that was last sent. Empty is what lets the
+    /// The plain text of the day's entry, or the empty string when there is nothing to send: no
+    /// entry, nothing written in it, or the very text that was last sent. Empty is what lets the
     /// automation run twice without a second entry. A text edited after it was sent comes back
     /// again here; this rule only says whether the text is new, and the app decides whether to ask.
-    public static func textToSend(turns: [JournalTurn], language: JournalLanguage,
-                                  lastSentFingerprint: String?) -> String {
-        let text = JournalComposer.text(turns: turns, language: language)
-        guard fingerprint(of: text) != lastSentFingerprint else { return "" }
-        return text
-    }
-
-    /// The plain text of the day's entry, or the empty string when there is nothing to send: no
-    /// entry, nothing written in it, or the very text that was last sent. The document counterpart
-    /// of the turn-based `textToSend`.
     public static func textToSend(entry: JournalEntry?, lastSentFingerprint: String?) -> String {
         guard let text = entry?.document.plainText(), !text.isEmpty,
               fingerprint(of: text) != lastSentFingerprint else { return "" }

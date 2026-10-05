@@ -43,7 +43,7 @@ struct JournalEntryBackupTests {
     @discardableResult
     private func turn(_ ctx: ModelContext, on dayKey: String, _ kind: JournalPromptKind, question: String = "",
                       answer: String, hour: Int = 22) throws -> JournalTurn {
-        try JournalService.record(ctx, dayKey: dayKey, kind: kind, promptID: question.isEmpty ? "" : "pool.x",
+        try TurnRows.record(ctx, dayKey: dayKey, kind: kind, promptID: question.isEmpty ? "" : "pool.x",
                                   question: question, answer: answer, language: .en,
                                   askedAt: at(dayKey, hour: hour - 1), answeredAt: at(dayKey, hour: hour))
     }
@@ -163,7 +163,7 @@ struct JournalEntryBackupTests {
     @Test func aVersion7FileWithOnlyTurnsComesBackAsEntries() throws {
         let ctx = try Fixtures.context()
         try turn(ctx, on: friday, .opening, question: "What stayed with you?", answer: "The walk.", hour: 21)
-        try JournalService.appendFreeWriting("Then I slept.", on: friday, language: .en, in: ctx, now: at(friday, hour: 23))
+        try TurnRows.freeWriting(ctx, "Then I slept.", on: friday, at: at(friday, hour: 23))
         try turn(ctx, on: thursday, .opening, question: "Opening?", answer: "ok", hour: 20)
         try ctx.save()
 

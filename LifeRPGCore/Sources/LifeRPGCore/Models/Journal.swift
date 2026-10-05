@@ -42,12 +42,11 @@ public struct JournalSubject: Equatable, Sendable {
 
 /// One question and the user's response to it, on one day.
 ///
-/// A row is inserted when the user responds and is written once. Only `JournalService.edit` changes
-/// its words afterwards, and it keeps `answeredAt`, `outcome`, `index`, `questionText` and everything
-/// else, so a day's journal is the ordered list of its turns; the question in flight lives in the UI.
-/// The one exception is the free-writing turn, which the writing page autosaves into again and again
-/// (`JournalService.saveFreeWriting`). There is deliberately no
-/// parent entry: the entry would only ever be a cache of "which turns share a `dayKey`".
+/// A row was inserted when the user responded, and was written once, apart from the free-writing
+/// turn the old page autosaved into. The app no longer writes turns: the journal is one
+/// `JournalEntry` per day, and `JournalMigration` copies these rows into entries once. The rows stay
+/// untouched, and in the export, until a later release drops them. A day's journal was the ordered
+/// list of its turns; there is deliberately no parent entry for them.
 ///
 /// Like every history row the question and subject text are snapshots. `subjectID` is the
 /// `DailyQuest` or `RoutineOccurrence` the question was about; those rows keep their ids through
@@ -82,7 +81,7 @@ public struct JournalSubject: Equatable, Sendable {
     public init() {}
 
     /// Free writing: a closing turn with no question and no pool row. One rule for what the free
-    /// page owns, so `saveFreeWriting`, `JournalProgress` and the planner agree on it.
+    /// page owned, so the migration, `JournalProgress` and the planner agree on it.
     public var isFreeWriting: Bool {
         kindRaw == JournalPromptKind.closing.rawValue && questionText.isEmpty && promptID.isEmpty
     }

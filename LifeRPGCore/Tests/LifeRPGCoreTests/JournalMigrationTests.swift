@@ -11,7 +11,7 @@ struct JournalMigrationTests {
     private func turn(_ ctx: ModelContext, on dayKey: String = "2026-09-18", _ kind: JournalPromptKind,
                       question: String = "", answer: String = "", outcome: JournalOutcome = .answered,
                       source: JournalSource = .template, asked: Int = 21, answered: Int = 22) throws -> JournalTurn {
-        try JournalService.record(ctx, dayKey: dayKey, kind: kind, promptID: question.isEmpty ? "" : "pool.\(kind.rawValue)",
+        try TurnRows.record(ctx, dayKey: dayKey, kind: kind, promptID: question.isEmpty ? "" : "pool.\(kind.rawValue)",
                                   question: question, answer: answer, outcome: outcome, source: source, language: .en,
                                   askedAt: Fixtures.date(dayKey, hour: asked), answeredAt: Fixtures.date(dayKey, hour: answered))
     }
@@ -31,7 +31,7 @@ struct JournalMigrationTests {
         try turn(ctx, .opening, question: "What stayed with you?", answer: "The walk.", source: .template)
         try turn(ctx, .good, question: "What was good about the gym?", answer: "Felt strong.", source: .model)
         try turn(ctx, .heavy, question: "What was hard?", answer: "Waking up.", source: .template)
-        try JournalService.appendFreeWriting("Then I slept.", on: friday, language: .en, in: ctx, now: Fixtures.date(friday, hour: 23))
+        try TurnRows.freeWriting(ctx, "Then I slept.", on: friday, at: Fixtures.date(friday, hour: 23))
         try ctx.save()
 
         #expect(try JournalMigration.migrateTurns(in: ctx) == 1)
@@ -71,8 +71,7 @@ struct JournalMigrationTests {
     @Test func aBlankFreeWritingTurnIsSkipped() throws {
         let ctx = try Fixtures.context()
         try turn(ctx, .opening, question: "Opening?", answer: "x")
-        try JournalService.saveFreeWriting("something", writingSeconds: 5, on: friday, language: .en, in: ctx, now: Fixtures.date(friday, hour: 23))
-        try JournalService.saveFreeWriting("", writingSeconds: 5, on: friday, language: .en, in: ctx, now: Fixtures.date(friday, hour: 23))
+        try TurnRows.freeWriting(ctx, "", on: friday, at: Fixtures.date(friday, hour: 23), writingSeconds: 5)
         try ctx.save()
 
         try JournalMigration.migrateTurns(in: ctx)
@@ -100,7 +99,7 @@ struct JournalMigrationTests {
 
     @Test func freeWritingAloneClosesTheDay() throws {
         let ctx = try Fixtures.context()
-        try JournalService.saveFreeWriting("just this", writingSeconds: 0, on: friday, language: .en, in: ctx, now: Fixtures.date(friday, hour: 22))
+        try TurnRows.freeWriting(ctx, "just this", on: friday, at: Fixtures.date(friday, hour: 22))
         try ctx.save()
         try JournalMigration.migrateTurns(in: ctx)
         let entry = try #require(try JournalEntries.entry(on: friday, in: ctx))
@@ -133,15 +132,15 @@ struct JournalMigrationTests {
         let ctx = try Fixtures.context()
         try turn(ctx, .opening, question: "Q?", answer: "a")
         try turn(ctx, .closing, question: "More?", answer: "b")
-        try JournalService.appendFreeWriting("c", on: friday, language: .en, in: ctx, now: Fixtures.date(friday, hour: 23))
+        try TurnRows.freeWriting(ctx, "c", on: friday, at: Fixtures.date(friday, hour: 23))
         try ctx.save()
-        let before = try JournalService.turns(on: friday, in: ctx).map { [$0.questionText, $0.answer, $0.kindRaw, "\($0.index)"] }
+        let before = try TurnRows.turns(on: friday, in: ctx).map { [$0.questionText, $0.answer, $0.kindRaw, "\($0.index)"] }
 
         #expect(try JournalMigration.migrateTurns(in: ctx) == 1)
         try ctx.save()
         #expect(try JournalMigration.migrateTurns(in: ctx) == 0)
         #expect(try ctx.fetchCount(FetchDescriptor<JournalEntry>()) == 1)
-        #expect(try JournalService.turns(on: friday, in: ctx).map { [$0.questionText, $0.answer, $0.kindRaw, "\($0.index)"] } == before)
+        #expect(try TurnRows.turns(on: friday, in: ctx).map { [$0.questionText, $0.answer, $0.kindRaw, "\($0.index)"] } == before)
         #expect(try ctx.fetchCount(FetchDescriptor<JournalTurn>()) == 3)
     }
 

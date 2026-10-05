@@ -11,14 +11,8 @@ struct JournalSendTests {
         return LifeCalendar.gregorian(zone).date(from: parts)!
     }
 
-    private func turn(_ index: Int, q: String, a: String, day: String = "2026-10-03") -> JournalTurn {
-        let t = JournalTurn()
-        t.dayKey = day; t.index = index; t.kind = .opening; t.questionText = q; t.answer = a; t.outcome = .answered
-        return t
-    }
-
-    private let composed = "Journal 2026-10-03\n\nWhat from today do you want to remember?\nThe rain."
-    private var turns: [JournalTurn] { [turn(0, q: "What from today do you want to remember?", a: "The rain.")] }
+    /// A day's text as it was handed over, for the sent-state rule, which only compares fingerprints.
+    private let composed = "Quiet day.\n\nWhat are you grateful for today?\nTea."
 
     // MARK: the day that has just ended
 
@@ -47,42 +41,6 @@ struct JournalSendTests {
         let honolulu = TimeZone(identifier: "Pacific/Honolulu")!
         #expect(JournalSend.finishedDayKey(now: moment, timeZone: zone) == "2026-10-04")
         #expect(JournalSend.finishedDayKey(now: moment, timeZone: honolulu) == "2026-10-03")
-    }
-
-    // MARK: what goes to Apple Journal
-
-    @Test func anUnsentDayGivesItsComposedText() {
-        #expect(JournalSend.textToSend(turns: turns, language: .en, lastSentFingerprint: nil) == composed)
-    }
-
-    @Test func aDayAlreadySentGivesNothingSoARepeatedRunCannotDuplicate() {
-        let sent = JournalSend.fingerprint(of: composed)
-        #expect(JournalSend.textToSend(turns: turns, language: .en, lastSentFingerprint: sent) == "")
-    }
-
-    @Test func aDayWithNothingWrittenGivesNothing() {
-        #expect(JournalSend.textToSend(turns: [], language: .en, lastSentFingerprint: nil) == "")
-        let skipped = turn(0, q: "Q", a: "")
-        skipped.outcome = .skipped
-        #expect(JournalSend.textToSend(turns: [skipped], language: .en, lastSentFingerprint: nil) == "")
-    }
-
-    @Test func aBlankAnswerGivesNothing() {
-        #expect(JournalSend.textToSend(turns: [turn(0, q: "Q", a: " \n\t")], language: .en,
-                                       lastSentFingerprint: nil) == "")
-    }
-
-    /// The rule only says "is this text new". Whether the app ever sends it again is its decision.
-    @Test func aTextEditedAfterItWasSentIsNewAgain() {
-        let sent = JournalSend.fingerprint(of: composed)
-        let edited = [turn(0, q: "What from today do you want to remember?", a: "The rain, and the walk.")]
-        #expect(JournalSend.textToSend(turns: edited, language: .en, lastSentFingerprint: sent)
-                == "Journal 2026-10-03\n\nWhat from today do you want to remember?\nThe rain, and the walk.")
-    }
-
-    @Test func theTextFollowsTheLanguage() {
-        #expect(JournalSend.textToSend(turns: turns, language: .zhHans, lastSentFingerprint: nil)
-                .hasPrefix("日记 2026-10-03"))
     }
 
     // MARK: sent, or changed since
@@ -117,7 +75,7 @@ struct JournalSendTests {
         #expect(JournalSend.fingerprint(of: "今天") != JournalSend.fingerprint(of: "今日"))
     }
 
-    // MARK: the entry-based text
+    // MARK: what goes to Apple Journal
 
     private func entry(_ blocks: [JournalBlock]) -> JournalEntry {
         let row = JournalEntry()
