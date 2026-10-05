@@ -52,42 +52,47 @@ struct TrendsView: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 0) {
-                if case .locked = page?.content {
-                    Color.clear.frame(height: 44)
-                } else {
-                    HStack {
-                        Spacer(minLength: 0)
-                        PeriodPicker(period: $period)
+        // The stack only carries the pushes (Ratings, the entries list); the page keeps its own title.
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    if case .locked = page?.content {
+                        Color.clear.frame(height: 44)
+                    } else {
+                        HStack {
+                            Spacer(minLength: 0)
+                            PeriodPicker(period: $period)
+                        }
+                        .padding(.top, 4)
                     }
-                    .padding(.top, 4)
-                }
-                Text("Trends").lr(.pageTitle).foregroundStyle(LR.Color.ink)
-                    .padding(.top, 14)
-                    .accessibilityAddTraits(.isHeader)
-                subtitleRow.padding(.top, 4)
-                if let page {
-                    switch page.content {
-                    case .locked(let locked): lockedContent(locked).padding(.top, 28)
-                    case .unlocked(let unlocked): unlockedContent(unlocked, period: page.period).padding(.top, 18)
+                    Text("Trends").lr(.pageTitle).foregroundStyle(LR.Color.ink)
+                        .padding(.top, 14)
+                        .accessibilityAddTraits(.isHeader)
+                    subtitleRow.padding(.top, 4)
+                    if let page {
+                        switch page.content {
+                        case .locked(let locked): lockedContent(locked).padding(.top, 28)
+                        case .unlocked(let unlocked): unlockedContent(unlocked, period: page.period).padding(.top, 18)
+                        }
                     }
+                    if !entries.isEmpty { entriesLink.padding(.top, 8) }
                 }
+                .padding(.horizontal, 16)
+                .padding(.bottom, 12)
             }
-            .padding(.horizontal, 16)
-            .padding(.bottom, 12)
+            .reservingTabBarSpace()
+            .background(LR.Color.canvas.ignoresSafeArea())
+            .toolbar(.hidden, for: .navigationBar)
+            .task(id: key) {
+                // Let the page draw (and a tab switch finish) before the work.
+                await Task.yield()
+                page = build()
+            }
+            .fullScreenCover(isPresented: $writing) {
+                JournalEditorView(dayKey: today, today: today)
+            }
+            .onChange(of: period) { anchor = nil }
         }
-        .reservingTabBarSpace()
-        .background(LR.Color.canvas.ignoresSafeArea())
-        .task(id: key) {
-            // Let the page draw (and a tab switch finish) before the work.
-            await Task.yield()
-            page = build()
-        }
-        .fullScreenCover(isPresented: $writing) {
-            JournalEditorView(dayKey: today, today: today)
-        }
-        .onChange(of: period) { anchor = nil }
     }
 
     private func build() -> TrendsPage {
@@ -189,6 +194,8 @@ struct TrendsView: View {
                 }
             }
             .padding(.top, 10)
+            // Ratings are not a chart, and this is the only way to them.
+            ratingsLink.padding(.top, 12)
         }
     }
 
@@ -207,10 +214,40 @@ struct TrendsView: View {
             if let about = page.about { aboutCard(about) }
             if !page.calendar.isEmpty { calendarCard(page.calendar, period: period, daysWritten: daysWritten) }
             if let favorites = page.favorites { favoritesCard(favorites) }
+            ratingsLink
             if let energy = page.energy { energyCard(energy) }
             if !page.gratitude.isEmpty { gratitudeCard(page.gratitude) }
             if !page.year.isEmpty { yearCard(page.year) }
         }
+    }
+
+    private var ratingsLink: some View {
+        NavigationLink { RatingSummaryView(today: today) } label: {
+            InfoRowCard(systemImage: "star.bubble", disc: LR.Color.sectionCircle(.hidden), title: "Ratings",
+                        caption: "What has been landing well lately", chevron: true)
+        }
+        .buttonStyle(PressableCardStyle())
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Ratings, what has been landing well lately")
+        .accessibilityAddTraits(.isButton)
+    }
+
+    /// A quiet row, not a card: the page is about patterns, the list is where single days are.
+    private var entriesLink: some View {
+        NavigationLink { JournalEntriesView(today: today) } label: {
+            HStack {
+                Text("All journal entries").lr(.bodyStrong)
+                Spacer(minLength: 8)
+                Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold))
+                    .accessibilityHidden(true)
+            }
+            .foregroundStyle(LR.Color.inkSecondary)
+            .padding(.horizontal, 4)
+            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(PressableCardStyle())
+        .accessibilityLabel("All journal entries")
     }
 
     private func tile(_ value: String, _ label: String) -> some View {

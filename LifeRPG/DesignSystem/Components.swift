@@ -454,3 +454,38 @@ struct PillSegmentedControl<Value: Hashable>: View {
         }
     }
 }
+
+/// A row card: an icon on a disc, a title over a caption, and a chevron when it leads somewhere.
+/// The Calendar's "All journal entries" and Trends' Ratings are this.
+struct InfoRowCard: View {
+    let systemImage: String
+    let disc: Color
+    let title: LocalizedStringKey
+    let caption: String
+    var chevron = false
+
+    var body: some View {
+        HStack(spacing: 14) {
+            Image(systemName: systemImage)
+                .font(.system(size: 18, weight: .medium))
+                .foregroundStyle(LR.Color.ink)
+                .frame(width: 40, height: 40)
+                .background(Circle().fill(disc))
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title).lr(.heading).foregroundStyle(LR.Color.ink)
+                Text(caption).lr(.caption).foregroundStyle(LR.Color.inkSecondary)
+            }
+            Spacer(minLength: 8)
+            if chevron {
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(LR.Color.iconNeutral)
+                    .accessibilityHidden(true)
+            }
+        }
+        .padding(.horizontal, 16).padding(.vertical, 14)
+        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+        .lrCard(.surface, radius: LR.Radius.row)
+    }
+}

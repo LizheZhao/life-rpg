@@ -37,27 +37,43 @@ struct CalendarView: View {
 
     var body: some View {
         // Both rules live in Core; the page only hands over the rows its queries hold.
-        let journalLevels = JournalMarks.levels(entryDays: JournalEntryHistory.days(from: journalEntries))
+        let journalDays = JournalEntryHistory.days(from: journalEntries)
+        let journalLevels = JournalMarks.levels(entryDays: journalDays)
         let marks = CalendarMarks.marks(quests: quests, occurrences: occurrences, journalLevels: journalLevels)
         let epicWeeks = CalendarMarks.epicWeeks(quests)
         NavigationStack {
             ScrollView {
                 VStack(spacing: LR.Spacing.sectionGap) {
+                    titleRow
                     header
                     gridCard(marks: marks, epicWeeks: epicWeeks)
                     legend
-                    ratingsLink
+                    entriesLink(count: journalDays.count)
                 }
                 .padding(.horizontal, 16)
+                .padding(.top, 4)
             }
             .reservingTabBarSpace()
             .background(LR.Color.canvas.ignoresSafeArea())
-            .navigationTitle("Calendar")
+            .toolbar(.hidden, for: .navigationBar)
             .sheet(item: $selected) { DayDetailView(dayKey: $0.id) }
         }
     }
 
     // MARK: header
+
+    /// The page title with the round book that opens the entries list.
+    private var titleRow: some View {
+        HStack {
+            Text("Calendar").lr(.pageTitle).foregroundStyle(LR.Color.ink)
+                .accessibilityAddTraits(.isHeader)
+            Spacer(minLength: 8)
+            NavigationLink { JournalEntriesView(today: today) } label: { RoundIcon(systemName: "book") }
+                .buttonStyle(PressableCardStyle())
+                .accessibilityLabel("All journal entries")
+        }
+        .padding(.top, 8)
+    }
 
     private var header: some View {
         HStack(spacing: 12) {
@@ -219,7 +235,7 @@ struct CalendarView: View {
         return parts.isEmpty ? "nothing recorded" : parts.joined(separator: ", ")
     }
 
-    // MARK: legend and ratings
+    // MARK: legend and entries
 
     private var legend: some View {
         FlowRow(spacing: 6) {
@@ -258,34 +274,6 @@ struct CalendarView: View {
             .foregroundStyle(LR.Color.ink.opacity(Self.pencilOpacity[level - 1]))
     }
 
-    /// A row card: an icon on a disc, a title over a caption, and a chevron when it leads somewhere.
-    private func infoRow(_ systemImage: String, disc: Color, title: LocalizedStringKey, caption: LocalizedStringKey,
-                         chevron: Bool = false) -> some View {
-        HStack(spacing: 12) {
-            Image(systemName: systemImage)
-                .font(.system(size: 15, weight: .medium))
-                .foregroundStyle(LR.Color.iconNeutral)
-                .frame(width: 32, height: 32)
-                .background(Circle().fill(disc))
-                .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title).lr(.bodyStrong).foregroundStyle(LR.Color.ink)
-                Text(caption).lr(.caption)
-                    .foregroundStyle(LR.Color.inkSecondary)
-            }
-            Spacer(minLength: 8)
-            if chevron {
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(LR.Color.iconNeutral)
-                    .accessibilityHidden(true)
-            }
-        }
-        .padding(12)
-        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-        .lrCard(.surface, radius: LR.Radius.row)
-    }
-
     private func tierName(_ tint: QuestTint) -> String {
         switch tint {
         case .trivial: "Trivial"
@@ -298,14 +286,14 @@ struct CalendarView: View {
         }
     }
 
-    private var ratingsLink: some View {
-        NavigationLink { RatingSummaryView(today: today) } label: {
-            infoRow("star.bubble", disc: LR.Color.sectionCircle(.hidden), title: "Ratings",
-                    caption: "What has been landing well lately", chevron: true)
+    private func entriesLink(count: Int) -> some View {
+        NavigationLink { JournalEntriesView(today: today) } label: {
+            InfoRowCard(systemImage: "book", disc: LR.Color.tabPill, title: "All journal entries",
+                        caption: JournalEntriesList.cardLine(entries: count), chevron: true)
         }
         .buttonStyle(PressableCardStyle())
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Ratings, what has been landing well lately")
+        .accessibilityLabel("All journal entries, \(JournalEntriesList.cardLine(entries: count))")
         .accessibilityAddTraits(.isButton)
     }
 
