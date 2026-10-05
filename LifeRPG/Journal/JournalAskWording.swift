@@ -5,7 +5,7 @@ import LifeRPGCore
 /// nil otherwise, which `JournalAsk.resolve` answers with the next fixed prompt. On the simulator
 /// the Debug page can force a result instead, so each path can be driven without a model.
 enum JournalAskWording {
-    static func current(language: JournalLanguage) -> (any JournalWording)? {
+    nonisolated static func current(language: JournalLanguage) -> (any JournalWording)? {
         #if targetEnvironment(simulator)
         if let forced = JournalAskForce.current { return forced }
         #endif
@@ -20,10 +20,9 @@ enum JournalAskForce: String, CaseIterable {
 
     static let key = "debugJournalAsk"
 
-    static let options: [(String, String)] = [("Real", "real"), ("Question", "question"), ("Timeout", "timeout"),
-                                              ("Error", "error"), ("Garbage", "garbage")]
+    static var options: [(String, String)] { allCases.map { ($0.rawValue.capitalized, $0.rawValue) } }
 
-    static var current: (any JournalWording)? {
+    nonisolated static var current: (any JournalWording)? {
         let force = JournalAskForce(rawValue: UserDefaults.standard.string(forKey: key) ?? "") ?? .real
         return force == .real ? nil : ForcedWording(force: force)
     }

@@ -134,8 +134,16 @@ struct DebugView: View {
                                          selection: $journalTiming, accessibilityLabel: "Journal card")
                 }
                 section("Ask me something (simulator only)", footer: "Forces what the model returns to the editor's pill. Real uses the on-device model when there is one and the fixed prompts otherwise. Question is a canned question, Timeout never answers (the pill waits 6 s), Error returns nothing, Garbage returns text Core must reject.") {
-                    PillSegmentedControl(options: JournalAskForce.options, selection: $askForce,
-                                         accessibilityLabel: "Ask me something")
+                    FlowRow(spacing: 8) {
+                        ForEach(JournalAskForce.options, id: \.1) { label, value in
+                            if askForce == value {
+                                Button(label) { askForce = value }.buttonStyle(InkPillButtonStyle())
+                            } else {
+                                Button(label) { askForce = value }.buttonStyle(PillButtonStyle())
+                            }
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 section("Old journal turns (simulator only)", footer: "Writes turn-based days two, three and four days before the app's day, as the build before entries stored them. The migration runs once at launch, guarded by a flag: Reset the flag, then relaunch the app to see those days become entries. A second relaunch must not bring back a day you cleared.") {
                     FlowRow(spacing: 8) {
