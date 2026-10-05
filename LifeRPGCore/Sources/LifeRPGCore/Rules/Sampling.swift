@@ -92,7 +92,12 @@ public enum Sampling {
 
     /// Fetches the active templates once; `ensureToday` filters the same array per slot rather
     /// than issuing one fetch per slot.
+    ///
+    /// Sorted by text, which the library keeps unique: an unsorted fetch comes back in an order
+    /// that changes per store, and a draw walks the pool in order, so the same `SeededRNG` seed
+    /// would otherwise draw different quests each run.
     public static func activeTemplates(_ context: ModelContext) throws -> [QuestTemplate] {
-        try context.fetch(FetchDescriptor<QuestTemplate>(predicate: #Predicate { $0.isActive }))
+        try context.fetch(FetchDescriptor<QuestTemplate>(predicate: #Predicate { $0.isActive },
+                                                         sortBy: [SortDescriptor(\.text)]))
     }
 }
