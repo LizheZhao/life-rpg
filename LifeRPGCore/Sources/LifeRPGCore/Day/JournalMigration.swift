@@ -25,13 +25,19 @@ public enum JournalMigration {
         return created
     }
 
+    /// The closing turn, whether it answers the closing question or is free writing, ended the day.
+    /// A free-writing turn that is blank (the page was cleared) closed nothing.
+    static func isClosed(_ turns: [JournalTurn]) -> Bool {
+        turns.contains { $0.kind == .closing && !$0.isBlankFreeWriting }
+    }
+
     /// One day's turns as an entry, or nil when nothing is written in them.
     ///
     /// An answered question becomes a prompt with its answer, a skipped or misfit one a prompt with
     /// no answer (it stays visible as passed), free writing a text, and the safety line is dropped.
     /// A model-worded question is `llm`, a pool question `fixed`, with no `fixedKey` because the pool
     /// rows are not the four chips. `createdAt` is the first question asked and `updatedAt` the last
-    /// answer; `doneAt` is that last answer when the day was closed (`JournalProgress.isClosed`).
+    /// answer; `doneAt` is that last answer when the day was closed (`isClosed`).
     static func entry(from rows: [JournalTurn], dayKey: String) -> JournalEntry? {
         let ordered = rows.sorted { $0.index < $1.index }
         var blocks: [JournalBlock] = []
@@ -52,7 +58,7 @@ public enum JournalMigration {
         row.blocksJSON = JournalBlock.encodeAll(document.blocks)
         row.createdAt = first
         row.updatedAt = last
-        row.doneAt = JournalProgress.isClosed(ordered) ? last : nil
+        row.doneAt = isClosed(ordered) ? last : nil
         return row
     }
 }

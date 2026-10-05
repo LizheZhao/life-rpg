@@ -196,44 +196,17 @@ struct JournalBlankFreeWritingTests {
     typealias F = JournalFixtures
 
     @Test func aBlankFreeWritingTurnDoesNotCloseTheDay() {
-        #expect(!JournalProgress.isClosed([F.freeWriting("")]))
-        #expect(!JournalProgress.isClosed([F.turn(.opening, "ok then", index: 0), F.freeWriting("  \n", index: 1)]))
+        #expect(!JournalMigration.isClosed([F.freeWriting("")]))
+        #expect(!JournalMigration.isClosed([F.turn(.opening, "ok then", index: 0), F.freeWriting("  \n", index: 1)]))
     }
 
     @Test func aWrittenFreeWritingTurnStillClosesIt() {
-        #expect(JournalProgress.isClosed([F.freeWriting("hello")]))
+        #expect(JournalMigration.isClosed([F.freeWriting("hello")]))
     }
 
     @Test func aSkippedQuestionedClosingTurnStillCloses() {
-        #expect(JournalProgress.isClosed([F.turn(.closing, "", index: 0, outcome: .skipped)]))
+        #expect(JournalMigration.isClosed([F.turn(.closing, "", index: 0, outcome: .skipped)]))
         let blankButQuestioned = F.turn(.closing, "", index: 0)
-        #expect(JournalProgress.isClosed([blankButQuestioned]))
-    }
-
-    @Test func theNextQuestionIsAskedAsIfTheBlankTurnWerenotThere() {
-        let blank = F.freeWriting("", index: 0)
-        let step = JournalPlanner.next(signals: F.signals(), habits: .none, today: [blank], language: .en)
-        guard case .ask(let q) = step else { Issue.record("expected the opening, got \(step)"); return }
-        #expect(q.kind == .opening)
-    }
-
-    @Test func aFollowUpIsStillOfferedWhenTheBlankTurnIsTheLastRow() {
-        let opening = F.turn(.opening, "That one went better than I expected.", index: 0)
-        let blank = F.freeWriting("", index: 1)
-        let step = JournalPlanner.next(signals: F.signals(), habits: .none, today: [opening, blank], language: .en)
-        guard case .followUp = step else { Issue.record("expected a follow-up, got \(step)"); return }
-    }
-
-    @Test func aWrittenFreeWritingTurnStillEndsTheDayForThePlanner() {
-        let step = JournalPlanner.next(signals: F.signals(), habits: .none, today: [F.freeWriting("text")], language: .en)
-        #expect(step == .done)
-    }
-
-    @Test func aClearedPageIsNotAnAnsweredClosingQuestionInTheHabits() {
-        let turns = [F.turn(.closing, "", index: 0, on: "2026-09-17", outcome: .skipped),
-                     F.freeWriting("", index: 1, on: "2026-09-17")]
-        let habits = JournalHabits.derive(from: turns, asOf: "2026-09-18", timeZone: Fixtures.tokyo)
-        // One skip and no answers: (0 + 1) / (0 + 1 + 1) = 0.5. A counted blank would read 2/3.
-        #expect(habits.weight(for: .closing) == 0.5)
+        #expect(JournalMigration.isClosed([blankButQuestioned]))
     }
 }

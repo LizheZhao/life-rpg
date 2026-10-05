@@ -2,7 +2,7 @@ import Foundation
 import SwiftData
 @testable import LifeRPGCore
 
-/// Plain rows for journal tests, built without a store: the planner and the signals are pure
+/// Plain rows for journal tests, built without a store: the signals are pure
 /// functions of rows, so a worked day is just a handful of them.
 enum JournalFixtures {
     static let day = "2026-09-18"

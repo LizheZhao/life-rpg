@@ -1,16 +1,12 @@
 import Foundation
 import SwiftData
 
-/// What a journal question is for. The kind is what the planner ranks and what the habit weights
-/// are learned per, so it is stored with every turn.
+/// What a journal question was for. The kind was stored with every turn, and the pool is grouped
+/// by it.
 public enum JournalPromptKind: String, Codable, CaseIterable, Sendable {
     case opening, heavy, good, choice, skip, followUp, closing
-    /// The safety line. Recorded when it has been shown, so that "shown once" survives an app kill
-    /// without the planner needing any state beyond the day's turns.
+    /// The safety line. Recorded on a turn when it was shown.
     case safety
-
-    /// The kinds that ask about one specific thing from the day, as opposed to the day as a whole.
-    public static let supplemental: [JournalPromptKind] = [.skip, .heavy, .good, .choice]
 }
 
 /// How the user answered a question. A skipped or misfit turn is still a response: the question
@@ -81,7 +77,7 @@ public struct JournalSubject: Equatable, Sendable {
     public init() {}
 
     /// Free writing: a closing turn with no question and no pool row. One rule for what the free
-    /// page owned, so the migration, `JournalProgress` and the planner agree on it.
+    /// page owned, so the migration and the turn readers agree on it.
     public var isFreeWriting: Bool {
         kindRaw == JournalPromptKind.closing.rawValue && questionText.isEmpty && promptID.isEmpty
     }
