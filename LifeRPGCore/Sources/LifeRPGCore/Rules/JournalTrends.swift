@@ -67,9 +67,21 @@ extension JournalTrends {
         public struct DayWords: Equatable, Sendable {
             public let dayKey: String
             public let words: Int
-            /// 0 for a day with no writing, 1 to 3 for the rest, 3 the longest third
-            /// (`Year.level(forWords:among:)`), for both the bars and the heat grid.
-            public let level: Int
+            /// The bar is drawn darkest: the day has words and is at or above the period's nearest-rank
+            /// 90th percentile (`topCutoff`).
+            public let isTop: Bool
+            /// The heat grid's cell: 0 for a day with no entry, otherwise the calendar glyph's fixed
+            /// band for the day's words (`JournalMarks.level(forWords:)`).
+            public let tier: Int
+        }
+
+        /// The word count a bar must reach to be darkest: the value at rank `ceil(0.9 * n)` of the
+        /// written days (those with words), ascending. Nil with none. The rank is at least 1 whatever
+        /// `n` is, so any writing has a darkest day.
+        static func topCutoff(of wordCounts: [Int]) -> Int? {
+            let written = wordCounts.filter { $0 > 0 }.sorted()
+            guard !written.isEmpty else { return nil }
+            return written[(written.count * 9 + 9) / 10 - 1]
         }
 
         private let all: [JournalEntryDay]
@@ -98,10 +110,11 @@ extension JournalTrends {
         /// Every day of the period in order, 0 words for a day with none.
         public var wordsByDay: [DayWords] {
             let words = Dictionary(inRange.map { ($0.dayKey, $0.wordCount) }, uniquingKeysWith: +)
-            let written = Array(words.values)
+            let cutoff = Self.topCutoff(of: Array(words.values))
             return range.days(in: timeZone).map { key in
                 let count = words[key] ?? 0
-                return DayWords(dayKey: key, words: count, level: Year.level(forWords: count, among: written))
+                return DayWords(dayKey: key, words: count, isTop: count > 0 && count >= (cutoff ?? .max),
+                                tier: words[key].map(JournalMarks.level(forWords:)) ?? 0)
             }
         }
 

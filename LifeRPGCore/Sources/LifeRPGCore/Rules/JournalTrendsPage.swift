@@ -48,8 +48,8 @@ public struct TrendsPage: Equatable, Sendable {
             public let words: Int
             /// 0 to 1 against the longest day of the period.
             public let fraction: Double
-            /// 0 for a quiet day, 1 to 3 by thirds of the written days, 3 the longest.
-            public let level: Int
+            /// Drawn in ink: the day is at or above the period's 90th percentile of written days.
+            public let isTop: Bool
         }
 
         public let average: Int
@@ -73,6 +73,7 @@ public struct TrendsPage: Equatable, Sendable {
 
     public struct CalendarCell: Equatable, Sendable {
         public let dayKey: String
+        /// 0 for a day with no entry, 1 to 3 by the calendar glyph's bands of words.
         public let level: Int
     }
 
@@ -148,7 +149,7 @@ extension TrendsPage {
             let longest = max(1, byDay.map(\.words).max() ?? 1)
             let bars = byDay.map {
                 WordsPerDay.Bar(dayKey: $0.dayKey, words: $0.words, fraction: Double($0.words) / Double(longest),
-                                level: $0.level)
+                                isTop: $0.isTop)
             }
             let keys = byDay.map(\.dayKey)
             let axis = [keys.first, keys.isEmpty ? nil : keys[(keys.count - 1) / 2], keys.last]
@@ -201,7 +202,7 @@ extension TrendsPage {
             usualHour: writing.usualHour.map(formatter.hour),
             wordsPerDay: wordsPerDay,
             about: about,
-            calendar: entries == 0 ? [] : byDay.map { CalendarCell(dayKey: $0.dayKey, level: $0.level) },
+            calendar: entries == 0 ? [] : byDay.map { CalendarCell(dayKey: $0.dayKey, level: $0.tier) },
             favorites: favorites,
             energy: energy,
             gratitude: JournalTrends.Gratitude.phrases(in: periodDays),

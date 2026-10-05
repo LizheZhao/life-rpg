@@ -32,10 +32,49 @@ struct JournalTrendsWritingTests {
         #expect(w.wordsByDay.map(\.words) == [0, 250, 0, 0, 40, 0, 0])
     }
 
-    @Test func aQuietDayIsAnEmptyBarAndTheLongestThirdIsDarkest() {
-        let w = writing([("2026-09-14", 10), ("2026-09-15", 20), ("2026-09-16", 30),
-                         ("2026-09-17", 40), ("2026-09-18", 50), ("2026-09-19", 60)], in: week)
-        #expect(w.wordsByDay.map(\.level) == [1, 1, 2, 2, 3, 3, 0])
+    // The darkest bars are the days at or above the nearest-rank 90th percentile: the value at rank
+    // ceil(0.9 * n) of the written days, ascending. Ties at the cutoff are all darkest.
+    private func top(_ counts: [Int]) -> [Bool] {
+        let spec = counts.enumerated().map { (String(format: "2026-09-%02d", $0.offset + 1), $0.element) }
+        return writing(spec).wordsByDay.prefix(counts.count).map(\.isTop)
+    }
+
+    @Test func aTenDayPeriodsDarkestBarsAreTheNinthAndTenthLongest() {
+        #expect(top([10, 20, 30, 40, 50, 60, 70, 80, 90, 100])
+                == [false, false, false, false, false, false, false, false, true, true])
+    }
+
+    @Test func aTwentyDayPeriodsDarkestBarsAreTheThreeLongest() {
+        let counts = (1...20).map { $0 * 10 }
+        #expect(top(counts) == (1...20).map { $0 >= 18 })
+    }
+
+    @Test func fewDaysStillHaveADarkestOneAndTiesAtTheCutoffAreAllDarkest() {
+        #expect(top([40]) == [true])
+        #expect(top([10, 30, 20]) == [false, true, false])
+        #expect(top([5, 5, 5]) == [true, true, true])
+        // Ascending 1 x7, 7, 7, 9: rank 9 is 7, so both sevens and the nine.
+        #expect(top([9, 7, 7, 1, 1, 1, 1, 1, 1, 1]) == [true, true, true, false, false, false, false, false, false, false])
+    }
+
+    @Test func aDayWithNoWordsIsNeverDarkestAndDoesNotCountTowardTheCutoff() {
+        // Two written days of 50 and 80: the cutoff is 80. The four quiet days are not days with words.
+        let w = writing([("2026-09-14", 50), ("2026-09-16", 80)], in: week)
+        #expect(w.wordsByDay.map(\.isTop) == [false, false, true, false, false, false, false])
+        #expect(writing([], in: week).wordsByDay.allSatisfy { !$0.isTop })
+    }
+
+    @Test func theHeatGridUsesTheCalendarGlyphsFixedTiers() {
+        let w = writing([("2026-09-14", 99), ("2026-09-15", 100), ("2026-09-16", 299), ("2026-09-17", 300),
+                         ("2026-09-18", 1000)], in: week)
+        #expect(w.wordsByDay.map(\.tier) == [1, 2, 2, 3, 3, 0, 0])
+    }
+
+    @Test func anEntryOfOnlyEmojiHasTheLightestTierWhileADayWithNoEntryHasNone() {
+        let emoji = TrendsFixtures.day("2026-09-14", text: "\u{1F600}")
+        let w = JournalTrends.Writing(days: [emoji], range: week, timeZone: tz)
+        #expect(w.wordsByDay.map(\.tier) == [1, 0, 0, 0, 0, 0, 0])
+        #expect(w.wordsByDay.map(\.isTop) == Array(repeating: false, count: 7))
     }
 
     @Test func theStreakCountsConsecutiveWrittenDaysEndingToday() {

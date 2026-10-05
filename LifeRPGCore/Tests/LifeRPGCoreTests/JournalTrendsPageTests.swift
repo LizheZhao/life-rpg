@@ -130,8 +130,8 @@ struct JournalTrendsPageTests {
                                               "2026-09-18", "2026-09-19", "2026-09-20"])
         #expect(chart.bars.map(\.words) == [100, 400, 100, 100, 25, 0, 0])
         #expect(chart.bars.map(\.fraction) == [0.25, 1, 0.25, 0.25, 0.0625, 0, 0])
-        #expect(chart.bars[1].level == 3)
-        #expect(chart.bars[5].level == 0)
+        // Five written days, so the 90th percentile is the longest: only the 400 is darkest.
+        #expect(chart.bars.map(\.isTop) == [false, true, false, false, false, false, false])
         // 5 written days of 100, 400, 100, 100, 25: average 145.
         #expect(chart.average == 145)
         #expect(chart.axis == ["Sep 14", "Sep 17", "Sep 20"])
@@ -151,7 +151,9 @@ struct JournalTrendsPageTests {
         let bar = try! #require(result.wordsPerDay?.bars.first { $0.dayKey == "2026-09-17" })
         #expect(bar.words == 0)
         #expect(bar.fraction == 0)
-        #expect(bar.level == 0)
+        #expect(!bar.isTop)
+        // The entry is still an entry, so its heat cell is the lightest tier rather than blank.
+        #expect(result.calendar.first { $0.dayKey == "2026-09-17" }?.level == 1)
     }
 
     // MARK: words
@@ -191,11 +193,12 @@ struct JournalTrendsPageTests {
 
     // MARK: calendar, gratitude, year
 
-    @Test func theHeatGridHasACellPerDayAtTheLevelOfItsBar() {
+    @Test func theHeatGridHasACellPerDayAtTheTierOfItsWords() {
         let result = unlocked(page(.week, anchor: "2026-09-16"))
         #expect(result.calendar.map(\.dayKey) == ["2026-09-14", "2026-09-15", "2026-09-16", "2026-09-17",
                                                    "2026-09-18", "2026-09-19", "2026-09-20"])
-        #expect(result.calendar.map(\.level) == [3, 3, 3, 3, 0, 0, 0])
+        // 100 words a day is the middle tier of the glyph's bands.
+        #expect(result.calendar.map(\.level) == [2, 2, 2, 2, 0, 0, 0])
     }
 
     @Test func gratitudeIsThePeriodsMostOftenPhrasesAndAbsentWhenThereAreNone() {
