@@ -66,7 +66,7 @@ public enum JournalTextCheck {
         return Violation.allCases.filter(found.contains)
     }
 
-    private static func isQuestionMark(_ character: Character) -> Bool {
+    static func isQuestionMark(_ character: Character) -> Bool {
         character == "?" || character == "？"
     }
 

@@ -42,17 +42,15 @@ public enum JournalPlaceholder: String, CaseIterable, Sendable {
     case phrase
 }
 
-/// The question pool: examples and direction for the model, and the fallback when it can't help.
+/// The question pool: tone anchors for the model's "Ask me something" question, chosen by the day's
+/// facts (`JournalAsk.anchors`), which it must not copy (`JournalNovelty`). Each row's `approach`
+/// is the question shape it borrows.
 ///
-/// Rows are not what the user is meant to read every day. The planner decides what to ask and the
-/// model words a fresh question, with a few rows of the kind as tone anchors (`JournalExample`)
-/// that it must not copy (`JournalNovelty`). A row is shown as it stands only when the model is
-/// unavailable or its wording is rejected, and then the least recently used one of the kind, so the
-/// fallback rotates too. Each row's `approach` is the question shape it borrows.
-///
-/// A table rather than code, so a wording change is one edited row. Every row also has to pass
-/// `JournalTextCheck`, except the one-question rule on three deliberate two-part rows, so the
-/// anchors follow the same voice rules the model is held to.
+/// A table rather than code, so a wording change is one edited row, and `doc/JOURNAL_PROMPTS.md`
+/// is the draft it is checked against. Every row also has to pass `JournalTextCheck`, except the
+/// one-question rule on three deliberate two-part rows, so the anchors follow the same voice rules
+/// the model is held to. The follow-up, closing and choice rows belong to the draft but no code
+/// asks for them now.
 public enum JournalPool {
     public static let all: [JournalPrompt] = [
         .init(id: "open.scale", kind: .opening, approach: .scale,
