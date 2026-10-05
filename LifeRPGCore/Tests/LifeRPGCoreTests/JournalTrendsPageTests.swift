@@ -235,7 +235,7 @@ struct JournalTrendsPageTests {
         #expect(unlocked(page(.month)).gratitude.isEmpty)
     }
 
-    @Test func theYearAtAGlanceIsTwelveCirclesShadedByEntriesOfTheYearOfThePeriod() {
+    @Test func theYearAtAGlanceIsTwelveCirclesShadedByEntriesOfTheCalendarYear() {
         let spec = september() + (1...12).map { (String(format: "2026-08-%02d", $0), 10) }
             + [("2025-12-30", 10)]
         let circles = unlocked(page(.month, spec: spec)).year
@@ -245,6 +245,22 @@ struct JournalTrendsPageTests {
         #expect(circles[8].entries == 8 && circles[8].level == 1)
         #expect(circles[0].entries == 0 && circles[0].level == 0)
         #expect(circles[11].entries == 0)
+    }
+
+    @Test func theYearAtAGlanceIsTheYearOfTodayWhateverPeriodIsShownOrBrowsed() {
+        let spec = september() + (1...12).map { (String(format: "2026-08-%02d", $0), 10) }
+            + [("2025-12-30", 10), ("2025-12-31", 10)]
+        func entries(_ built: TrendsPage) -> [Int] { unlocked(built).year.map(\.entries) }
+        let thisYear = [0, 0, 0, 0, 0, 0, 0, 12, 8, 0, 0, 0]
+        #expect(entries(page(.month, spec: spec)) == thisYear)
+        #expect(entries(page(.week, anchor: "2026-09-16", spec: spec)) == thisYear)
+        #expect(entries(page(.year, spec: spec)) == thisYear)
+        // Browsing back to December 2025 or to all of 2025 leaves the dots on 2026.
+        #expect(entries(page(.month, anchor: "2025-12-30", spec: spec)) == thisYear)
+        #expect(entries(page(.year, anchor: "2025-06-01", spec: spec)) == thisYear)
+        // Another today, another year: 2025 has the two December entries.
+        let lastDecember = entries(page(.month, anchor: "2025-12-30", today: "2025-12-31", spec: spec))
+        #expect(lastDecember == [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2])
     }
 
     // MARK: quests and energy

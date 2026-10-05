@@ -194,7 +194,8 @@ extension TrendsPage {
                           lowDayPercent: JournalTrends.Energy.lowDayRatio(energyDays))
         }()
 
-        let year = MonthKey(dayKey: range.first)?.year ?? 0
+        // The calendar year of today, however far back the period control has been paged.
+        let year = MonthKey(dayKey: today)?.year ?? 0
         let counts = JournalTrends.Year.monthCounts(of: days, year: year)
         let circles = counts.allSatisfy({ $0 == 0 }) ? [] : counts.enumerated().map { index, count in
             MonthCircle(label: formatter.monthName(index), entries: count, level: JournalTrends.Year.level(for: count))
