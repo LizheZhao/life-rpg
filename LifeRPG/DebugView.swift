@@ -16,6 +16,8 @@ struct DebugView: View {
     @AppStorage("debugDayOffset") private var dayOffset = 0
     /// "evening", "daytime" or "cleared" overrides what decides Today's journal card; "" is the real one.
     @AppStorage("debugJournalTiming") private var journalTiming = ""
+    /// What "Ask me something" gets back, whatever the device's model is.
+    @AppStorage(JournalAskForce.key) private var askForce = JournalAskForce.real.rawValue
     /// What the last press of the hand-off button returned: "" is a text that came back empty.
     @State private var handOffText: String?
     @State private var trendsSeedText: String?
@@ -130,6 +132,10 @@ struct DebugView: View {
                 section("Journal card (simulator only)", footer: "Today shows the \"Write about today\" card from 20:00 until the day rolls over, and at any hour once everything is cleared. Evening forces the clock to 21:00, Daytime to 12:00 with nothing cleared, Cleared to 12:00 with the day cleared.") {
                     PillSegmentedControl(options: [("Real", ""), ("Evening", "evening"), ("Daytime", "daytime"), ("Cleared", "cleared")],
                                          selection: $journalTiming, accessibilityLabel: "Journal card")
+                }
+                section("Ask me something (simulator only)", footer: "Forces what the model returns to the editor's pill. Real uses the on-device model when there is one and the fixed prompts otherwise. Question is a canned question, Timeout never answers (the pill waits 6 s), Error returns nothing, Garbage returns text Core must reject.") {
+                    PillSegmentedControl(options: JournalAskForce.options, selection: $askForce,
+                                         accessibilityLabel: "Ask me something")
                 }
                 section("Old journal turns (simulator only)", footer: "Writes turn-based days two, three and four days before the app's day, as the build before entries stored them. The migration runs once at launch, guarded by a flag: Reset the flag, then relaunch the app to see those days become entries. A second relaunch must not bring back a day you cleared.") {
                     FlowRow(spacing: 8) {
