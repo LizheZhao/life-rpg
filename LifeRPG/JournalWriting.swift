@@ -3,11 +3,6 @@ import Observation
 import SwiftData
 import SwiftUI
 
-extension JournalLanguage {
-    /// The journal's language on this device: Core's rule applied to the system's preferred languages.
-    static var system: JournalLanguage { resolve(preferred: Locale.preferredLanguages) }
-}
-
 /// What a free-writing editor holds while the user types: the draft (Core's `FreeWritingDraft`)
 /// and when it reaches the store. A keystroke only changes the draft in memory; the store is
 /// written about a second after the last one, and at once on `flush` (Close, Done, leaving the

@@ -11,7 +11,7 @@ import SwiftUI
 struct TrendsView: View {
     let today: String
 
-    @Query private var turns: [JournalTurn]
+    @Query private var entries: [JournalEntry]
     @Query private var quests: [DailyQuest]
     @Query private var occurrences: [RoutineOccurrence]
     @Query private var ratings: [QuestRating]
@@ -37,19 +37,21 @@ struct TrendsView: View {
 
     private let language = JournalLanguage.system
 
-    /// What the page reads. A row count is enough to notice an added entry or completion; an edit
-    /// to an existing day is caught by `reload` and by the rebuild when the tab appears.
+    /// What the page reads. A row count is enough to notice an added completion; an entry is also
+    /// tracked by the time it was last written, since an edit leaves the count alone.
     private struct BuildKey: Hashable {
         var period: JournalTrends.Period
         var anchor: String
         var today: String
         var counts: [Int]
+        var lastWritten: Double
         var reload: Int
     }
 
     private var key: BuildKey {
         BuildKey(period: period, anchor: anchor ?? today, today: today,
-                 counts: [turns.count, quests.count, occurrences.count, ratings.count, contexts.count],
+                 counts: [entries.count, quests.count, occurrences.count, ratings.count, contexts.count],
+                 lastWritten: entries.map(\.updatedAt.timeIntervalSince1970).max() ?? 0,
                  reload: reload)
     }
 
@@ -93,7 +95,7 @@ struct TrendsView: View {
     }
 
     private func build() -> TrendsPage {
-        let days = JournalHistory.days(from: turns, language: language)
+        let days = JournalEntryHistory.days(from: entries)
         return TrendsPage.build(period: period, anchor: anchor ?? today, today: today, days: days,
                                 quests: quests, occurrences: occurrences, ratings: ratings,
                                 contexts: contexts, language: language)
@@ -273,7 +275,7 @@ struct TrendsView: View {
     private func wordsPerDay(_ chart: TrendsPage.WordsPerDay, daysWritten: Int) -> some View {
         card("Words per day", trailing: "avg \(chart.average)") {
             VStack(spacing: 8) {
-                barStrip(chart.bars.map { (dayKey: $0.dayKey, fraction: $0.fraction, color: barColor($0.level)) },
+                barStrip(chart.bars.map { (dayKey: $0.dayKey, fraction: $0.fraction, color: barColor($0)) },
                          height: 110)
                 HStack {
                     ForEach(Array(chart.axis.enumerated()), id: \.offset) { index, label in
@@ -292,12 +294,9 @@ struct TrendsView: View {
         } ?? "")
     }
 
-    private func barColor(_ level: Int) -> Color {
-        switch level {
-        case 0: LR.Color.pillFill
-        case 3: LR.Color.fill
-        default: LR.Color.trendMid
-        }
+    /// Ink for the longest days, blue for the rest, and a quiet stub for a day with nothing written.
+    private func barColor(_ bar: TrendsPage.WordsPerDay.Bar) -> Color {
+        bar.words == 0 ? LR.Color.pillFill : bar.isTop ? LR.Color.fill : LR.Color.trendMid
     }
 
     private func aboutCard(_ about: TrendsPage.About) -> some View {

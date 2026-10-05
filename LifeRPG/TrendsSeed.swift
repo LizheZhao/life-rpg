@@ -7,8 +7,9 @@ import SwiftData
 /// today, plus the quest rows the page's other cards read. Simulator only, run from Debug.
 ///
 /// None of it came from using the app, so a number on the page after this is the fixture's. It is
-/// deterministic and writes through the same calls the app uses where one exists
-/// (`JournalService.saveFreeWriting`), so pressing it twice rewrites the same entries.
+/// deterministic and writes through the same call the editor saves with (`JournalEntries.save`), so
+/// pressing it twice rewrites the same entries. Block ids are derived from the day, so a second
+/// press does not change what is stored.
 enum TrendsSeed {
     struct Result {
         var entries = 0
@@ -42,6 +43,10 @@ enum TrendsSeed {
         "Today I feel fine.", "Got up late and just kept going.", "Nothing much happened, honestly.",
         "Looked at the river on the way home.", "Called a friend and talked for a while.",
     ]
+    private static func blockID(_ back: Int, _ index: Int) -> UUID {
+        UUID(uuidString: String(format: "5EED1000-0000-0000-%04d-%012d", index, back))!
+    }
+
     private static let grateful = ["the walk", "the cat", "a good 1:1", "the river", "sleep", "cooking", "quiet morning"]
 
     /// 15% trivial, 35% easy, 35% medium, 15% hard, so the calendar dots and the day sheet show every
@@ -80,16 +85,18 @@ enum TrendsSeed {
                     lines.append(pool < 6 ? (isRecent ? recent : older).randomElement(using: &rng)!
                                           : filler.randomElement(using: &rng)!)
                 }
-                var paragraphs = [lines.joined(separator: " ")]
+                var blocks: [JournalBlock] = [.text(id: blockID(back, 0), text: lines.joined(separator: " "))]
                 if Int.random(in: 0..<10, using: &rng) < 5 {
                     let items = grateful.shuffled(using: &rng).prefix(Int.random(in: 1...3, using: &rng))
-                    paragraphs.append("Grateful for " + items.joined(separator: ", "))
+                    blocks.append(.prompt(id: blockID(back, 1),
+                                          question: JournalFixedKey.gratefulFor.question(language: .en),
+                                          answer: items.joined(separator: ", "), source: .fixed,
+                                          fixedKey: .gratefulFor))
                 }
                 var written = calendar.date(bySettingHour: 20 + back % 4, minute: 10, second: 0,
                                             of: DayKey.date(dayKey) ?? Date()) ?? Date()
                 written = written.addingTimeInterval(Double(back % 50) * 60)
-                if try JournalService.saveFreeWriting(paragraphs.joined(separator: "\n\n"), writingSeconds: 240 + back * 7,
-                                                      on: dayKey, language: .en, in: context, now: written) != nil {
+                if try JournalEntries.save(blocks, on: dayKey, in: context, now: written) != nil {
                     result.entries += 1
                 }
             }

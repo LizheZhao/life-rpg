@@ -179,8 +179,8 @@ struct JournalTrendsPageTests {
         // A year with no other year to compare against is labelled for what it is.
         let lonely = unlocked(page(.year, texts: texts)).about
         #expect(lonely?.kind == .mostUsed)
-        #expect(lonely?.subtitle == "Most used words")
-        #expect(lonely?.title == "What this year was about")
+        #expect(lonely?.title == "Most used words")
+        #expect(lonely?.subtitle == "Plain counts until another year has entries")
         let withLastYear = unlocked(page(.year, texts: texts + [("2025-12-31", "tea tea")])).about
         #expect(withLastYear?.kind == .distinctive)
         #expect(withLastYear?.subtitle == "Words that stood out versus your other years")
@@ -190,7 +190,7 @@ struct JournalTrendsPageTests {
         let texts = (10...17).map { (String(format: "2026-09-%02d", $0), "water water. Tea.") }
         let about = try! #require(unlocked(page(.month, texts: texts)).about)
         #expect(about.kind == .mostUsed)
-        #expect(about.subtitle == "Most used words")
+        #expect(about.title == "Most used words")
         #expect(about.rows.map(\.word) == ["water", "tea"])
         #expect(about.rows.map(\.count) == [16, 8])
     }

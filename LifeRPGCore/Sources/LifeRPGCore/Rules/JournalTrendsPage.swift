@@ -165,9 +165,9 @@ extension TrendsPage {
             // The list is ranked by how much a word stands out, so its first row need not be the commonest.
             guard let top = words.entries.map(\.count).max() else { return nil }
             return About(kind: words.kind,
-                         title: "What this \(noun) was about",
+                         title: words.kind == .distinctive ? "What this \(noun) was about" : "Most used words",
                          subtitle: words.kind == .distinctive ? "Words that stood out versus your other \(noun)s"
-                                                              : "Most used words",
+                                                              : "Plain counts until another \(noun) has entries",
                          rows: words.entries.map { About.Row(word: $0.word, count: $0.count,
                                                              fraction: Double($0.count) / Double(top)) })
         }()
