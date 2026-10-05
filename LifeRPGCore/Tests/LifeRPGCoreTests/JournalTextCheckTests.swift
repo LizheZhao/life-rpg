@@ -66,7 +66,7 @@ struct JournalTextCheckTests {
 
     // MARK: the pool must pass
 
-    /// The check can't be allowed to reject the app's own questions. Three hand-written rows are
+    /// The check can't be allowed to reject the app's own questions. Two hand-written rows are
     /// deliberate two-part questions, so the one-question rule is the only thing that fires on them,
     /// and on nothing else: any other violation in the pool fails here.
     @Test func thePoolPassesTheCheck() {
@@ -77,7 +77,7 @@ struct JournalTextCheckTests {
                 if !violations.isEmpty { failing["\(row.id).\(language.rawValue)"] = violations }
             }
         }
-        let twoPart = ["open.scale", "choice.photo", "skip.exception"]
+        let twoPart = ["open.scale", "skip.exception"]
         #expect(Set(failing.keys) == Set(twoPart.flatMap { ["\($0).en", "\($0).zh-Hans"] }))
         #expect(failing.values.allSatisfy { $0 == [.manyQuestions] })
     }

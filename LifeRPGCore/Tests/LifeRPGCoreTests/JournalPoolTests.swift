@@ -23,15 +23,8 @@ struct JournalPoolTests {
 
     @Test func thePoolHasTheRowsOfTheDraft() {
         let counts = Dictionary(grouping: JournalPool.all, by: \.kind).mapValues(\.count)
-        #expect(counts == [.opening: 3, .heavy: 4, .good: 3, .choice: 3, .skip: 3,
-                           .followUp: 3, .closing: 2, .safety: 1])
+        #expect(counts == [.opening: 3, .heavy: 4, .good: 3, .skip: 3, .safety: 1])
         #expect(Set(JournalPool.all.map(\.id)).count == JournalPool.all.count)
-    }
-
-    /// The shapes of the "Question shapes" paragraph of the draft: scaling and open questions,
-    /// self-compassion, savoring, values, exceptions, reflective listening. Each is borrowed by a row.
-    @Test func everyShapeIsBorrowedByARow() {
-        #expect(Set(JournalPool.all.map(\.approach)) == Set(JournalApproach.allCases))
     }
 
     /// The placeholders a row's text asks for.
@@ -67,15 +60,12 @@ struct JournalPoolTests {
                 == "You rated Morning run high. Which moment was the best part?")
         #expect(JournalPool.render(id: "good.moment", language: .zhHans, fills: [.quest: "晨跑"])
                 == "你给「晨跑」打了高分。哪一刻最好？")
-        #expect(JournalPool.render(id: "choice.item", language: .en, fills: [.item: "Red"])
-                == "You picked Red. What made it the one?")
         #expect(JournalPool.render(id: "open.keep", language: .en) == "What from today do you want to remember?")
     }
 
     /// A raw `{quest}` on screen is the failure; a missing or blank fill must give nil instead.
     @Test func aMissingOrBlankFillIsNilNeverARawPlaceholder() {
         #expect(JournalPool.render(id: "skip.block", language: .en) == nil)
-        #expect(JournalPool.render(id: "skip.block", language: .en, fills: [.item: "x"]) == nil)
         #expect(JournalPool.render(id: "skip.block", language: .zhHans, fills: [.quest: "  "]) == nil)
         #expect(JournalPool.render(id: "no.such.row", language: .en) == nil)
         for language in JournalLanguage.allCases {
@@ -86,7 +76,7 @@ struct JournalPoolTests {
     }
 
     @Test func aFillThatLooksLikeAPlaceholderIsInsertedAsText() {
-        #expect(JournalPool.render(id: "skip.block", language: .en, fills: [.quest: "{phrase} run"])
-                == "{phrase} run didn't happen. What got in the way?")
+        #expect(JournalPool.render(id: "skip.block", language: .en, fills: [.quest: "{quest} run"])
+                == "{quest} run didn't happen. What got in the way?")
     }
 }

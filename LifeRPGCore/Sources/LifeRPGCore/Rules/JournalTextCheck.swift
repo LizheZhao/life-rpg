@@ -6,7 +6,7 @@ import Foundation
 /// marker. `JournalAsk.accept` adds the length, one-question, placeholder and novelty rules on top;
 /// a failure there means the caller falls back to a fixed prompt, never to a retry.
 ///
-/// The pool itself passes every rule except the one-question rule on three deliberate two-part
+/// The pool itself passes every rule except the one-question rule on two deliberate two-part
 /// rows, which `JournalTextCheckTests` asserts, so the check can't drift into rejecting the app's
 /// own questions.
 public enum JournalTextCheck {
