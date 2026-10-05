@@ -116,4 +116,42 @@ struct JournalSendTests {
         #expect(JournalSend.fingerprint(of: "aa") == "089c4307b54596b7")
         #expect(JournalSend.fingerprint(of: "今天") != JournalSend.fingerprint(of: "今日"))
     }
+
+    // MARK: the entry-based text
+
+    private func entry(_ blocks: [JournalBlock]) -> JournalEntry {
+        let row = JournalEntry()
+        row.dayKey = "2026-10-03"
+        row.blocks = blocks
+        return row
+    }
+
+    private let entryText = "Quiet day.\n\nWhat are you grateful for today?\nTea."
+    private var written: JournalEntry {
+        entry([EntryFixtures.text(1, "Quiet day."),
+               EntryFixtures.prompt(2, "What are you grateful for today?", answer: "Tea.", key: .gratefulFor),
+               EntryFixtures.prompt(3, "Skipped?")])
+    }
+
+    @Test func anUnsentEntryGivesItsPlainText() {
+        #expect(JournalSend.textToSend(entry: written, lastSentFingerprint: nil) == entryText)
+    }
+
+    @Test func anEntryAlreadySentGivesNothing() {
+        let sent = JournalSend.fingerprint(of: entryText)
+        #expect(JournalSend.textToSend(entry: written, lastSentFingerprint: sent) == "")
+    }
+
+    @Test func anEntryEditedAfterTheSendComesBackAgain() {
+        let sent = JournalSend.fingerprint(of: entryText)
+        let edited = entry([EntryFixtures.text(1, "Quiet day, then rain.")])
+        #expect(JournalSend.textToSend(entry: edited, lastSentFingerprint: sent) == "Quiet day, then rain.")
+    }
+
+    @Test func noEntryAndAnEntryWithNothingWrittenGiveNothing() {
+        #expect(JournalSend.textToSend(entry: nil, lastSentFingerprint: nil) == "")
+        #expect(JournalSend.textToSend(entry: entry([]), lastSentFingerprint: nil) == "")
+        #expect(JournalSend.textToSend(entry: entry([EntryFixtures.text(1, " \n ")]), lastSentFingerprint: nil) == "")
+        #expect(JournalSend.textToSend(entry: entry([EntryFixtures.prompt(1, "Only asked")]), lastSentFingerprint: nil) == "")
+    }
 }

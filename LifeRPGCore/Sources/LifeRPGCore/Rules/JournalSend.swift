@@ -24,6 +24,15 @@ public enum JournalSend {
         return text
     }
 
+    /// The plain text of the day's entry, or the empty string when there is nothing to send: no
+    /// entry, nothing written in it, or the very text that was last sent. The document counterpart
+    /// of the turn-based `textToSend`.
+    public static func textToSend(entry: JournalEntry?, lastSentFingerprint: String?) -> String {
+        guard let text = entry?.document.plainText(), !text.isEmpty,
+              fingerprint(of: text) != lastSentFingerprint else { return "" }
+        return text
+    }
+
     public enum SentState: Equatable, Sendable {
         case notSent
         /// `text` is what was handed to the Shortcut.
