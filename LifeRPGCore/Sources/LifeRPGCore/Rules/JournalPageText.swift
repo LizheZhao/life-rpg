@@ -57,8 +57,9 @@ public enum JournalPageText {
         format(dayKey: dayKey, template: "EEEEMMMMd", language: language, timeZone: timeZone)
     }
 
-    private static func format(dayKey: String, template: String, language: JournalLanguage,
-                               timeZone: TimeZone) -> String {
+    /// Shared with the day sheet and the entries list, which word dates the same way.
+    static func format(dayKey: String, template: String, language: JournalLanguage,
+                       timeZone: TimeZone) -> String {
         guard let date = DayKey.date(dayKey, in: timeZone) else { return dayKey }
         let formatter = DateFormatter()
         formatter.locale = locale(language)
@@ -68,7 +69,7 @@ public enum JournalPageText {
     }
 
     /// Fixed per language, like `LifeCalendar`: the region setting does not reorder the heading.
-    private static func locale(_ language: JournalLanguage) -> Locale {
+    static func locale(_ language: JournalLanguage) -> Locale {
         Locale(identifier: language == .zhHans ? "zh_Hans_CN" : "en_US")
     }
 }
