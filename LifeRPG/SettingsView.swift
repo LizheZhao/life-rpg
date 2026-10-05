@@ -25,6 +25,7 @@ struct SettingsView: View {
     @State private var path: [Page] = []
     /// The sent log, watched so the status line changes when the Shortcut hands a day over.
     @AppStorage(JournalSentLog.key) private var sentLog = Data()
+    @AppStorage(JournalAskSettings.sendWritingKey) private var sendWriting = JournalAskSettings.sendWritingDefault
 
     var body: some View {
         NavigationStack(path: $path) {
@@ -80,6 +81,15 @@ struct SettingsView: View {
                     Text(JournalSentLog.statusLine(JournalSentLog.latest(JournalSentLog.decode(sentLog))))
                         .lr(.bodyStrong).foregroundStyle(LR.Color.ink)
                         .frame(minHeight: 44, alignment: .leading)
+                    Toggle(isOn: $sendWriting) {
+                        Text("Send my writing with the question request")
+                            .lr(.bodyStrong).foregroundStyle(LR.Color.ink)
+                    }
+                    .tint(LR.Color.trendDeep)
+                    .frame(minHeight: 44)
+                    Text(JournalAskSettings.sendWritingCaption)
+                        .lr(.caption).foregroundStyle(LR.Color.inkSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 } header: {
                     header("Journal")
                 } footer: {
