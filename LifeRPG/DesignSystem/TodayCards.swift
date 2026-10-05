@@ -634,8 +634,7 @@ struct ReplacedRowView: View {
     }
 }
 
-/// A plain card row for the calendar's "Did not finish" list: a title, a caption and whatever
-/// sits at the trailing edge.
+/// A plain card row: a title, a caption and whatever sits at the trailing edge.
 struct RecordRowView<Trailing: View>: View {
     let title: String
     var caption: String?
@@ -682,10 +681,11 @@ struct BannerView: View {
 // MARK: - history rows (day detail)
 
 /// The 44 pt mark at the trailing edge of a read-only row, where Today has the complete button:
-/// the filled check for done, an open ring for not done, a ring with a dash for skipped or
-/// replaced. Never the only signal: the row's status text says the same.
+/// the filled check for done, an open ring for not done, a ring with a dash for replaced, a ring
+/// with a cross for cancelled or given up on (`RecordMark`). Never the only signal: the row's
+/// status text says the same.
 struct HistoryMark: View {
-    /// `dropped` is a dash (swapped, cancelled); `missed` a cross (the settlement gave up on it).
+    /// `dropped` is a dash (swapped out); `missed` a cross (cancelled, or the settlement gave up on it).
     enum Kind { case done, open, dropped, missed }
     let kind: Kind
 

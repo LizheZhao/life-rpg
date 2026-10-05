@@ -262,7 +262,7 @@ struct DayDetailView: View {
             },
             status: status,
             pills: pills,
-            mark: q.replaced ? .dropped : q.completedAt != nil ? .done : .open,
+            mark: historyMark(RecordMark.mark(for: q)),
             accessibilityLabel: "\(spokenTitle), \(slotName) quest",
             accessibilityValue: ([status] + [q.points.map { "\($0) coins" }].compactMap { $0 }
                 + line.ratings.map { "rated \($0.rating)" }).joined(separator: ", "))
@@ -297,12 +297,6 @@ struct DayDetailView: View {
         if o.penaltyApplied > 0 { pills.append(PillState("-\(o.penaltyApplied)", .clay)) }
         pills += line.ratings.map(ratingPill)
 
-        let mark: HistoryMark.Kind = switch line.status {
-        case .done, .doneAhead, .late: .done
-        case .skipped, .replaced: .dropped
-        case .missed: .missed
-        case .notDone: .open
-        }
         var spoken = [status]
         if let p = o.awardedPoints { spoken.append("\(p) coins") }
         if o.penaltyApplied > 0 { spoken.append("penalty \(o.penaltyApplied) coins") }
@@ -315,7 +309,7 @@ struct DayDetailView: View {
             dropped: line.status == .replaced,
             status: status,
             pills: pills,
-            mark: mark,
+            mark: historyMark(RecordMark.mark(for: line.status)),
             accessibilityLabel: "\(o.displayText), routine",
             accessibilityValue: spoken.joined(separator: ", "))
     }
@@ -375,6 +369,15 @@ struct DayDetailView: View {
     }
 
     // MARK: small pieces
+
+    private func historyMark(_ mark: RecordMark) -> HistoryMark.Kind {
+        switch mark {
+        case .done: .done
+        case .open: .open
+        case .dashed: .dropped
+        case .crossed: .missed
+        }
+    }
 
     private func signed(_ n: Int) -> String { n > 0 ? "+\(n)" : "\(n)" }
 
