@@ -99,6 +99,8 @@ struct JournalEntriesView: View {
                 .lr(.chipLabel)
                 .focused($searchFocused)
                 .submitLabel(.search)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
             if !query.isEmpty {
                 Button { query = "" } label: {
                     Image(systemName: "xmark.circle.fill").foregroundStyle(LR.Color.iconNeutral)
