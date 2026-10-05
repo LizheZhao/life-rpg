@@ -118,6 +118,7 @@ struct JournalTurnTests {
         let (source, _) = try sourceWithJournal()
         var json = try #require(try JSONSerialization.jsonObject(with: try JSONExport.data(source)) as? [String: Any])
         json["schemaVersion"] = 6
+        json.removeValue(forKey: "journalEntries")
         var journal = try #require(json["journal"] as? [String: Any])
         var turns = try #require(journal["turns"] as? [[String: Any]])
         for i in turns.indices { turns[i].removeValue(forKey: "writingSeconds") }
@@ -139,6 +140,7 @@ struct JournalTurnTests {
         var json = try #require(try JSONSerialization.jsonObject(with: try JSONExport.data(source)) as? [String: Any])
         json["schemaVersion"] = 5
         json.removeValue(forKey: "journal")
+        json.removeValue(forKey: "journalEntries")
         let data = try JSONSerialization.data(withJSONObject: json)
         #expect(!String(decoding: data, as: UTF8.self).contains("journal"))
 

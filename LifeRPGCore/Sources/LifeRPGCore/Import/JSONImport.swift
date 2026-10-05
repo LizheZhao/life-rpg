@@ -51,6 +51,9 @@ public enum JSONImport {
         /// Journal turns in the backup; zero for a file written before the journal existed, in which
         /// case the turns already on this store are kept.
         public var journalTurns: Int
+        /// Day documents in the backup; zero for a file written before schema 8, in which case the
+        /// entries already on this store are kept and the file's turns are copied into more.
+        public var journalEntries: Int
         public var rewards: Int
         /// What the balance will be once the backup is in.
         public var balance: Int
@@ -112,6 +115,7 @@ public enum JSONImport {
             ratings: snapshot.ratings.count,
             comments: snapshot.comments.count,
             journalTurns: snapshot.journal?.turns.count ?? 0,
+            journalEntries: snapshot.journalEntries?.count ?? 0,
             rewards: snapshot.rewards?.count ?? 0,
             balance: Economy.balance(snapshot.ledger),
             unmatchedLibrary: unmatched.sorted(),
@@ -145,6 +149,8 @@ public enum JSONImport {
         // A file from before the journal existed can't know about the turns written since, so it
         // leaves them alone; one that has the block replaces them like every other table.
         if plan.snapshot.journal != nil { try deleteAll(JournalTurn.self, in: context) }
+        // The same for the day documents, which a file before schema 8 does not have.
+        if plan.snapshot.journalEntries != nil { try deleteAll(JournalEntry.self, in: context) }
 
         let s = plan.snapshot
         try restoreUserLibrary(s.userLibrary, in: context)
@@ -225,6 +231,13 @@ public enum JSONImport {
             context.insert(row)
         }
 
+        for e in s.journalEntries ?? [] {
+            let row = JournalEntry()
+            row.dayKey = e.dayKey; row.blocks = e.blocks; row.createdAt = e.createdAt
+            row.updatedAt = e.updatedAt; row.doneAt = e.doneAt
+            context.insert(row)
+        }
+
         for r in s.rewards ?? [] {
             let row = Reward()
             row.id = r.id; row.name = r.name; row.estimatedCost = r.estimatedCost
@@ -249,6 +262,11 @@ public enum JSONImport {
         }
 
         try Affinity.sync(context)
+
+        // An older backup holds its writing only as turns, so it comes back as entries too. A file
+        // that has entries is the whole truth: an entry the user cleared has turns behind it still,
+        // and copying them would bring it back.
+        if s.journalEntries == nil { try JournalMigration.migrateTurns(in: context) }
     }
 
     /// Puts back the user's own rows the store lacks, under their old ids. A row already there

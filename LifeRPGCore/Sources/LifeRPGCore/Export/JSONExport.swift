@@ -17,8 +17,9 @@ import SwiftData
 public enum JSONExport {
     /// Bumped when the model changes shape, independently of the GitHub tag. Import reads this
     /// and nothing else. 4 added `Occurrence.iconKey`, 5 the user's own library rows
-    /// (`userLibrary`), 6 the journal, 7 `Turn.writingSeconds`; an older file simply lacks them.
-    public static let schemaVersion = 7
+    /// (`userLibrary`), 6 the journal, 7 `Turn.writingSeconds`, 8 the day documents
+    /// (`journalEntries`); an older file simply lacks them.
+    public static let schemaVersion = 8
 
     /// The oldest export import still reads. Anything between this and `schemaVersion` decodes into
     /// the current shape, the fields added since being optional.
@@ -46,6 +47,10 @@ public enum JSONExport {
         /// block is always written, empty or not, so import can tell "no journal in this backup" from
         /// "a backup with nothing in its journal" and leave the first alone.
         public var journal: Journal?
+        /// The day documents. Nil only in a file written before schema 8; from 8 on the array is
+        /// always written, empty or not, so import can tell "no entries in this backup" (an older
+        /// file, whose entries are rebuilt from its turns) from "a backup with none".
+        public var journalEntries: [JournalEntryRow]?
     }
 
     /// The seed CSVs' text, to tell what the user changed from what they started with.
@@ -242,6 +247,17 @@ public enum JSONExport {
         public var turns: [Turn]
     }
 
+    /// One day's document. `blocks` are the objects documented on `JournalBlock`. The row's own id
+    /// is not carried: nothing points at an entry.
+    public struct JournalEntryRow: Codable, Equatable, Sendable {
+        public var dayKey: String
+        public var blocks: [JournalBlock]
+        public var createdAt: Date
+        public var updatedAt: Date
+        /// Nil is a draft.
+        public var doneAt: Date?
+    }
+
     /// `subjectID` is a `DailyQuest` or `RoutineOccurrence` id, both kept through import, so it is
     /// carried as it is, the same way a rating's `questID` is.
     public struct Turn: Codable, Equatable, Sendable {
@@ -401,7 +417,11 @@ public enum JSONExport {
                          subjectID: $0.subjectID, subjectText: $0.subjectText, answer: $0.answer,
                          outcome: $0.outcomeRaw, source: $0.sourceRaw, language: $0.languageRaw,
                          askedAt: $0.askedAt, answeredAt: $0.answeredAt, writingSeconds: $0.writingSeconds)
-                }))
+                }),
+            journalEntries: try JournalEntries.all(in: context).sorted { ($0.dayKey, $0.createdAt) < ($1.dayKey, $1.createdAt) }.map {
+                JournalEntryRow(dayKey: $0.dayKey, blocks: $0.blocks, createdAt: $0.createdAt,
+                                updatedAt: $0.updatedAt, doneAt: $0.doneAt)
+            })
     }
 
     public static func data(_ context: ModelContext, seeds: Seeds? = nil, now: Date = Date()) throws -> Data {
