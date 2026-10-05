@@ -13,7 +13,9 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
-NAME="LifeRPG-Verify"
+# One simulator per checkout (main repo and each git worktree): two sessions driving one shared
+# simulator reinstall the app and reset each other's store mid-run.
+NAME="LifeRPG-Verify-$(printf %s "$ROOT" | shasum | cut -c1-6)"
 BUNDLE="com.lizhezhao.LifeRPG"
 RUNTIME="com.apple.CoreSimulator.SimRuntime.iOS-27-0"
 MODEL="iPhone 17 Pro Max"

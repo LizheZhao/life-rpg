@@ -11,7 +11,8 @@ Everything runs through `.claude/skills/verify/scripts/verify.sh` (below: `V`). 
 
 ## Hard rules
 
-- **Use only the `LifeRPG-Verify` simulator**, never another booted device. The user's other simulators may hold data they care about, and the real phone is out of reach. `V up` creates and owns this one.
+- **Use only this checkout's own simulator** (`V udid`; named `LifeRPG-Verify-<hash of the checkout path>`), never another booted device. The user's other simulators may hold data they care about, the real phone is out of reach, and a simulator named plain `LifeRPG-Verify` belongs to whichever other checkout or session still uses the old script. `V up` creates and owns this one; the main repo and each git worktree get a separate simulator, store and build folder, because two sessions on one simulator reinstall the app and reset each other's store mid-run (observed). If `V doctor` shows row counts or a journal entry you did not make, or the app's process was started from another build folder, another session is driving this simulator: stop, and don't clean its instance.
+- The simulator control tool asks the user to approve each new device the first time it is used; a `V up` that creates a new simulator therefore needs that approval before any tap. Without it only `V` and `xcrun simctl io … screenshot` work.
 - **Never write to the store** with `sqlite3`. The app holds it open (WAL). Read only (`V sql`).
 - No Health or Calendar permission sheet appears unless a button asks for one (Debug → *Allow Health access*, Settings → Workout detection → *Allow Calendar access*). The simulator has no health data, so a fresh day is `tier normal`, readiness `75`, energy `1.000`, and HRV/Sleep/Resting HR show `—`. A test of a *bad night* or a cycle day can't be driven here; that is a device check (`doc/DEV_PLAN.md`).
 - Don't `rm -rf` anything; the project denies it.
@@ -50,9 +51,10 @@ Stable points on iPhone 17 Pro Max (440×956 pt):
 | Floating tab bar: Today / Calendar / Trends / Rewards / Settings | y = 880; x = 100 / 160 / 220 / 280 / 340 |
 | Today header: `+` (Add for today) top-right; avatar top-left opens the Levels sheet | 396, 92; 44, 92 |
 | Pushed page back button (Library, Debug, Design) | 40, 84 |
-| Sheet `Done` button (day detail) | 383, 104 |
+| Sheet `Done` (a pushed page's sheet, e.g. the Levels sheet) | 220, 890 |
+| Close a bottom sheet with no button (the Calendar day sheet) | swipe down from about 220, 300 to 220, 900 |
 
-Settings is the fourth tab. It lists Library, Workout detection, Output records to JSON, Ratings & comments (CSV), Restore from JSON…, Design gallery and Debug; Library, Workout detection, Design and Debug are pushed onto the Settings stack, so the floating bar stays visible on them. At the default text size, with Settings scrolled to the top, the rows sit at about y = 247 (Library), 381 (Workout detection), 514 / 588 / 662 (the three Data rows), 795 (Design gallery); Debug is behind the floating bar there, and after scrolling to the bottom the rows sit at about 175 / 309 / 383 / 456 / 590 and Debug at 722. The bar hides while the keyboard is up, and a tap issued right after an alert, sheet, card or file panel closes is swallowed.
+Settings is the fifth tab. It lists Library, Workout detection, Output records to JSON, Tables (CSV), Restore from JSON…, a Journal section (Apple Journal status, the `Send my writing with the question request` toggle, the Shortcut set-up text), Design gallery and Debug; Library, Workout detection, Design and Debug are pushed onto the Settings stack, so the floating bar stays visible on them. At the default text size, with Settings scrolled to the top, the rows sit at about y = 247 (Library), 381 (Workout detection), 514 / 588 / 662 (the three Data rows), 795 (Design gallery); Debug is behind the floating bar there; scrolled to the bottom Design gallery sits at about 590 and Debug at 723. The Settings tab keeps whatever page was pushed when you switch tabs and come back (a relaunch resets it), so check which page you are on. The bar hides while the keyboard is up, and a tap issued right after an alert, sheet, card or file panel closes is swallowed.
 
 Everything else moves with content: find it from a screenshot. Time travel is scripted rather than tapped: `V day <N>`.
 
@@ -64,8 +66,9 @@ Text entry: tap the field, then `control` action `text`. The tool returns before
 | --- | --- |
 | `V day <N>` | Sets `debugDayOffset` to the absolute value N (simulator-only time travel) and relaunches; `V day 2` is two days ahead, `V day 0` returns to the real date. Same effect as Settings → Debug → Advance one day, and it works after that button too. Prints `offset=N; latest generated day <date>` |
 | `V ledger` | Every ledger row and the balance (sum). The coin count on Today's level card must equal this |
-| `V sql "<query>"` | Read-only SQL. Tables: `ZLEDGERENTRY`, `ZDAILYQUEST`, `ZROUTINEOCCURRENCE`, `ZDAILYCONTEXT`, `ZQUESTRATING`, `ZQUESTCOMMENT`, `ZREWARD`, `ZQUESTTEMPLATE`, `ZROUTINETASK`. Enums are `Z…RAW` strings; a rating is `-2…+2` in `ZRATING` |
+| `V sql "<query>"` | Read-only SQL. Tables: `ZLEDGERENTRY`, `ZDAILYQUEST`, `ZROUTINEOCCURRENCE`, `ZDAILYCONTEXT`, `ZQUESTRATING`, `ZQUESTCOMMENT`, `ZREWARD`, `ZJOURNALENTRY`, `ZQUESTTEMPLATE`, `ZROUTINETASK`. Enums are `Z…RAW` strings; a rating is `-2…+2` in `ZRATING` |
 | `V relaunch` | Terminate + launch; re-runs the foreground refresh (`ensureToday`, re-plan check) |
+| `xcrun simctl privacy $(V udid) grant calendar com.lizhezhao.LifeRPG` | Grants calendar access without the system sheet (then `V relaunch`); `grant`/`revoke`/`reset` also exist for photos, contacts and others. There is no Health equivalent |
 
 ## Evidence
 
@@ -80,6 +83,7 @@ A proof is: the **action** (screenshot before + after, or the dialog), the **res
 
 - **The app's day ends at 05:00.** Between 00:00 and 05:00 host time, the app's "today" is *yesterday's* date. `V doctor` prints both. Don't read a day-key mismatch as a bug before checking the clock.
 - On a freshly booted simulator the first day generation can take 10s+, and Today briefly shows `0 random slots` / "No quests today — the pool is empty". That is not an empty pool: `V up` waits until quests exist (60s cap); if you launch by hand, run `V doctor` until `dailyQuest` is above 0 before judging the screen.
+- The control tool's `screenshot` can show a frame several seconds old, and its taps do not flip SwiftUI switches (`Toggle`): five taps on Rewards' `Saving for this` and one on Library's `On` changed nothing. Verify every tap's effect with `V shot` or `V sql`, and treat a switch as unreachable by tap.
 - A tap issued right after a sheet or alert dismisses is swallowed. Screenshot first and re-tap.
 - Time travel writes future-dated rows that never go away (going back doesn't undo). It is simulator-only on purpose. After a time-travel proof, `V up --fresh` to start clean.
 - Completing a quest or routine opens one centered card (disc and title, a `?` box for quests or a `+N` pill for routines, a full-width `Complete` pill, a quiet `Not yet`), not an alert or inline toggle. After `Complete` the same card rolls, lands on `+N`, then asks `how did that feel?` (five thumbs → ratings −2…+2, then `Done`). It closes by itself 8 s after the rate phase appears or the last pick, and the rating is written only if one was picked: a screenshot read between `Complete` and the thumb is slower than that. Feature files give the blind sequence.
