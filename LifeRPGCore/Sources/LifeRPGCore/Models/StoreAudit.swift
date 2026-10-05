@@ -88,6 +88,14 @@ public enum StoreAudit {
             check("JournalTurn", "dayKey", t.dayKey, { DayKey.isValid($0) })
         }
 
+        for e in try context.fetch(FetchDescriptor<JournalEntry>()) {
+            check("JournalEntry", "dayKey", e.dayKey, { DayKey.isValid($0) })
+            // The value is a fixed phrase, not the JSON: a document can be pages long.
+            if !JournalBlock.isValidJSON(e.blocksJSON) {
+                check("JournalEntry", "blocksJSON", "not an array of readable blocks", { _ in false })
+            }
+        }
+
         for e in try context.fetch(FetchDescriptor<LedgerEntry>()) {
             check("LedgerEntry", "dayKey", e.dayKey, { DayKey.isValid($0) })
         }

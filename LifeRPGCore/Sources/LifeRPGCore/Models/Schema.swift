@@ -24,9 +24,12 @@ import SwiftData
 /// 6 with a `journal` block, and import still reads v3 to v5, whose files simply have no journal.
 /// V7 added `JournalTurn.writingSeconds`, defaulted to 0, so existing turns read as no time
 /// recorded; the export goes to 7 with the field on each turn, and import still reads v3 to v6,
-/// where a turn without it decodes as 0.
-public enum SchemaV7: VersionedSchema {
-    public static var versionIdentifier = Schema.Version(7, 0, 0)
+/// where a turn without it decodes as 0. V8 added `JournalEntry`, one document per day, as a new
+/// model that lightweight migration infers; no existing row is touched and `JournalTurn` stays. The
+/// export goes to 8 with a `journalEntries` array, and import still reads v3 to v7, where entries
+/// are built from the turns (`JournalMigration`).
+public enum SchemaV8: VersionedSchema {
+    public static var versionIdentifier = Schema.Version(8, 0, 0)
 
     public static var models: [any PersistentModel.Type] = [
         QuestTemplate.self,
@@ -39,17 +42,18 @@ public enum SchemaV7: VersionedSchema {
         QuestRating.self,
         QuestComment.self,
         JournalTurn.self,
+        JournalEntry.self,
     ]
 }
 
 public enum LifeRPGMigrationPlan: SchemaMigrationPlan {
-    public static var schemas: [any VersionedSchema.Type] = [SchemaV7.self]
+    public static var schemas: [any VersionedSchema.Type] = [SchemaV8.self]
     public static var stages: [MigrationStage] = []
 }
 
 public enum LifeRPGSchema {
-    public static let current = Schema(versionedSchema: SchemaV7.self)
+    public static let current = Schema(versionedSchema: SchemaV8.self)
 
     /// For `#Preview` and tests that just need the model list.
-    public static let models = SchemaV7.models
+    public static let models = SchemaV8.models
 }

@@ -16,10 +16,10 @@ struct SeedImporterTests {
                                     routinesCSV: routines ?? Fixtures.csv("routine_quests.csv"))
     }
 
-    /// Guards the schema declaration: a model missing from `SchemaV7.models` fails here.
+    /// Guards the schema declaration: a model missing from `SchemaV8.models` fails here.
     @Test func containerOpensWithVersionedSchema() throws {
         let ctx = try makeContext()
-        #expect(SchemaV7.versionIdentifier == Schema.Version(7, 0, 0))
+        #expect(SchemaV8.versionIdentifier == Schema.Version(8, 0, 0))
         #expect(LifeRPGMigrationPlan.schemas.count == 1)
         #expect(try ctx.fetchCount(FetchDescriptor<DailyQuest>()) == 0)
         #expect(try ctx.fetchCount(FetchDescriptor<LedgerEntry>()) == 0)
