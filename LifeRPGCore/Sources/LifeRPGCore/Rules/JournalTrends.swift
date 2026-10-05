@@ -52,6 +52,12 @@ public enum JournalTrends {
 }
 
 extension JournalTrends {
+    /// The days that have something written in them. An entry that holds only whitespace or unanswered
+    /// questions is not an entry here, which is what the entries list and the calendar say too.
+    public static func written(_ days: [JournalEntryDay]) -> [JournalEntryDay] {
+        days.filter { !$0.document.isEmpty }
+    }
+
     /// The Trends page's "when and how much": the writing days of one period, plus the all-time
     /// facts (streak, nights written) that a period filter would get wrong.
     public struct Writing {
@@ -72,7 +78,7 @@ extension JournalTrends {
 
         /// `days` may be the whole history: the period is cut here.
         public init(days: [JournalEntryDay], range: DayRange, timeZone: TimeZone = .current) {
-            self.all = days
+            self.all = JournalTrends.written(days)
             self.range = range
             self.timeZone = timeZone
         }
@@ -116,9 +122,21 @@ extension JournalTrends {
             return streak
         }
 
-        /// The hour (0-23) the period's entries were usually written, by `JournalHabits`' rule.
+        /// The wall-clock hour (0-23) most of the period's entries were started in, by `createdAt` so a
+        /// late edit does not move it. Nil with fewer than `JournalHabits.minimumTurnsForHour` entries.
+        ///
+        /// A mode has no use for the day boundary the old median counted from (a median needs the hours
+        /// in one line, so 23:00 and 01:00 had to sit next to each other), so 23:10 and 00:20 are
+        /// different hours. A tie goes to the hour of the most recently started entry among the tied
+        /// ones: the habit as it is now.
         public var usualHour: Int? {
-            JournalHabits.typicalHour(of: inRange.map(\.createdAt), in: timeZone)
+            let entries = inRange
+            guard entries.count >= JournalHabits.minimumTurnsForHour else { return nil }
+            let calendar = LifeCalendar.gregorian(timeZone)
+            let byHour = Dictionary(grouping: entries) { calendar.component(.hour, from: $0.createdAt) }
+            return byHour.max { a, b in
+                (a.value.count, a.value.map(\.createdAt).max()!) < (b.value.count, b.value.map(\.createdAt).max()!)
+            }?.key
         }
 
         /// Over all time, not the period.

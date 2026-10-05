@@ -115,9 +115,10 @@ extension TrendsPage {
     /// history (`JournalEntryHistory.days`): the period is cut here, and the other periods are what the
     /// word list is compared against.
     public static func build(period: JournalTrends.Period, anchor: String, today: String,
-                             days: [JournalEntryDay], quests: [DailyQuest], occurrences: [RoutineOccurrence],
+                             days allDays: [JournalEntryDay], quests: [DailyQuest], occurrences: [RoutineOccurrence],
                              ratings: [QuestRating], contexts: [DailyContext], language: JournalLanguage,
                              timeZone: TimeZone = .current, locale: Locale = .current) -> TrendsPage {
+        let days = JournalTrends.written(allDays)
         let range = JournalTrends.range(of: period, containing: anchor, in: timeZone)
             ?? JournalTrends.range(of: period, containing: today, in: timeZone)
             ?? JournalTrends.DayRange(first: today, last: today)

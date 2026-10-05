@@ -79,6 +79,16 @@ struct JournalTrendsPageTests {
         #expect(page(.week, anchor: "2026-09-02", spec: withAugust).nextAnchor == "2026-09-07")
     }
 
+    @Test func anEntryWithNothingWrittenLeadsNowhereAndIsNotCounted() {
+        let blank = TrendsFixtures.day("2026-08-31", [EntryFixtures.prompt(1, "Asked", answer: "")])
+        let days = TrendsFixtures.entryDays(september()) + [blank]
+        let result = TrendsPage.build(period: .month, anchor: "2026-09-18", today: "2026-09-18", days: days,
+                                      quests: [], occurrences: [], ratings: [], contexts: [], language: .en,
+                                      timeZone: tz, locale: english)
+        #expect(result.previousAnchor == nil)
+        #expect(result.subtitle == "September \u{00B7} 8 entries")
+    }
+
     // MARK: stats
 
     @Test func theTilesAreTheWordsTheStreakAndTheUsualHourInTheLocalesForm() {

@@ -66,17 +66,37 @@ struct JournalTrendsWritingTests {
         #expect(w.writingStreak(asOf: "2026-10-02") == 3)
     }
 
-    @Test func theUsualHourIsTheMedianOfTheDaysWrittenAtHourFrom0500() {
-        let late = writing([("2026-09-01", 5), ("2026-09-02", 5), ("2026-09-03", 5), ("2026-09-04", 5), ("2026-09-05", 5)],
-                           hour: 23)
-        #expect(late.usualHour == 23)
+    /// Entries started at the given wall-clock times on consecutive days of September.
+    private func writing(startedAt times: [(hour: Int, minute: Int)], editedAt editHour: Int? = nil) -> JournalTrends.Writing {
+        let days = times.enumerated().map { index, time in
+            let key = String(format: "2026-09-%02d", index + 1)
+            let day = TrendsFixtures.day(key, text: "word", hour: time.hour, minute: time.minute)
+            guard let editHour else { return day }
+            return JournalEntryDay(dayKey: key, document: day.document, isDone: false,
+                                   writtenAt: Fixtures.date(key, hour: editHour), createdAt: day.createdAt)
+        }
+        return JournalTrends.Writing(days: days, range: september, timeZone: tz)
     }
 
-    @Test func aNightOwlsLateAndEarlyHoursAverageToMidnight() {
-        let days = [("2026-09-01", 23), ("2026-09-02", 23), ("2026-09-03", 0), ("2026-09-04", 1), ("2026-09-05", 1)]
-            .map { TrendsFixtures.day($0.0, text: "word", hour: $0.1) }
-        let w = JournalTrends.Writing(days: days, range: september, timeZone: tz)
-        #expect(w.usualHour == 0)
+    @Test func theUsualHourIsTheHourMostEntriesWereStartedIn() {
+        #expect(writing(startedAt: [(21, 5), (22, 0), (22, 59), (22, 30), (23, 0)]).usualHour == 22)
+    }
+
+    @Test func theUsualHourIsWhenTheEntryWasStartedNotWhenItWasLastEdited() {
+        #expect(writing(startedAt: Array(repeating: (hour: 22, minute: 0), count: 5), editedAt: 2).usualHour == 22)
+    }
+
+    @Test func aNightOwlsHoursAreWallClockHoursSoMidnightIsNotFoldedIntoTheEvening() {
+        let evening = writing(startedAt: [(23, 10), (23, 10), (23, 10), (0, 20), (0, 20)])
+        #expect(evening.usualHour == 23)
+        let afterMidnight = writing(startedAt: [(0, 20), (0, 20), (0, 20), (23, 10), (23, 10)])
+        #expect(afterMidnight.usualHour == 0)
+    }
+
+    @Test func aTieGoesToTheHourOfTheMostRecentlyStartedEntryAmongTheTied() {
+        // 23:xx on the 1st and 2nd, 00:xx on the 3rd and 4th, noon on the 5th.
+        #expect(writing(startedAt: [(23, 10), (23, 10), (0, 20), (0, 20), (12, 0)]).usualHour == 0)
+        #expect(writing(startedAt: [(0, 20), (0, 20), (23, 10), (23, 10), (12, 0)]).usualHour == 23)
     }
 
     @Test func theUsualHourNeedsFiveEntriesInThePeriod() {
@@ -94,5 +114,22 @@ struct JournalTrendsWritingTests {
         let seven = writing((1...7).map { (String(format: "2026-08-%02d", $0), 5) }, in: week)
         #expect(seven.nightsWritten == 7)
         #expect(seven.isUnlocked)
+    }
+
+    @Test func aDayCountsOnceNoMatterHowManyRowsItHasAndNeedsSomethingWritten() {
+        let sixWritten = TrendsFixtures.entryDays((1...6).map { (String(format: "2026-08-%02d", $0), 5) })
+        let duplicate = TrendsFixtures.day("2026-08-03", text: "again")
+        let blank = TrendsFixtures.day("2026-08-07", [EntryFixtures.text(1, " \n "), EntryFixtures.prompt(2, "Asked", answer: "")])
+        let writing = JournalTrends.Writing(days: sixWritten + [duplicate, blank], range: september, timeZone: tz)
+        #expect(writing.nightsWritten == 6)
+        #expect(!writing.isUnlocked)
+        #expect(JournalTrends.Locked.progress(nightsWritten: writing.nightsWritten).text == "6 of 7 nights written")
+    }
+
+    @Test func aDayWithNothingWrittenIsNeitherAnEntryNorPartOfTheStreakOrTheHour() {
+        let blank = TrendsFixtures.day("2026-09-20", [EntryFixtures.prompt(1, "Asked", answer: "")])
+        let w = JournalTrends.Writing(days: [blank, TrendsFixtures.day("2026-09-19", text: "x")], range: september, timeZone: tz)
+        #expect(w.entries == 1)
+        #expect(w.writingStreak(asOf: "2026-09-20") == 1)
     }
 }
