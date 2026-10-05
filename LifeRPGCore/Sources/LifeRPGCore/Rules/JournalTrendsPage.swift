@@ -95,13 +95,13 @@ public struct TrendsPage: Equatable, Sendable {
     public struct Energy: Equatable, Sendable {
         public struct Bar: Equatable, Sendable {
             public let dayKey: String
-            /// 0 to 1 against the busiest day shown.
+            /// Points earned that day, 0 to 1 against the day that earned most of those shown.
             public let fraction: Double
             public let isLow: Bool
         }
 
         public let bars: [Bar]
-        /// Percent of a normal day's work a low day gets done, nil without enough days to say.
+        /// Mean points on low days as a percent of the mean on normal days, nil without enough days to say.
         public let lowDayPercent: Int?
     }
 
@@ -186,9 +186,9 @@ extension TrendsPage {
             let energyDays = JournalTrends.Energy.days(in: range, quests: quests, occurrences: occurrences,
                                                        contexts: contexts)
             guard energyDays.contains(where: \.isLow) else { return nil }
-            let busiest = max(1, energyDays.map(\.done).max() ?? 1)
+            let busiest = max(1, energyDays.map(\.points).max() ?? 1)
             return Energy(bars: energyDays.map {
-                              Energy.Bar(dayKey: $0.dayKey, fraction: Double($0.done) / Double(busiest),
+                              Energy.Bar(dayKey: $0.dayKey, fraction: Double($0.points) / Double(busiest),
                                          isLow: $0.isLow)
                           },
                           lowDayPercent: JournalTrends.Energy.lowDayRatio(energyDays))

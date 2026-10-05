@@ -80,11 +80,13 @@ extension JournalTrends {
         }
     }
 
-    /// "Low energy days": per day what got done against the tier the day was set to.
+    /// "Low energy days": per day the points earned against the tier the day was set to. Points
+    /// rather than a count, so one big quest is not the same as one small one.
     public enum Energy {
         public struct Day: Equatable, Sendable {
             public let dayKey: String
-            public let done: Int
+            /// What the day's finished quests and routines paid, by the day they were finished.
+            public let points: Int
             public let isLow: Bool
         }
 
@@ -95,27 +97,27 @@ extension JournalTrends {
         /// never opened has no tier to compare, so it is not a bar.
         public static func days(in range: DayRange, quests: [DailyQuest], occurrences: [RoutineOccurrence],
                                 contexts: [DailyContext]) -> [Day] {
-            var done: [String: Int] = [:]
-            for quest in quests where isDone(quest) { done[quest.dayKey, default: 0] += 1 }
+            var earned: [String: Int] = [:]
+            for quest in quests where isDone(quest) { earned[quest.dayKey, default: 0] += quest.points ?? 0 }
             for occurrence in occurrences where isDone(occurrence) {
-                done[occurrence.completedDayKey ?? "", default: 0] += 1
+                earned[occurrence.completedDayKey ?? "", default: 0] += occurrence.awardedPoints ?? 0
             }
             return contexts.filter { range.contains($0.dayKey) }
                 .sorted { $0.dayKey < $1.dayKey }
-                .map { Day(dayKey: $0.dayKey, done: done[$0.dayKey] ?? 0, isLow: $0.tier.isLow) }
+                .map { Day(dayKey: $0.dayKey, points: earned[$0.dayKey] ?? 0, isLow: $0.tier.isLow) }
         }
 
-        /// What percent of a normal day's work a low day gets done, rounded: the mean done on low
+        /// What percent of a normal day's points a low day earns, rounded: the mean points on low
         /// days over the mean on the others. Nil with fewer than three days of either kind, or when
-        /// the other days did nothing to compare against.
+        /// the other days earned nothing to compare against.
         public static func lowDayRatio(_ days: [Day]) -> Int? {
             let low = days.filter(\.isLow)
             let other = days.filter { !$0.isLow }
-            let otherDone = other.reduce(0) { $0 + $1.done }
-            guard low.count >= minimumDays, other.count >= minimumDays, otherDone > 0 else { return nil }
-            let lowDone = low.reduce(0) { $0 + $1.done }
-            // (lowDone / low.count) / (otherDone / other.count) as one division of integers.
-            return Int((100 * Double(lowDone * other.count) / Double(otherDone * low.count)).rounded())
+            let otherPoints = other.reduce(0) { $0 + $1.points }
+            guard low.count >= minimumDays, other.count >= minimumDays, otherPoints > 0 else { return nil }
+            let lowPoints = low.reduce(0) { $0 + $1.points }
+            // (lowPoints / low.count) / (otherPoints / other.count) as one division of integers.
+            return Int((100 * Double(lowPoints * other.count) / Double(otherPoints * low.count)).rounded())
         }
     }
 }

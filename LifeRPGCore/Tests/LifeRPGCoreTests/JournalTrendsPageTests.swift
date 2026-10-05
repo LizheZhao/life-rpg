@@ -275,11 +275,29 @@ struct JournalTrendsPageTests {
         #expect(unlocked(page(.month, quests: one)).favorites?.rows.first?.detail == "1 time")
     }
 
+    @Test func theEnergyBarsAndTheFooterAreInPointsNotInQuestsDone() {
+        let tiers: [(String, Tier)] = [("2026-09-10", .normal), ("2026-09-11", .normal), ("2026-09-12", .normal),
+                                       ("2026-09-13", .low), ("2026-09-14", .low), ("2026-09-15", .low)]
+        // A normal day is one 30-point quest, a low day two 5-point ones: more quests, fewer points.
+        var quests: [DailyQuest] = []
+        for (index, (key, _)) in tiers.enumerated() {
+            for points in index < 3 ? [30] : [5, 5] {
+                let quest = JournalFixtures.quest("Q", on: key)
+                quest.points = points
+                quests.append(quest)
+            }
+        }
+        let contexts = tiers.map { JournalFixtures.context(tier: $0.1, on: $0.0) }
+        let energy = try! #require(unlocked(page(.month, quests: quests, contexts: contexts)).energy)
+        #expect(energy.bars.map(\.fraction) == [1, 1, 1, 1.0 / 3.0, 1.0 / 3.0, 1.0 / 3.0])
+        #expect(energy.lowDayPercent == 33)
+    }
+
     @Test func lowEnergyShowsOnlyWithALowDayAndTheCalloutOnlyWithEnoughDaysOfEachKind() {
         let tiers: [(String, Tier)] = [("2026-09-10", .normal), ("2026-09-11", .normal), ("2026-09-12", .normal),
                                        ("2026-09-13", .veryLow), ("2026-09-14", .low), ("2026-09-15", .veryLow)]
         let contexts = tiers.map { JournalFixtures.context(tier: $0.1, on: $0.0) }
-        // Normal days finish 7, low days 5: 71% of a normal day.
+        // Each fixture quest pays 10: normal days earn 70, low days 50, so 71% of a normal day.
         var quests: [DailyQuest] = []
         for (key, count) in [("2026-09-10", 7), ("2026-09-11", 7), ("2026-09-12", 7),
                              ("2026-09-13", 5), ("2026-09-14", 5), ("2026-09-15", 5)] {
