@@ -98,7 +98,9 @@ struct WholeDayResetTests {
     @Test func cooldownsStartedByTheDayAreGivenBack() throws {
         let ctx = try Fixtures.context()
         Fixtures.stockLibrary(ctx)
-        let old = Fixtures.quest(ctx, "Done a week ago", completed: "2026-09-10", served: "2026-09-10")
+        // Weekend-only keeps it out of Friday's pool: if the draw picked and finished it, its stamp
+        // would be today's and reset would rightly clear it, which is not what this test is about.
+        let old = Fixtures.quest(ctx, "Done a week ago", weekendOnly: true, completed: "2026-09-10", served: "2026-09-10")
         var rng = try opened(ctx, on: friday)
         try playEverything(ctx, on: friday, rng: &rng)
         #expect(try ctx.fetch(FetchDescriptor<QuestTemplate>()).contains { $0.lastCompletedDayKey == friday })
