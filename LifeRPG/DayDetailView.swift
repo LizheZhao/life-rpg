@@ -2,80 +2,106 @@ import LifeRPGCore
 import SwiftData
 import SwiftUI
 
-/// One day, as it happened (`PLAN.md` §9). Read-only: everything here is history. Cards on the
-/// canvas, with quests and routines in the same row frame as Today's, minus the controls.
+/// The calendar's day sheet (`PLAN.md` §9): the date and what the day paid, the routines and the
+/// quests as collapsible sections, and the night's entry (or the way to write one). Read-only apart
+/// from that link. Every number, tag and rule (done / total, the header, when the sheet opens) is
+/// `DaySheet` in Core.
 struct DayDetailView: View {
     let dayKey: String
+    /// The app's day, which decides whether this day can still be written about.
+    let today: String
+    /// Which sections are open, held by the calendar so it lasts for the session.
+    @Binding var sections: DaySheet.Sections
 
     @Environment(\.modelContext) private var context
-    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        DayDetailPage(dayKey: dayKey, today: today, sections: $sections, context: context)
+    }
+}
+
+/// A sheet that is 720 pt tall, or as tall as the screen allows.
+struct DaySheetDetent: CustomPresentationDetent {
+    static let height: CGFloat = 720
+
+    static func height(in context: Context) -> CGFloat? { min(height, context.maxDetentValue) }
+}
+
+private struct DayDetailPage: View {
+    let dayKey: String
+    let today: String
+    @Binding var sections: DaySheet.Sections
+
+    /// Read once, before the first frame, so toggling a section does not fetch the day again.
+    @State private var record: Result<DayRecord, Error>
     /// That day's entry row, if it has one.
     @Query private var journalEntries: [JournalEntry]
-    @State private var reading = false
+    @State private var presented: Presented?
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private enum Presented: Identifiable {
+        case read, write
+
+        var id: Self { self }
+    }
 
     /// Characters of the entry the night card shows: about three lines at the card's width.
     private static let excerptLength = 120
 
-    init(dayKey: String) {
+    init(dayKey: String, today: String, sections: Binding<DaySheet.Sections>, context: ModelContext) {
         self.dayKey = dayKey
+        self.today = today
+        _sections = sections
+        _record = State(initialValue: Result { try DayRecord.load(dayKey, in: context) })
         _journalEntries = Query(filter: #Predicate<JournalEntry> { $0.dayKey == dayKey })
     }
 
     var body: some View {
-        NavigationStack {
-            Group {
-                switch Result(catching: { try DayRecord.load(dayKey, in: context) }) {
-                case .success(let record): content(record)
-                case .failure(let error):
-                    BannerView(message: error.localizedDescription).padding(16)
-                }
+        Group {
+            switch record {
+            case .success(let record): content(record)
+            case .failure(let error): BannerView(message: error.localizedDescription).padding(16)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-            .background(LR.Color.canvas.ignoresSafeArea())
-            .navigationTitle(friendlyDate)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { dismiss() }.foregroundStyle(LR.Color.ink)
-                }
-            }
-            .fullScreenCover(isPresented: $reading) { JournalReadingView(startDay: dayKey) }
         }
-    }
-
-    /// `Friday, October 2`; the `dayKey` itself is on the summary card, so VoiceOver and the eye
-    /// both still have it.
-    private var friendlyDate: String {
-        DayKey.date(dayKey).map { $0.formatted(.dateTime.weekday(.wide).month(.wide).day()) } ?? dayKey
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .background(LR.Color.canvas.ignoresSafeArea())
+        .fullScreenCover(item: $presented) { target in
+            switch target {
+            case .read: JournalReadingView(startDay: dayKey)
+            case .write: JournalEditorView(dayKey: dayKey, today: today)
+            }
+        }
     }
 
     private func content(_ record: DayRecord) -> some View {
         ScrollView {
             VStack(alignment: .leading, spacing: LR.Spacing.sectionGap) {
-                summaryCard(record.netPoints)
-
-                if let c = record.context { bodyCard(c) }
+                header(record)
 
                 if !record.routines.isEmpty {
-                    section("Routines due") {
+                    collapsible("Routines", progress: DaySheet.routineProgress(record.routines),
+                                open: sections.routinesOpen) { toggle(.routines) } rows: {
                         ForEach(record.routines) { routineRow($0) }
                     }
                 }
-                if !record.completedForOtherDays.isEmpty {
-                    section("Done this day for another day") {
-                        ForEach(record.completedForOtherDays) { routineRow($0, showDue: true) }
+                if !record.quests.isEmpty {
+                    collapsible("Quests", progress: DaySheet.questProgress(record.quests),
+                                open: sections.questsOpen) { toggle(.quests) } rows: {
+                        ForEach(record.quests) { questRow($0) }
                     }
-                }
-
-                section("Quests") {
-                    if record.quests.isEmpty {
-                        RecordRowView(title: "No quests this day", secondary: true) { EmptyView() }
-                    }
-                    ForEach(record.quests) { questRow($0) }
                 }
 
                 if let night = JournalEntryHistory.days(from: journalEntries).first {
                     nightCard(night)
+                } else {
+                    nothingWritten
+                }
+
+                if !record.completedForOtherDays.isEmpty {
+                    section("Done this day for another day") {
+                        ForEach(record.completedForOtherDays) { routineRow($0, showDue: true) }
+                    }
                 }
 
                 if !record.otherLedger.isEmpty {
@@ -102,9 +128,81 @@ struct DayDetailView: View {
                         }
                     }
                 }
+
+                if let c = record.context { bodyCard(c) }
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 8)
+            .padding(.horizontal, 20)
+            .padding(.top, 28)
+            .padding(.bottom, 24)
+        }
+    }
+
+    private func toggle(_ section: DaySheet.Section) {
+        Haptics.selection()
+        withAnimation(.easeInOut(duration: reduceMotion ? 0.15 : 0.22)) { sections.toggle(section) }
+    }
+
+    // MARK: header and sections
+
+    private func header(_ record: DayRecord) -> some View {
+        let header = DaySheet.header(dayKey: dayKey, net: record.netPoints, tier: record.context?.tier)
+        return ViewThatFits(in: .horizontal) {
+            HStack(alignment: .bottom, spacing: 8) {
+                headerDate(header)
+                Spacer(minLength: 8)
+                HStack(spacing: 6) { headerTags(header) }
+            }
+            VStack(alignment: .leading, spacing: 8) {
+                headerDate(header)
+                HStack(spacing: 6) { headerTags(header) }
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(header.weekday), \(header.date)")
+        .accessibilityValue([header.coins, header.dayType].compactMap { $0 }.joined(separator: ", "))
+        .accessibilityAddTraits(.isHeader)
+    }
+
+    private func headerDate(_ header: DaySheet.Header) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HandText(header.weekday, .hand).foregroundStyle(LR.Color.trendDeep)
+            Text(header.date).lr(.statNumber).foregroundStyle(LR.Color.ink)
+                .lineLimit(1).minimumScaleFactor(0.7)
+        }
+    }
+
+    @ViewBuilder private func headerTags(_ header: DaySheet.Header) -> some View {
+        PillLabel(text: header.coins)
+        if let dayType = header.dayType { PillLabel(text: dayType) }
+    }
+
+    /// A title row with `done / total` and a chevron; the whole row toggles the rows under it.
+    private func collapsible<Rows: View>(_ title: String, progress: DaySheet.Progress, open: Bool,
+                                         toggle: @escaping () -> Void,
+                                         @ViewBuilder rows: () -> Rows) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Button(action: toggle) {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(title).lr(.titleCard).foregroundStyle(LR.Color.ink)
+                    Spacer(minLength: 8)
+                    HandText(progress.text, .hand).foregroundStyle(LR.Color.trendDeep)
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(LR.Color.iconNeutral)
+                        .rotationEffect(.degrees(open ? 180 : 0))
+                        .accessibilityHidden(true)
+                }
+                .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("\(title), \(progress.text)")
+            .accessibilityHint(open ? "Hides them" : "Shows them")
+            .accessibilityAddTraits(.isHeader)
+            if open {
+                VStack(spacing: 8) { rows() }
+                    .transition(.opacity)
+            }
         }
     }
 
@@ -130,29 +228,7 @@ struct DayDetailView: View {
             .lrCard(.surface, radius: LR.Radius.row)
     }
 
-    // MARK: summary and body
-
-    private func summaryCard(_ net: Int) -> some View {
-        let text = net > 0 ? "+\(net)" : "\(net)"
-        return HStack(alignment: .lastTextBaseline) {
-            VStack(alignment: .leading, spacing: 0) {
-                Text("Net points").lr(.caption).foregroundStyle(LR.Color.inkSecondary)
-                // Sage fails contrast as text on a white card, so a gain stays `ink` and the sign
-                // says which way it went; a loss is clay.
-                HandText(text, .handDisplay).monospacedDigit()
-                    .foregroundStyle(net < 0 ? LR.Color.clay : net == 0 ? LR.Color.inkSecondary : LR.Color.ink)
-            }
-            Spacer(minLength: 8)
-            Text(dayKey).lr(.caption).monospacedDigit().foregroundStyle(LR.Color.inkSecondary)
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .lrCard(.surface, radius: LR.Radius.card)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(dayKey), net points")
-        .accessibilityValue("\(text) coins")
-    }
+    // MARK: body
 
     private func bodyCard(_ c: DailyContext) -> some View {
         let facts: [(label: String, value: String)] = [
@@ -209,13 +285,13 @@ struct DayDetailView: View {
         let excerpt = day.excerpt(limit: Self.excerptLength)
         return VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .firstTextBaseline) {
-                Text("THAT NIGHT").lr(.pill).tracking(1.2).foregroundStyle(LR.Color.inkSecondary)
+                Text("THAT NIGHT").lr(.pill).tracking(1.2).foregroundStyle(LR.Color.sectionTitle)
                 Spacer(minLength: 8)
-                Text("\(when) · \(words)").lr(.caption).monospacedDigit().foregroundStyle(LR.Color.inkSecondary)
+                Text("\(when) \u{00B7} \(words)").lr(.caption).monospacedDigit().foregroundStyle(LR.Color.sectionTitle)
             }
             // The button below says all of it.
             .accessibilityHidden(true)
-            Button { reading = true } label: {
+            Button { presented = .read } label: {
                 VStack(alignment: .leading, spacing: 14) {
                     Text(excerpt).lr(.journalExcerpt)
                         .foregroundStyle(LR.Color.onNight)
@@ -238,6 +314,35 @@ struct DayDetailView: View {
             .buttonStyle(PressableCardStyle())
             .accessibilityLabel("That night, \(when), \(words). \(excerpt)")
             .accessibilityHint("Opens the whole entry to read")
+        }
+    }
+
+    /// No entry that day: a flat outline in place of the dark card, and the way to write one unless
+    /// the day has not happened yet.
+    private var nothingWritten: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("THAT NIGHT").lr(.pill).tracking(1.2).foregroundStyle(LR.Color.sectionTitle)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(DaySheet.nothingWrittenTitle).lr(.bodyStrong).foregroundStyle(LR.Color.inkSecondary)
+                if DaySheet.canWrite(dayKey: dayKey, today: today) {
+                    Button { presented = .write } label: {
+                        HStack(spacing: 6) {
+                            Text(DaySheet.writeLinkTitle).lr(.bodyStrong)
+                            Image(systemName: "arrow.right").font(.system(size: 13, weight: .semibold))
+                                .accessibilityHidden(true)
+                        }
+                        .foregroundStyle(LR.Color.trendDeep)
+                        .frame(minHeight: 44, alignment: .leading)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 20).padding(.vertical, 14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .overlay(RoundedRectangle(cornerRadius: LR.Radius.row, style: .continuous)
+                .strokeBorder(LR.Color.dotEmpty, lineWidth: 1.5))
         }
     }
 
@@ -300,11 +405,13 @@ struct DayDetailView: View {
 
         var pills: [PillState] = []
         if let p = o.awardedPoints { pills.append(pointPill(p)) }
+        if o.usedDegraded { pills.append(PillState("light version", .plain)) }
         if o.penaltyApplied > 0 { pills.append(PillState("-\(o.penaltyApplied)", .clay)) }
         pills += line.ratings.map(ratingPill)
 
         var spoken = [status]
         if let p = o.awardedPoints { spoken.append("\(p) coins") }
+        if o.usedDegraded { spoken.append("light version") }
         if o.penaltyApplied > 0 { spoken.append("penalty \(o.penaltyApplied) coins") }
         spoken += line.ratings.map { "rated \($0.rating)" }
 
@@ -335,7 +442,6 @@ struct DayDetailView: View {
         }
         if let at = o.completedAt { parts.append(at.formatted(date: .omitted, time: .shortened)) }
         if showDue { parts.append("due \(o.dueDayKey)") }
-        if o.usedDegraded { parts.append("light version") }
         if o.sourceTypeRaw == SourceType.healthKit.rawValue { parts.append("auto-verified") }
         if o.replacesQuestID != nil { parts.append("ad-hoc") }
         if !o.countsForClear { parts.append("doesn't gate the day") }

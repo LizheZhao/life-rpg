@@ -16,10 +16,13 @@ struct CalendarView: View {
 
     @State private var month: MonthKey?
     @State private var selected: SelectedDay?
+    /// Which day-sheet sections are open; kept here so the choice lasts while the app runs.
+    @State private var daySections = DaySheet.Sections()
     /// -1 / 1 for the way the last month change went, so the new month slides in from that side.
     @State private var direction = 1
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.modelContext) private var context
 
     private struct SelectedDay: Identifiable { let id: String }
 
@@ -46,7 +49,7 @@ struct CalendarView: View {
                 VStack(spacing: LR.Spacing.sectionGap) {
                     titleRow
                     header
-                    gridCard(marks: marks, epicWeeks: epicWeeks)
+                    gridCard(marks: marks, epicWeeks: epicWeeks, journalDays: journalDays)
                     legend
                     entriesLink(count: journalDays.count)
                 }
@@ -56,7 +59,13 @@ struct CalendarView: View {
             .reservingTabBarSpace()
             .background(LR.Color.canvas.ignoresSafeArea())
             .toolbar(.hidden, for: .navigationBar)
-            .sheet(item: $selected) { DayDetailView(dayKey: $0.id) }
+            .sheet(item: $selected) { day in
+                DayDetailView(dayKey: day.id, today: today, sections: $daySections)
+                    .presentationDetents([.custom(DaySheetDetent.self), .large])
+                    .presentationDragIndicator(.visible)
+                    .presentationCornerRadius(34)
+                    .presentationBackground(LR.Color.canvas)
+            }
         }
     }
 
@@ -127,7 +136,8 @@ struct CalendarView: View {
 
     // MARK: grid
 
-    private func gridCard(marks: [String: DayMarks], epicWeeks: Set<String>) -> some View {
+    private func gridCard(marks: [String: DayMarks], epicWeeks: Set<String>,
+                          journalDays: [JournalEntryDay]) -> some View {
         let grid = MonthGrid(shownMonth)
         return VStack(spacing: 4) {
             HStack(spacing: 0) {
@@ -145,7 +155,7 @@ struct CalendarView: View {
                     let epic = epicWeeks.contains(week.weekKey)
                     HStack(spacing: 0) {
                         ForEach(week.days, id: \.dayKey) { day in
-                            cell(day, marks[day.dayKey] ?? DayMarks(), epic: epic)
+                            cell(day, marks[day.dayKey] ?? DayMarks(), epic: epic, journalDays: journalDays)
                         }
                     }
                     .background {
@@ -170,12 +180,21 @@ struct CalendarView: View {
         .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
     }
 
-    private func cell(_ day: MonthGrid.Day, _ marks: DayMarks, epic: Bool) -> some View {
+    /// An empty day opens nothing (`DaySheet.opens`). A day whose rows can't be read opens the sheet,
+    /// which says so.
+    private func openSheet(for dayKey: String, journalDays: [JournalEntryDay]) {
+        let hasEntry = journalDays.contains { $0.dayKey == dayKey }
+        if let record = try? DayRecord.load(dayKey, in: context), !DaySheet.opens(record, hasEntry: hasEntry) { return }
+        Haptics.selection()
+        selected = SelectedDay(id: dayKey)
+    }
+
+    private func cell(_ day: MonthGrid.Day, _ marks: DayMarks, epic: Bool,
+                      journalDays: [JournalEntryDay]) -> some View {
         let future = day.dayKey > today
         let isToday = day.dayKey == today
         return Button {
-            Haptics.selection()
-            selected = SelectedDay(id: day.dayKey)
+            openSheet(for: day.dayKey, journalDays: journalDays)
         } label: {
             VStack(spacing: 3) {
                 Text("\(day.dayOfMonth)")
