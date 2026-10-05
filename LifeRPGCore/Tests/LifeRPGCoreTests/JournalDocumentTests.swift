@@ -10,7 +10,6 @@ struct JournalDocumentTests {
     @Test func wordsCountTextAndAnswersNeverQuestions() {
         let doc = F.doc(F.text(1, "one two three"), F.prompt(2, "a very long question indeed", answer: "four five"))
         #expect(doc.wordCount == 5)
-        #expect(doc.characterCount == "one two three".count + "four five".count)
     }
 
     @Test func chineseCountsOneWordPerIdeograph() {

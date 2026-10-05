@@ -135,8 +135,11 @@ extension JournalTrends {
             return streak
         }
 
+        /// Entries a period needs before it has a usual hour.
+        static let minimumEntriesForUsualHour = 5
+
         /// The wall-clock hour (0-23) most of the period's entries were started in, by `createdAt` so a
-        /// late edit does not move it. Nil with fewer than `JournalHabits.minimumTurnsForHour` entries.
+        /// late edit does not move it. Nil with fewer than `minimumEntriesForUsualHour` entries.
         ///
         /// A mode has no use for the day boundary the old median counted from (a median needs the hours
         /// in one line, so 23:00 and 01:00 had to sit next to each other), so 23:10 and 00:20 are
@@ -144,7 +147,7 @@ extension JournalTrends {
         /// ones: the habit as it is now.
         public var usualHour: Int? {
             let entries = inRange
-            guard entries.count >= JournalHabits.minimumTurnsForHour else { return nil }
+            guard entries.count >= Self.minimumEntriesForUsualHour else { return nil }
             let calendar = LifeCalendar.gregorian(timeZone)
             let byHour = Dictionary(grouping: entries) { calendar.component(.hour, from: $0.createdAt) }
             return byHour.max { a, b in
@@ -177,18 +180,6 @@ extension JournalTrends {
             case 10..<22: 2
             default: 3
             }
-        }
-
-        /// 0 for no words. Otherwise 1 to 3 by thirds of the written days' words, the longest third
-        /// darkest and a tie with the cutoff going to the darker shade. A third of the days rounds
-        /// down but never below one, so any writing at all has a darkest day.
-        public static func level(forWords words: Int, among written: [Int]) -> Int {
-            guard words > 0 else { return 0 }
-            guard !written.isEmpty else { return 1 }
-            let descending = written.sorted(by: >)
-            func cutoff(_ share: Int) -> Int { descending[max(1, written.count * share / 3) - 1] }
-            if words >= cutoff(1) { return 3 }
-            return words >= cutoff(2) ? 2 : 1
         }
     }
 }

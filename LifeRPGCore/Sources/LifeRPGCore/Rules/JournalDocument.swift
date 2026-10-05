@@ -15,11 +15,6 @@ public struct JournalDocument: Equatable, Sendable {
         blocks.reduce(0) { $0 + JournalWords.count($1.writtenText) }
     }
 
-    /// Characters in every text and every answer, whitespace included.
-    public var characterCount: Int {
-        blocks.reduce(0) { $0 + $1.writtenText.count }
-    }
-
     /// Nothing but whitespace in any text or answer. Unanswered prompts alone do not make an entry,
     /// and neither does a page of spaces and newlines, which would be saved with a blank preview.
     public var isEmpty: Bool {

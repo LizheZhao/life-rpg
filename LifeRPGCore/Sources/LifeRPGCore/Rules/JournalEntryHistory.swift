@@ -29,7 +29,6 @@ public struct JournalEntryDay: Equatable, Sendable {
 
     public var wordCount: Int { document.wordCount }
     public var promptCount: Int { document.promptCount }
-    public var llmPromptCount: Int { document.llmPromptCount }
 
     /// The two-line preview of a list row (`JournalDocument.preview`).
     public var preview: String { document.preview() }

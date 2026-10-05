@@ -28,7 +28,6 @@ struct JournalEntryHistoryTests {
         #expect(day.dayKey == "2026-09-18")
         #expect(day.wordCount == 4)
         #expect(day.promptCount == 2)
-        #expect(day.llmPromptCount == 1)
         #expect(day.isDone)
         #expect(day.writtenAt == Fixtures.date("2026-09-18", hour: 22))
         #expect(day.preview == "one two three")
