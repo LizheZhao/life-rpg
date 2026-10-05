@@ -17,11 +17,13 @@ struct JournalDocumentTests {
         #expect(F.doc(F.text(1, "今天很开心")).wordCount == 5)
     }
 
-    @Test func aDocumentIsEmptyOnlyWhenNoCharacterWasTyped() {
+    @Test func aDocumentIsEmptyWhenNothingButWhitespaceWasTyped() {
         #expect(JournalDocument().isEmpty)
         #expect(F.doc(F.text(1, "")).isEmpty)
         #expect(F.doc(F.prompt(1, "Q"), F.prompt(2, "Q2")).isEmpty)
-        #expect(!F.doc(F.text(1, " ")).isEmpty)
+        #expect(F.doc(F.text(1, " ")).isEmpty)
+        #expect(F.doc(F.text(1, " \n\t "), F.prompt(2, "Q", answer: "  ")).isEmpty)
+        #expect(!F.doc(F.text(1, " a ")).isEmpty)
         #expect(!F.doc(F.prompt(1, "Q", answer: "x")).isEmpty)
         #expect(!F.doc(F.text(1, "😀")).isEmpty)
     }
