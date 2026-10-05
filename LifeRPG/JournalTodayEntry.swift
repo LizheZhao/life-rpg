@@ -7,6 +7,8 @@ import SwiftUI
 /// when it shows is Core (`JournalEntryToday`); this lays it out.
 struct JournalTonightCard: View {
     let today: String
+    /// The journal clock, which decides whether the label says "today" or "tonight".
+    let now: Date
     let write: () -> Void
     let read: (String) -> Void
 
@@ -14,8 +16,9 @@ struct JournalTonightCard: View {
     /// The newest entry before today: one row, so the card does not decode the whole history.
     @Query private var earlier: [JournalEntry]
 
-    init(today: String, write: @escaping () -> Void, read: @escaping (String) -> Void) {
+    init(today: String, now: Date, write: @escaping () -> Void, read: @escaping (String) -> Void) {
         self.today = today
+        self.now = now
         self.write = write
         self.read = read
         _todays = Query(filter: #Predicate<JournalEntry> { $0.dayKey == today })
@@ -30,7 +33,7 @@ struct JournalTonightCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
-                HandText("tonight", .hand).foregroundStyle(LR.Color.nightAccent)
+                HandText(JournalEntryToday.moment(now: now), .hand).foregroundStyle(LR.Color.nightAccent)
                 Spacer()
                 Image(systemName: "moon")
                     .font(.system(size: 18, weight: .medium))

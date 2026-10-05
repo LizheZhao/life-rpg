@@ -158,7 +158,7 @@ struct TrendsView: View {
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(locked.progress.text)
                 Button { writing = true } label: {
-                    Text("Write tonight's entry").lr(.bodyStrong).foregroundStyle(LR.Color.nightCard)
+                    Text(JournalEntryToday.writeButtonTitle(now: JournalClock.now())).lr(.bodyStrong).foregroundStyle(LR.Color.nightCard)
                         .padding(.horizontal, 20)
                         .frame(minHeight: 46)
                         .background(Capsule().fill(LR.Color.onNight))

@@ -61,11 +61,26 @@ public enum JournalEntryToday {
             .map { LastNight(dayKey: $0.dayKey, words: $0.wordCount) }
     }
 
-    /// From 20:00 local until the 05:00 rollover (hours 20 to 23 and 0 to 4), and at any hour once
-    /// the day is cleared.
-    public static func cardVisible(now: Date, timeZone: TimeZone = .current, allCleared: Bool) -> Bool {
+    /// Evening, in the user's own hours: from 20:00 until the 05:00 rollover (hours 20 to 23 and 0 to 4).
+    /// The one clock rule behind the card, the editor's date line and every "tonight" label.
+    public static func isEvening(now: Date, timeZone: TimeZone = .current) -> Bool {
         let hour = LifeCalendar.gregorian(timeZone).component(.hour, from: now)
-        return allCleared || hour >= cardStartHour || hour < LifeCalendar.dayStartHour
+        return hour >= cardStartHour || hour < LifeCalendar.dayStartHour
+    }
+
+    /// "tonight" in the evening, "today" by day: how the day's own entry is named.
+    public static func moment(now: Date, timeZone: TimeZone = .current) -> String {
+        isEvening(now: now, timeZone: timeZone) ? "tonight" : "today"
+    }
+
+    /// Whether the card shows: in the evening, and at any hour once the day is cleared.
+    public static func cardVisible(now: Date, timeZone: TimeZone = .current, allCleared: Bool) -> Bool {
+        allCleared || isEvening(now: now, timeZone: timeZone)
+    }
+
+    /// The Trends card's button.
+    public static func writeButtonTitle(now: Date, timeZone: TimeZone = .current) -> String {
+        "Write \(moment(now: now, timeZone: timeZone))'s entry"
     }
 
     /// Whether `dayKey` has been played out: at least one thing to do, and none of it still open

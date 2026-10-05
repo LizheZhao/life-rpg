@@ -72,11 +72,9 @@ struct TodayView: View {
     /// it appears at 20:00 for someone who left the app open.
     @State private var clock = Date()
     @Environment(\.scenePhase) private var scenePhase
-    #if targetEnvironment(simulator)
     /// Debug page: "evening", "daytime" or "cleared" overrides what decides the journal card, so
-    /// each Today state can be seen at any hour.
-    @AppStorage("debugJournalTiming") private var debugJournalTiming = ""
-    #endif
+    /// each Today state can be seen at any hour. Stays "" on a device.
+    @AppStorage(JournalClock.timingKey) private var debugJournalTiming = ""
     /// A card's `⋯ → Rate / note`: the sheet that files a rating or a note under what the card was.
     private struct FeedbackRequest: Identifiable {
         let subject: Feedback.Subject
@@ -295,19 +293,14 @@ struct TodayView: View {
     /// Whether the "Write about today" card shows: Core's rule over the clock and whether the day
     /// is cleared.
     private var showsJournalCard: Bool {
-        var now = clock
-        var cleared = JournalEntryToday.allCleared(quests: allQuests, occurrences: occurrences, dayKey: today)
-        #if targetEnvironment(simulator)
-        func at(_ hour: Int) -> Date { LifeCalendar.gregorian().date(bySettingHour: hour, minute: 0, second: 0, of: clock) ?? clock }
-        switch debugJournalTiming {
-        case "evening": now = at(21)
-        case "daytime": now = at(12); cleared = false
-        case "cleared": now = at(12); cleared = true
-        default: break
-        }
-        #endif
-        return JournalEntryToday.cardVisible(now: now, allCleared: cleared)
+        let cleared = JournalClock.allCleared(
+            JournalEntryToday.allCleared(quests: allQuests, occurrences: occurrences, dayKey: today),
+            timing: debugJournalTiming)
+        return JournalEntryToday.cardVisible(now: journalNow, allCleared: cleared)
     }
+
+    /// The clock for the journal card, with the Debug page's forced hour on the simulator.
+    private var journalNow: Date { JournalClock.now(clock, timing: debugJournalTiming) }
 
     private var greeting: TodayGreeting {
         TodayGreeting(dayKey: today, hour: LifeCalendar.gregorian().component(.hour, from: Date()), streak: streak)
@@ -320,7 +313,7 @@ struct TodayView: View {
                 topBar
                 greetingBlock
                 if showsJournalCard {
-                    JournalTonightCard(today: today,
+                    JournalTonightCard(today: today, now: journalNow,
                                        write: { journalSheet = .write },
                                        read: { journalSheet = .read($0) })
                 }

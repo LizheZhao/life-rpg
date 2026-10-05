@@ -7,14 +7,16 @@ import SwiftUI
 /// it ever locks: Done only marks the entry, and reopening shows the same blocks, editable.
 struct JournalEditorView: View {
     let dayKey: String
-    /// The app's day, which decides whether the date line says "tonight". The simulator's time
+    /// The app's day, which decides whether the date line names the moment. The simulator's time
     /// travel passes its own.
     var today = JournalEntries.entryDayKey(now: Date())
+    /// The clock the date line's "today" or "tonight" is read from.
+    var now = JournalClock.now()
 
     @Environment(\.modelContext) private var context
 
     var body: some View {
-        JournalEditorPage(dayKey: dayKey, today: today, context: context)
+        JournalEditorPage(dayKey: dayKey, today: today, now: now, context: context)
     }
 }
 
@@ -24,9 +26,11 @@ private struct JournalEditorPage: View {
     @State private var model: JournalEditorModel
 
     private let today: String
+    private let now: Date
 
-    init(dayKey: String, today: String, context: ModelContext) {
+    init(dayKey: String, today: String, now: Date, context: ModelContext) {
         self.today = today
+        self.now = now
         _model = State(initialValue: JournalEditorModel(dayKey: dayKey, context: context))
     }
 
@@ -35,7 +39,7 @@ private struct JournalEditorPage: View {
             header
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    HandText(JournalPageText.editorHeading(dayKey: model.dayKey, today: today, language: model.language),
+                    HandText(JournalPageText.editorHeading(dayKey: model.dayKey, today: today, now: now, language: model.language),
                              .hand)
                         .foregroundStyle(LR.Color.trendDeep)
                         .padding(.bottom, -2)

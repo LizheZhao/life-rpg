@@ -90,6 +90,28 @@ struct JournalEntryTodayTests {
         #expect(!JournalEntryToday.cardVisible(now: moment, timeZone: paris, allCleared: false))
     }
 
+    // MARK: the moment's word
+
+    private func moment(hour: Int, minute: Int = 0) -> String {
+        JournalEntryToday.moment(now: Fixtures.date("2026-09-18", hour: hour, in: tz).addingTimeInterval(Double(minute) * 60),
+                                 timeZone: tz)
+    }
+
+    @Test func theDayIsNamedTonightFromTwentyUntilTheRollover() {
+        #expect(moment(hour: 4, minute: 59) == "tonight")
+        #expect(moment(hour: 5) == "today")
+        #expect(moment(hour: 19, minute: 59) == "today")
+        #expect(moment(hour: 20) == "tonight")
+        #expect(moment(hour: 23, minute: 59) == "tonight")
+    }
+
+    @Test func theTrendsButtonNamesTheSameMoment() {
+        let day = Fixtures.date("2026-09-18", hour: 12, in: tz)
+        let night = Fixtures.date("2026-09-18", hour: 21, in: tz)
+        #expect(JournalEntryToday.writeButtonTitle(now: day, timeZone: tz) == "Write today's entry")
+        #expect(JournalEntryToday.writeButtonTitle(now: night, timeZone: tz) == "Write tonight's entry")
+    }
+
     // MARK: all cleared
 
     private func quest(done: Bool, replaced: Bool = false, hidden: Bool = false, slot: Difficulty = .easy,

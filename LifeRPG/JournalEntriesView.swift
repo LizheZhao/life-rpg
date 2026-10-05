@@ -28,7 +28,7 @@ struct JournalEntriesView: View {
     }
 
     var body: some View {
-        let page = JournalEntriesList.page(days: JournalEntryHistory.days(from: entries), today: today, query: query)
+        let page = JournalEntriesList.page(days: JournalEntryHistory.days(from: entries), today: today, now: JournalClock.now(), query: query)
         VStack(alignment: .leading, spacing: 0) {
             topBar
             ScrollView {
@@ -129,7 +129,7 @@ struct JournalEntriesView: View {
                     .background(Circle().fill(LR.Color.onNight.opacity(0.12)))
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 0) {
-                    Text("Tonight, in progress").lr(.heading).foregroundStyle(LR.Color.onNight)
+                    Text(tonight.title).lr(.heading).foregroundStyle(LR.Color.onNight)
                     Text(tonight.detail).lr(.caption).foregroundStyle(LR.Color.onNightSecondary)
                 }
                 Spacer(minLength: 8)
@@ -144,7 +144,7 @@ struct JournalEntriesView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(PressableCardStyle())
-        .accessibilityLabel("Tonight, in progress, \(tonight.detail)")
+        .accessibilityLabel("\(tonight.title), \(tonight.detail)")
         .accessibilityHint("Opens today's page to keep writing")
     }
 

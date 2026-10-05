@@ -6,19 +6,16 @@ public enum JournalPageText {
     /// "1 word", "412 words".
     public static func words(_ count: Int) -> String { "\(count) \(count == 1 ? "word" : "words")" }
 
-    /// The writing page's heading: the day and the moment it is written in, "Sunday, October 4 · tonight".
-    public static func writingHeading(dayKey: String, evening: Bool, language: JournalLanguage,
-                                      timeZone: TimeZone = .current) -> String {
-        let moment = language == .zhHans ? (evening ? "今晚" : "今天") : (evening ? "tonight" : "today")
-        return "\(dateText(dayKey: dayKey, language: language, timeZone: timeZone)) · \(moment)"
-    }
-
-    /// The editor's date line: today's entry is "Sunday, October 4 · tonight", any other day
-    /// is its weekday and date. `today` is the app day (`JournalEntries.entryDayKey`).
-    public static func editorHeading(dayKey: String, today: String, language: JournalLanguage,
+    /// The editor's date line: today's entry is "Sunday, October 4 · today" by day and "· tonight" in the
+    /// evening (`JournalEntryToday.isEvening`), any other day is its weekday and date. `today` is the app
+    /// day (`JournalEntries.entryDayKey`); `now` is the caller's clock, so the hour is never read here.
+    public static func editorHeading(dayKey: String, today: String, now: Date, language: JournalLanguage,
                                      timeZone: TimeZone = .current) -> String {
-        dayKey == today ? writingHeading(dayKey: dayKey, evening: true, language: language, timeZone: timeZone)
-                        : dateText(dayKey: dayKey, language: language, timeZone: timeZone)
+        let date = dateText(dayKey: dayKey, language: language, timeZone: timeZone)
+        guard dayKey == today else { return date }
+        let evening = JournalEntryToday.isEvening(now: now, timeZone: timeZone)
+        let moment = language == .zhHans ? (evening ? "今晚" : "今天") : (evening ? "tonight" : "today")
+        return "\(date) · \(moment)"
     }
 
     /// The reader's heading for an entry: the day and the time it was last written, "Thursday, October 1 · 11:14 PM".

@@ -15,7 +15,7 @@ struct DebugView: View {
     #if targetEnvironment(simulator)
     @AppStorage("debugDayOffset") private var dayOffset = 0
     /// "evening", "daytime" or "cleared" overrides what decides Today's journal card; "" is the real one.
-    @AppStorage("debugJournalTiming") private var journalTiming = ""
+    @AppStorage(JournalClock.timingKey) private var journalTiming = ""
     /// What "Ask me something" gets back, whatever the device's model is.
     @AppStorage(JournalAskForce.key) private var askForce = JournalAskForce.real.rawValue
     /// What the last press of the hand-off button returned: "" is a text that came back empty.
@@ -129,7 +129,7 @@ struct DebugView: View {
                         .disabled(dayOffset == 0)
                     }
                 }
-                section("Journal card (simulator only)", footer: "Today shows the \"Write about today\" card from 20:00 until the day rolls over, and at any hour once everything is cleared. Evening forces the clock to 21:00, Daytime to 12:00 with nothing cleared, Cleared to 12:00 with the day cleared.") {
+                section("Journal time (simulator only)", footer: "The journal reads its hour from here: the editor's date line and the Trends and entries cards say today by day and tonight from 20:00. Today shows the \"Write about today\" card from 20:00 until the day rolls over, and at any hour once everything is cleared. Evening forces the clock to 21:00, Daytime to 12:00 with nothing cleared, Cleared to 12:00 with the day cleared.") {
                     PillSegmentedControl(options: [("Real", ""), ("Evening", "evening"), ("Daytime", "daytime"), ("Cleared", "cleared")],
                                          selection: $journalTiming, accessibilityLabel: "Journal card")
                 }

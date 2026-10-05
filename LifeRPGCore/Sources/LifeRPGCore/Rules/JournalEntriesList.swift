@@ -24,6 +24,8 @@ public enum JournalEntriesList {
     /// Today's entry while it is still a draft: shown as the dark card at the top, and not again as a row.
     public struct Tonight: Equatable, Sendable {
         public let dayKey: String
+        /// "Tonight, in progress" in the evening, "Today, in progress" by day.
+        public let title: String
         public let detail: String
     }
 
@@ -37,7 +39,7 @@ public enum JournalEntriesList {
 
     /// `days` is `JournalEntryHistory.days`. A blank query lists everything; otherwise the dark card is
     /// set aside and every match is a row, today's draft included.
-    public static func page(days: [JournalEntryDay], today: String, query: String,
+    public static func page(days: [JournalEntryDay], today: String, now: Date, query: String,
                             language: JournalLanguage = .system, timeZone: TimeZone = .current) -> Page {
         let needle = query.trimmingCharacters(in: .whitespacesAndNewlines)
         let searching = !needle.isEmpty
@@ -49,7 +51,9 @@ public enum JournalEntriesList {
         if searching {
             listed = days.filter { $0.matches(needle) }
         } else if let draft = days.first(where: { $0.dayKey == today && !$0.isDone }) {
+            let moment = JournalEntryToday.moment(now: now, timeZone: timeZone)
             tonight = Tonight(dayKey: draft.dayKey,
+                              title: "\(moment.prefix(1).uppercased())\(moment.dropFirst()), in progress",
                               detail: "\(JournalPageText.words(draft.wordCount)) \u{00B7} keep going")
             listed = days.filter { $0.dayKey != today }
         }

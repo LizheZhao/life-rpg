@@ -12,8 +12,10 @@ struct JournalEntriesListTests {
                         writtenAt: Fixtures.date(dayKey, hour: 22))
     }
 
-    private func page(_ days: [JournalEntryDay], today: String = "2026-10-04", query: String = "") -> JournalEntriesList.Page {
-        JournalEntriesList.page(days: days, today: today, query: query, language: .en, timeZone: tz)
+    private func page(_ days: [JournalEntryDay], today: String = "2026-10-04", hour: Int = 21,
+                      query: String = "") -> JournalEntriesList.Page {
+        JournalEntriesList.page(days: days, today: today, now: Fixtures.date(today, hour: hour, in: tz), query: query,
+                                language: .en, timeZone: tz)
     }
 
     // MARK: header lines
@@ -88,9 +90,17 @@ struct JournalEntriesListTests {
         let draft = entry("2026-10-04", [F.text(1, "one two three")], done: false)
         let older = entry("2026-10-03", [F.text(1, "x")])
         let page = page([draft, older])
-        #expect(page.tonight == JournalEntriesList.Tonight(dayKey: "2026-10-04", detail: "3 words \u{00B7} keep going"))
+        #expect(page.tonight == JournalEntriesList.Tonight(dayKey: "2026-10-04", title: "Tonight, in progress",
+                                                           detail: "3 words \u{00B7} keep going"))
         #expect(page.sections.flatMap(\.rows).map(\.dayKey) == ["2026-10-03"])
         #expect(page.subtitle.hasPrefix("2 entries"))
+    }
+
+    @Test func theDraftCardIsNamedByTheHour() {
+        let draft = entry("2026-10-04", [F.text(1, "one")], done: false)
+        #expect(page([draft], hour: 12).tonight?.title == "Today, in progress")
+        #expect(page([draft], hour: 19).tonight?.title == "Today, in progress")
+        #expect(page([draft], hour: 20).tonight?.title == "Tonight, in progress")
     }
 
     @Test func aDoneEntryTodayIsARowNotTheCard() {

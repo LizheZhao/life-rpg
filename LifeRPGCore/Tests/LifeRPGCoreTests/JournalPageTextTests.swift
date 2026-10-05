@@ -11,15 +11,6 @@ struct JournalPageTextTests {
         #expect(JournalPageText.words(412) == "412 words")
     }
 
-    @Test func theWritingHeadingNamesTheDayAndTheMoment() {
-        #expect(JournalPageText.writingHeading(dayKey: "2026-10-04", evening: true, language: .en, timeZone: tz)
-                == "Sunday, October 4 · tonight")
-        #expect(JournalPageText.writingHeading(dayKey: "2026-10-04", evening: false, language: .en, timeZone: tz)
-                == "Sunday, October 4 · today")
-        #expect(JournalPageText.writingHeading(dayKey: "2026-10-04", evening: true, language: .zhHans, timeZone: tz)
-                .hasSuffix("· 今晚"))
-    }
-
     @Test func aNeighbourButtonIsTheShortDate() {
         #expect(JournalPageText.shortDate(dayKey: "2026-09-30", language: .en, timeZone: tz) == "Sep 30")
     }
@@ -28,18 +19,34 @@ struct JournalPageTextTests {
         #expect(JournalPageText.dateHeading(dayKey: "2026-10-01", language: .en, timeZone: tz) == "Thursday, October 1")
     }
 
-    @Test func aMalformedKeyIsShownAsItIs() {
-        #expect(JournalPageText.writingHeading(dayKey: "nope", evening: true, language: .en, timeZone: tz)
-                == "nope · tonight")
-    }
-
     // MARK: the editor and the reader of an entry
 
-    @Test func theEditorHeadingIsTonightForTodayAndTheDateForAnotherDay() {
-        #expect(JournalPageText.editorHeading(dayKey: "2026-10-04", today: "2026-10-04", language: .en, timeZone: tz)
-                == "Sunday, October 4 · tonight")
-        #expect(JournalPageText.editorHeading(dayKey: "2026-10-01", today: "2026-10-04", language: .en, timeZone: tz)
-                == "Thursday, October 1")
+    private func heading(_ day: String, today: String = "2026-10-04", hour: Int, minute: Int = 0,
+                         language: JournalLanguage = .en) -> String {
+        let now = Fixtures.date("2026-10-04", hour: hour, in: tz).addingTimeInterval(Double(minute) * 60)
+        return JournalPageText.editorHeading(dayKey: day, today: today, now: now, language: language, timeZone: tz)
+    }
+
+    @Test func theEditorHeadingOfTodayIsTodayByDayAndTonightFromTwenty() {
+        #expect(heading("2026-10-04", hour: 4, minute: 59) == "Sunday, October 4 · tonight")
+        #expect(heading("2026-10-04", hour: 5) == "Sunday, October 4 · today")
+        #expect(heading("2026-10-04", hour: 19, minute: 59) == "Sunday, October 4 · today")
+        #expect(heading("2026-10-04", hour: 20) == "Sunday, October 4 · tonight")
+        #expect(heading("2026-10-04", hour: 23, minute: 59) == "Sunday, October 4 · tonight")
+    }
+
+    @Test func theEditorHeadingOfAnotherDayIsTheDateAtAnyHour() {
+        #expect(heading("2026-10-01", hour: 21) == "Thursday, October 1")
+        #expect(heading("2026-10-01", hour: 12) == "Thursday, October 1")
+    }
+
+    @Test func theChineseEditorHeadingFollowsTheSameHours() {
+        #expect(heading("2026-10-04", hour: 12, language: .zhHans).hasSuffix("· 今天"))
+        #expect(heading("2026-10-04", hour: 21, language: .zhHans).hasSuffix("· 今晚"))
+    }
+
+    @Test func aMalformedKeyIsShownAsItIs() {
+        #expect(heading("nope", today: "nope", hour: 21) == "nope · tonight")
     }
 
     @Test func theReadingHeadingOfAnEntryHasTheTimeItWasWritten() {
