@@ -165,6 +165,7 @@ struct JournalTrendsPageTests {
         texts += (1...2).map { (String(format: "2026-08-%02d", $0), "tea tea tea tea") }
         let result = unlocked(page(.month, texts: texts))
         let about = try! #require(result.about)
+        #expect(about.kind == .distinctive)
         #expect(about.title == "What this month was about")
         #expect(about.subtitle == "Words that stood out versus your other months")
         #expect(about.rows.map(\.word) == ["ownership", "water"])
@@ -172,7 +173,23 @@ struct JournalTrendsPageTests {
         #expect(about.rows.map(\.fraction) == [1, 8.0 / 12.0])
 
         #expect(unlocked(page(.week, anchor: "2026-09-16", texts: texts)).about?.title == "What this week was about")
-        #expect(unlocked(page(.year, texts: texts)).about?.subtitle == "Words that stood out versus your other years")
+        // A year with no other year to compare against is labelled for what it is.
+        let lonely = unlocked(page(.year, texts: texts)).about
+        #expect(lonely?.kind == .mostUsed)
+        #expect(lonely?.subtitle == "Most used words")
+        #expect(lonely?.title == "What this year was about")
+        let withLastYear = unlocked(page(.year, texts: texts + [("2025-12-31", "tea tea")])).about
+        #expect(withLastYear?.kind == .distinctive)
+        #expect(withLastYear?.subtitle == "Words that stood out versus your other years")
+    }
+
+    @Test func withOnlyThisMonthWrittenTheListIsMostUsedWordsInPlainCounts() {
+        let texts = (10...17).map { (String(format: "2026-09-%02d", $0), "water water. Tea.") }
+        let about = try! #require(unlocked(page(.month, texts: texts)).about)
+        #expect(about.kind == .mostUsed)
+        #expect(about.subtitle == "Most used words")
+        #expect(about.rows.map(\.word) == ["water", "tea"])
+        #expect(about.rows.map(\.count) == [16, 8])
     }
 
     @Test func theBarsAreAgainstTheCommonestWordEvenWhenARarerOneRanksFirst() {

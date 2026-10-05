@@ -4,31 +4,47 @@ import NaturalLanguage
 extension JournalTrends {
     /// "What this month was about": the words the period leans on that the other months do not.
     ///
-    /// Only the user's own words are read (the answers, never the question lines, and never the
-    /// starter phrase the page typed for them). A word's score is its count in the period times how
-    /// much more often it turns up there than elsewhere, so a word written every month, however
-    /// often, does not win.
+    /// Only the user's own words are read (a text block and a prompt's answer, never a question).
+    /// Each period of the shown kind that holds entries is one document, and a word's score is its
+    /// count in the shown period times its inverse document frequency over those documents, so a
+    /// word written every month, however often, does not win. With no other period to compare
+    /// against the list is plain counts and says so (`Kind.mostUsed`).
     public enum Words {
         public struct Entry: Equatable, Sendable {
             public let word: String
             public let count: Int
         }
 
-        /// Added to a word's relative frequency in the other months before dividing by it, so a
-        /// word they never use scores high without dividing by zero. About one use in a thousand
-        /// words: a word the period uses at that rate everywhere else weighs next to half a word of
-        /// the same count that is new, one it uses never weighs six times as much.
-        static let smoothing = 0.001
+        public enum Kind: Equatable, Sendable {
+            /// Ranked by how much a word stands out against the other periods.
+            case distinctive
+            /// Ranked by count alone: fewer than two periods have entries.
+            case mostUsed
+        }
+
+        public struct Result: Equatable, Sendable {
+            public let kind: Kind
+            public let entries: [Entry]
+        }
+
         /// A word said once is not what the month was about.
         static let minimumWordCount = 2
         /// Two different words in a row must repeat this often to count as a phrase ("light version").
         static let minimumPhraseCount = 3
 
-        public static func distinctive(period: [JournalEntryDay], others: [JournalEntryDay], language: JournalLanguage,
-                                       limit: Int = 5) -> [Entry] {
-            guard limit > 0 else { return [] }
-            let mine = tally(period, language: language)
-            let theirs = tally(others, language: language)
+        /// The top `limit` words of `range`, a period of the kind `period`. `days` may be the whole
+        /// history: the other periods of the same kind are the rest of the corpus.
+        public static func top(in days: [JournalEntryDay], period: Period, range: DayRange,
+                               language: JournalLanguage, limit: Int = 5,
+                               timeZone: TimeZone = .current) -> Result {
+            let written = JournalTrends.written(days)
+            let mineDays = written.filter { range.contains($0.dayKey) }
+            let mine = tally(mineDays, language: language)
+            let others = Dictionary(grouping: written.filter { !range.contains($0.dayKey) }) {
+                JournalTrends.range(of: period, containing: $0.dayKey, in: timeZone)?.first ?? $0.dayKey
+            }.values.map { tally($0, language: language) }
+            let kind: Kind = !mineDays.isEmpty && !others.isEmpty ? .distinctive : .mostUsed
+            guard limit > 0 else { return Result(kind: kind, entries: []) }
 
             // Repeating pairs are candidates of their own, and an occurrence inside one is theirs
             // rather than its words', so "light version" is not also "light" and "version".
@@ -46,23 +62,28 @@ extension JournalTrends {
             struct Candidate {
                 let key: String
                 let count: Int
-                let otherCount: Int
+                /// Documents of the corpus that have it, the period's own included.
+                let documents: Int
             }
             let myWords = withoutPhrases(mine)
-            let theirWords = withoutPhrases(theirs)
-            let candidates = myWords.filter { $0.value >= minimumWordCount }
-                .map { Candidate(key: $0.key, count: $0.value, otherCount: theirWords[$0.key] ?? 0) }
-                + phrases.map { Candidate(key: $0.key, count: $0.value, otherCount: theirs.pairs[$0.key] ?? 0) }
-
-            let scored = candidates.map { c -> (Candidate, Double) in
-                let mineRate = Double(c.count) / Double(max(1, mine.total))
-                let theirRate = Double(c.otherCount) / Double(max(1, theirs.total))
-                return (c, Double(c.count) * mineRate / (theirRate + smoothing))
+            let otherWords = others.map(withoutPhrases)
+            let candidates = myWords.filter { $0.value >= minimumWordCount }.map { key, count in
+                Candidate(key: key, count: count, documents: 1 + otherWords.filter { ($0[key] ?? 0) > 0 }.count)
+            } + phrases.map { key, count in
+                Candidate(key: key, count: count, documents: 1 + others.filter { ($0.pairs[key] ?? 0) > 0 }.count)
             }
-            return scored
+
+            let corpusSize = Double(others.count + 1)
+            let scored = candidates.map { c -> (Candidate, Double) in
+                guard kind == .distinctive else { return (c, Double(c.count)) }
+                // Smoothed, so a word in every document still scores its count rather than nothing.
+                return (c, Double(c.count) * (log((corpusSize + 1) / (Double(c.documents) + 1)) + 1))
+            }
+            let top = scored
                 .sorted { ($0.1, $0.0.count, $1.0.key) > ($1.1, $1.0.count, $0.0.key) }
                 .prefix(limit)
                 .map { Entry(word: display($0.0.key, language: language), count: $0.0.count) }
+            return Result(kind: kind, entries: top)
         }
 
         private static func display(_ key: String, language: JournalLanguage) -> String {
@@ -83,8 +104,7 @@ extension JournalTrends {
                 for block in day.document.blocks {
                     for paragraph in block.writtenText.split(whereSeparator: \.isNewline) {
                         var previous: String?
-                        for token in tokens(in: JournalStarters.strippingStarter(from: String(paragraph)),
-                                            language: language) {
+                        for token in tokens(in: String(paragraph), language: language) {
                             guard isContent(token.text, language: language) else {
                                 previous = nil
                                 continue

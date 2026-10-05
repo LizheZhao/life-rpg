@@ -66,6 +66,8 @@ public struct TrendsPage: Equatable, Sendable {
             public let fraction: Double
         }
 
+        /// `.mostUsed` while fewer than two periods have entries: plain counts, labelled as such.
+        public let kind: JournalTrends.Words.Kind
         public let title: String
         public let subtitle: String
         public let rows: [Row]
@@ -158,14 +160,16 @@ extension TrendsPage {
         }()
 
         let about: About? = {
-            let others = days.filter { !range.contains($0.dayKey) }
-            let words = JournalTrends.Words.distinctive(period: periodDays, others: others, language: language)
+            let words = JournalTrends.Words.top(in: days, period: period, range: range, language: language,
+                                                timeZone: timeZone)
             // The list is ranked by how much a word stands out, so its first row need not be the commonest.
-            guard let top = words.map(\.count).max() else { return nil }
-            return About(title: "What this \(noun) was about",
-                         subtitle: "Words that stood out versus your other \(noun)s",
-                         rows: words.map { About.Row(word: $0.word, count: $0.count,
-                                                     fraction: Double($0.count) / Double(top)) })
+            guard let top = words.entries.map(\.count).max() else { return nil }
+            return About(kind: words.kind,
+                         title: "What this \(noun) was about",
+                         subtitle: words.kind == .distinctive ? "Words that stood out versus your other \(noun)s"
+                                                              : "Most used words",
+                         rows: words.entries.map { About.Row(word: $0.word, count: $0.count,
+                                                             fraction: Double($0.count) / Double(top)) })
         }()
 
         let favorites: Favorites? = {
