@@ -48,7 +48,14 @@ private struct JournalEditorPage: View {
             .scrollDismissesKeyboard(.interactively)
         }
         .background(LR.Color.canvas.ignoresSafeArea())
-        .safeAreaInset(edge: .bottom, spacing: 0) { JournalPromptBar(model: model) {} }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            VStack(spacing: 0) {
+                JournalAskNoticeView(model: model)
+                JournalAskCappedHint(model: model)
+                JournalPromptBar(model: model) { JournalAskPill(model: model) }
+            }
+            .animation(.easeOut(duration: 0.2), value: model.notice)
+        }
         .onChange(of: scenePhase) { _, phase in
             if phase != .active { model.flush() }
         }

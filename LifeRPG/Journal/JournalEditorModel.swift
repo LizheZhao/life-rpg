@@ -23,8 +23,17 @@ final class JournalEditorModel {
         let focus: BlockFocus
     }
 
+    /// What the page shows besides the blocks after a tap of "Ask me something". `serial` tells two
+    /// equal toasts apart, so the second restarts its fade.
+    struct Notice: Equatable {
+        let serial: Int
+        let value: JournalAskNotice
+    }
+
     /// How long after the last change the store is written.
     static let debounce: Duration = .milliseconds(500)
+    /// How long a toast stays; the safety line stays until it is dismissed.
+    static let toastDuration: Duration = .seconds(4)
 
     let dayKey: String
     let language: JournalLanguage
@@ -36,6 +45,9 @@ final class JournalEditorModel {
     private(set) var lastWriteAt: Date?
     /// Opened as done and not changed since: the header says "Reopened · saved".
     private(set) var reopenedDone: Bool
+    /// A request from "Ask me something" is out. The pill shows a spinner and ignores taps.
+    private(set) var asking = false
+    private(set) var notice: Notice?
 
     @ObservationIgnored private let context: ModelContext
     @ObservationIgnored private let now: () -> Date
@@ -44,13 +56,23 @@ final class JournalEditorModel {
     @ObservationIgnored private var cursor: BlockFocus?
     @ObservationIgnored private var waiting: Task<Void, Never>?
     @ObservationIgnored private var serial = 0
+    @ObservationIgnored private var noticeSerial = 0
+    @ObservationIgnored private var noticeTimer: Task<Void, Never>?
+    /// Read when the pill is tapped, so a model that comes or goes, and the Settings switch, count
+    /// from that moment.
+    @ObservationIgnored private let wording: (JournalLanguage) -> (any JournalWording)?
+    @ObservationIgnored private let includeWriting: () -> Bool
 
     init(dayKey: String, context: ModelContext, language: JournalLanguage = .system,
-         now: @escaping () -> Date = Date.init) {
+         now: @escaping () -> Date = Date.init,
+         wording: @escaping (JournalLanguage) -> (any JournalWording)? = JournalAskWording.current,
+         includeWriting: @escaping () -> Bool = { JournalAskSettings.includeWriting() }) {
         self.dayKey = dayKey
         self.language = language
         self.context = context
         self.now = now
+        self.wording = wording
+        self.includeWriting = includeWriting
         let entry = try? JournalEntries.entry(on: dayKey, in: context)
         let opened = JournalDocument(blocks: entry?.blocks ?? []).openedForEditing()
         document = opened.document
@@ -70,6 +92,11 @@ final class JournalEditorModel {
     var wordCountText: String { JournalPageText.words(document.wordCount) }
 
     func isUsed(_ key: JournalFixedKey) -> Bool { document.containsFixedKey(key) }
+
+    /// Five model prompts are in: the pill is dimmed before the tap, by the rule `resolve` uses.
+    var askIsCapped: Bool { JournalAsk.isCapped(document) }
+
+    var cappedTooltip: String { JournalAsk.cappedTooltip(language: language) }
 
     // MARK: what the text views report
 
@@ -93,6 +120,57 @@ final class JournalEditorModel {
     func insert(_ key: JournalFixedKey) {
         let seed = JournalPromptSeed.fixed(key, language: language)
         apply(document.insertingPrompt(seed, atBlock: cursor?.blockID, offset: cursor?.offset ?? 0))
+    }
+
+    /// "Ask me something". The cursor is captured now; the request runs while the user keeps
+    /// typing, and the result goes in at that cursor (`JournalAsk.insert`), so characters typed
+    /// meanwhile stay where they were typed, after the new prompt when they were typed at the cursor.
+    func ask() {
+        guard !asking, !JournalAsk.isCapped(document) else { return }
+        asking = true
+        dismissNotice()
+        let captured = cursor
+        let snapshot = document
+        let language = language
+        let includeWriting = includeWriting()
+        let signals = (try? JournalService.signals(on: dayKey, in: context))
+            ?? JournalSignals(dayKey: dayKey, quests: [], occurrences: [], context: nil, ratings: [])
+        let previous = JournalAsk.previousQuestions(before: dayKey, in: (try? JournalEntries.all(in: context)) ?? [])
+        let model = wording(language)
+        Task { [weak self] in
+            let result = await JournalAsk.resolve(language: language, signals: signals, document: snapshot,
+                                                  previousQuestions: previous, includeWriting: includeWriting,
+                                                  wording: model)
+            self?.finishAsk(result, at: captured)
+        }
+    }
+
+    private func finishAsk(_ result: JournalAskResult, at captured: BlockFocus?) {
+        asking = false
+        let edit = JournalAsk.insert(result, into: document, atBlock: captured?.blockID,
+                                     offset: captured?.offset ?? 0, language: language)
+        apply(edit)
+        if let value = JournalAsk.notice(for: result, inserted: edit != nil, document: document, language: language) {
+            show(value)
+        }
+    }
+
+    func dismissNotice() {
+        noticeTimer?.cancel()
+        notice = nil
+    }
+
+    private func show(_ value: JournalAskNotice) {
+        noticeSerial += 1
+        notice = Notice(serial: noticeSerial, value: value)
+        noticeTimer?.cancel()
+        guard case .toast = value else { return }
+        let shown = noticeSerial
+        noticeTimer = Task { [weak self] in
+            try? await Task.sleep(for: Self.toastDuration)
+            guard !Task.isCancelled, self?.notice?.serial == shown else { return }
+            self?.notice = nil
+        }
     }
 
     /// Return at the end of a prompt's answer: free text starts below it.

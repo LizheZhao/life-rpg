@@ -3,8 +3,8 @@ import SwiftUI
 
 /// The bar above the keyboard: the fixed chips, scrolling sideways, and the word count at the
 /// right. A chip whose prompt is already in the entry is dimmed and does nothing (Core's
-/// `insertingPrompt` refuses it as well). `leading` is the place for the "Ask me something" pill,
-/// which a later step fills; nothing is drawn there until it does.
+/// `insertingPrompt` refuses it as well). `leading` holds the "Ask me something" pill and its
+/// divider, which stay put while the chips scroll beside them.
 struct JournalPromptBar<Leading: View>: View {
     let model: JournalEditorModel
     @ViewBuilder var leading: Leading
@@ -16,7 +16,6 @@ struct JournalPromptBar<Leading: View>: View {
                 HStack(spacing: 8) {
                     ForEach(JournalFixedKey.allCases, id: \.self) { key in chip(key) }
                 }
-                .padding(.leading, 16)
             }
             Text(model.wordCountText).lr(.caption)
                 .foregroundStyle(LR.Color.inkSecondary)
@@ -25,6 +24,7 @@ struct JournalPromptBar<Leading: View>: View {
                 .padding(.trailing, 20)
                 .padding(.leading, 4)
         }
+        .padding(.leading, 16)
         .padding(.vertical, 10)
         .frame(maxWidth: .infinity)
         .background(LR.Color.surface)
