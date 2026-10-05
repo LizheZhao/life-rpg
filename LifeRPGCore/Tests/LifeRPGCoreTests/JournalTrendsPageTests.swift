@@ -13,11 +13,12 @@ struct JournalTrendsPageTests {
 
     private func page(_ period: JournalTrends.Period = .month, anchor: String = "2026-09-18",
                       today: String = "2026-09-18", spec: [(String, Int)]? = nil,
-                      texts: [(String, String)]? = nil, quests: [DailyQuest] = [],
+                      texts: [(String, String)]? = nil, entries: [JournalEntryDay]? = nil, quests: [DailyQuest] = [],
                       occurrences: [RoutineOccurrence] = [], ratings: [QuestRating] = [],
                       contexts: [DailyContext] = [], language: JournalLanguage = .en,
                       locale: Locale? = nil) -> TrendsPage {
-        let days = texts.map { TrendsFixtures.entryDays(texts: $0) } ?? TrendsFixtures.entryDays(spec ?? september())
+        let days = entries ?? texts.map { TrendsFixtures.entryDays(texts: $0) }
+            ?? TrendsFixtures.entryDays(spec ?? september())
         return TrendsPage.build(period: period, anchor: anchor, today: today, days: days, quests: quests,
                                 occurrences: occurrences, ratings: ratings, contexts: contexts,
                                 language: language, timeZone: tz, locale: locale ?? english)
@@ -105,9 +106,11 @@ struct JournalTrendsPageTests {
     @Test func aPeriodWithNothingWrittenHasZeroWordsNoUsualHourAndNoChartSections() {
         // Writing, quests, a low day and gratitude, all 10 to 17 September; the week shown is the one
         // before, so each section is empty only if it is cut to the week.
-        let texts = (10...17).map { (String(format: "2026-09-%02d", $0), "Grateful for tea") }
+        let thanks = (10...17).map {
+            TrendsFixtures.day(String(format: "2026-09-%02d", $0), [grateful("tea")])
+        }
         let contexts = [JournalFixtures.context(tier: .low, on: "2026-09-11")]
-        let result = unlocked(page(.week, anchor: "2026-09-02", texts: texts, quests: walk(), contexts: contexts))
+        let result = unlocked(page(.week, anchor: "2026-09-02", entries: thanks, quests: walk(), contexts: contexts))
         #expect(result.totalWords == 0)
         #expect(result.usualHour == nil)
         #expect(result.wordsPerDay == nil)
@@ -208,6 +211,10 @@ struct JournalTrendsPageTests {
         #expect(about?.rows.map(\.word).contains("散步") == true)
     }
 
+    private func grateful(_ answer: String) -> JournalBlock {
+        EntryFixtures.prompt(1, "What are you grateful for today?", answer: answer, key: .gratefulFor)
+    }
+
     // MARK: calendar, gratitude, year
 
     @Test func theHeatGridHasACellPerDayAtTheTierOfItsWords() {
@@ -219,9 +226,10 @@ struct JournalTrendsPageTests {
     }
 
     @Test func gratitudeIsThePeriodsMostOftenPhrasesAndAbsentWhenThereAreNone() {
-        var texts = (10...16).map { (String(format: "2026-09-%02d", $0), "Quiet day.") }
-        texts += [("2026-09-17", "Grateful for the walk, the cat"), ("2026-09-18", "Grateful for the walk")]
-        let result = unlocked(page(.month, texts: texts))
+        var entries = (10...16).map { TrendsFixtures.day(String(format: "2026-09-%02d", $0), text: "Quiet day.") }
+        entries += [TrendsFixtures.day("2026-09-17", [grateful("the walk, the cat")]),
+                    TrendsFixtures.day("2026-09-18", [grateful("the walk")])]
+        let result = unlocked(page(.month, entries: entries))
         #expect(result.gratitude.map(\.text) == ["the walk", "the cat"])
         #expect(result.gratitude.map(\.count) == [2, 1])
         #expect(unlocked(page(.month)).gratitude.isEmpty)

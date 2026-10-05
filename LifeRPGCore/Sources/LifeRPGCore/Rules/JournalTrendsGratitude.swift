@@ -1,8 +1,9 @@
 import Foundation
 
 extension JournalTrends {
-    /// "Grateful for, most often": what the user wrote after the "Grateful for" starter
-    /// (`JournalStarters.grateful`, in either language), counted across days.
+    /// "Grateful for, most often": what the user answered to the Grateful for chip
+    /// (`JournalFixedKey.gratefulFor`), counted across days. Free text and every other prompt,
+    /// the model's included, are left alone: the page counts what was asked as gratitude.
     public enum Gratitude {
         public struct Phrase: Equatable, Sendable {
             public let text: String
@@ -13,8 +14,7 @@ extension JournalTrends {
         static let maximumLength = 40
 
         /// The commonest items first, then the most recently written, then alphabetically so the
-        /// order is the same every time. The starter matches in both languages whichever one the
-        /// system is in: someone can write in either.
+        /// order is the same every time.
         public static func phrases(in days: [JournalEntryDay], limit: Int = 7) -> [Phrase] {
             guard limit > 0 else { return [] }
             struct Seen {
@@ -25,14 +25,13 @@ extension JournalTrends {
             var seen: [String: Seen] = [:]
             for day in days {
                 for block in day.document.blocks {
-                    for paragraph in block.writtenText.split(whereSeparator: \.isNewline) {
-                        for item in items(inParagraph: String(paragraph)) {
-                            let key = item.lowercased()
-                            seen[key, default: Seen()].count += 1
-                            seen[key]!.latestDay = max(seen[key]!.latestDay, day.dayKey)
-                            let casing = seen[key]!.casings[item] ?? (0, "")
-                            seen[key]!.casings[item] = (casing.count + 1, max(casing.latestDay, day.dayKey))
-                        }
+                    guard case .prompt(_, _, let answer, _, .gratefulFor) = block else { continue }
+                    for item in items(inAnswer: answer) {
+                        let key = item.lowercased()
+                        seen[key, default: Seen()].count += 1
+                        seen[key]!.latestDay = max(seen[key]!.latestDay, day.dayKey)
+                        let casing = seen[key]!.casings[item] ?? (0, "")
+                        seen[key]!.casings[item] = (casing.count + 1, max(casing.latestDay, day.dayKey))
                     }
                 }
             }
@@ -47,49 +46,27 @@ extension JournalTrends {
                 }
         }
 
-        /// What follows the starter in one paragraph, up to the first sentence end, as separate
-        /// things. Empty for a paragraph that does not begin with the starter.
-        static func items(inParagraph paragraph: String) -> [String] {
-            let trimmed = paragraph.trimmingCharacters(in: .whitespacesAndNewlines)
-            let english = JournalStarters.grateful.en
-            let chinese = JournalStarters.grateful.zh
-            var rest: Substring
-            let isChinese: Bool
-            var separators = CharacterSet(charactersIn: ",;，；、")
-            if let match = trimmed.range(of: english, options: [.anchored, .caseInsensitive]),
-               trimmed[match.upperBound...].first.map({ !$0.isLetter && !$0.isNumber }) ?? true {
-                rest = trimmed[match.upperBound...]
-                isChinese = false
-            } else if trimmed.hasPrefix(chinese) {
-                rest = trimmed.dropFirst(chinese.count)
-                separators.insert("和")
-                isChinese = true
-            } else {
-                return []
+        /// The separate things one answer names. Items end at a comma, semicolon, `、`, `，`, `；`, " and "
+        /// (only with spaces around it, so "sand" stays whole), `和`, a line break or a sentence end.
+        /// A full stop ends a sentence only at the end of the text or before whitespace, so "3.5 hours"
+        /// stays whole.
+        static func items(inAnswer answer: String) -> [String] {
+            let text = Array(answer.replacingOccurrences(of: " and ", with: ",", options: .caseInsensitive))
+            var items: [String] = []
+            var current = ""
+            for (index, ch) in text.enumerated() {
+                let next = index + 1 < text.count ? text[index + 1] : nil
+                let ends = ch.isNewline || ",;，；、和!?。！？".contains(ch)
+                    || (ch == "." && (next?.isWhitespace ?? true))
+                if ends {
+                    items.append(current)
+                    current = ""
+                } else {
+                    current.append(ch)
+                }
             }
-            while let first = rest.first, first.isWhitespace || first == ":" || first == "：" { rest = rest.dropFirst() }
-
-            var sentence = String(firstSentence(of: rest))
-            // "and" splits only in English and "和" only in Chinese: each is an ordinary part of a
-            // word in the other ("sand", "和平").
-            if !isChinese {
-                sentence = sentence.replacingOccurrences(of: " and ", with: ",", options: .caseInsensitive)
-            }
-            return sentence.components(separatedBy: separators).compactMap(clean)
-        }
-
-        /// Up to the first `.`, `!`, `?`, `。`, `！` or `？`. A full stop counts only at the end of the
-        /// text or before whitespace, so "3.5 hours" stays whole.
-        private static func firstSentence(of text: Substring) -> Substring {
-            var index = text.startIndex
-            while index < text.endIndex {
-                let ch = text[index]
-                let next = text.index(after: index)
-                if "!?。！？".contains(ch) { return text[..<index] }
-                if ch == ".", next == text.endIndex || text[next].isWhitespace { return text[..<index] }
-                index = next
-            }
-            return text
+            items.append(current)
+            return items.compactMap(clean)
         }
 
         private static let trimmed = CharacterSet.whitespacesAndNewlines
