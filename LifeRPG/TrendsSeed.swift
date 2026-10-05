@@ -44,6 +44,17 @@ enum TrendsSeed {
     ]
     private static let grateful = ["the walk", "the cat", "a good 1:1", "the river", "sleep", "cooking", "quiet morning"]
 
+    /// 15% trivial, 35% easy, 35% medium, 15% hard, so the calendar dots and the day sheet show every
+    /// tier colour. A day has one trivial group at most, as in the app.
+    private static func seededDifficulty(using rng: inout SeededRNG, allowTrivial: Bool) -> Difficulty {
+        switch Int.random(in: 0..<20, using: &rng) {
+        case 0..<3: allowTrivial ? .trivial : .easy
+        case 3..<10: .easy
+        case 10..<17: .medium
+        default: .hard
+        }
+    }
+
     @MainActor
     static func seed(days count: Int, endingBefore today: String, in context: ModelContext) throws -> Result {
         var result = Result()
@@ -99,13 +110,23 @@ enum TrendsSeed {
                     let picks: [(UUID?, String)] = [(liftID, "Workout: weight training"), (groomID, "Cat grooming"),
                                                     (nil, "Read 20 pages")]
                     let (id, text) = picks[index % 3]
+                    let difficulty = seededDifficulty(using: &rng, allowTrivial: index == 0)
                     let quest = DailyQuest()
                     quest.dayKey = dayKey
                     quest.weekKey = DayKey.weekKey(of: dayKey) ?? ""
-                    quest.slotRaw = Difficulty.easy.rawValue
+                    quest.slotRaw = difficulty.rawValue
                     quest.templateID = id
                     quest.textSnapshot = text
-                    quest.points = 10
+                    if difficulty == .trivial {
+                        // The app's trivial slot is always the three-item group, which has no template.
+                        quest.templateID = nil
+                        quest.trivialGroup = picks.map(\.1)
+                        quest.textSnapshot = quest.trivialGroup.joined(separator: " · ")
+                        quest.trivialDone = [true, true, true]
+                        quest.points = Scoring.trivialGroupBase
+                    } else {
+                        quest.points = Int.random(in: difficulty.range, using: &rng)
+                    }
                     quest.completedAt = noon
                     context.insert(quest)
                     result.quests += 1
