@@ -8,20 +8,44 @@ import Testing
 struct JournalConversationTests {
     typealias F = JournalFixtures
 
-    /// Replies as scripted, counts its calls, and can stall for `delay` without honouring cancellation.
+    /// A model that is stuck until the test lets go of it, so "still stalled" is a fact the test
+    /// controls instead of a wall-clock bound that parallel test load can overrun.
+    private final class Stall: @unchecked Sendable {
+        private let lock = NSLock()
+        private var open = false
+        private var waiting: [CheckedContinuation<Void, Never>] = []
+
+        func wait() async {
+            await withCheckedContinuation { c in
+                lock.lock()
+                if open { lock.unlock(); c.resume() } else { waiting.append(c); lock.unlock() }
+            }
+        }
+
+        func release() {
+            lock.lock()
+            open = true
+            let all = waiting
+            waiting = []
+            lock.unlock()
+            all.forEach { $0.resume() }
+        }
+    }
+
+    /// Replies as scripted, counts its calls, and can stall on `stall` without honouring cancellation.
     private final class FakeWording: JournalWording, @unchecked Sendable {
         private let lock = NSLock()
         private var calls = 0
         let question: String?
         let followUp: (reflection: String, question: String)?
-        let delay: TimeInterval
+        let stall: Stall?
         private(set) var instructions: [String] = []
         private(set) var prompts: [String] = []
 
-        init(question: String? = nil, followUp: (reflection: String, question: String)? = nil, delay: TimeInterval = 0) {
+        init(question: String? = nil, followUp: (reflection: String, question: String)? = nil, stall: Stall? = nil) {
             self.question = question
             self.followUp = followUp
-            self.delay = delay
+            self.stall = stall
         }
 
         var callCount: Int { lock.withLock { calls } }
@@ -32,11 +56,7 @@ struct JournalConversationTests {
                 self.instructions.append(instructions)
                 prompts.append(prompt)
             }
-            if delay > 0 {
-                await withCheckedContinuation { c in
-                    DispatchQueue.global().asyncAfter(deadline: .now() + delay) { c.resume() }
-                }
-            }
+            await stall?.wait()
         }
 
         func word(instructions: String, prompt: String) async -> String? {
@@ -48,6 +68,21 @@ struct JournalConversationTests {
             await record(instructions, prompt)
             return followUp
         }
+    }
+
+    /// `work`'s result, or nil if it has not returned after `ceiling`. Only a regression reaches the
+    /// ceiling (a `present` that waits for the stalled model never returns), so it turns that hang
+    /// into a failed expectation; a passing run returns as soon as `work` does.
+    private func returns<T: Sendable>(within ceiling: Duration, _ work: @escaping @Sendable () async -> T) async -> T? {
+        let (results, out) = AsyncStream<T?>.makeStream()
+        Task { out.yield(await work()) }
+        let timer = Task {
+            try? await Task.sleep(for: ceiling)
+            out.yield(nil)
+        }
+        defer { timer.cancel() }
+        for await first in results { return first }
+        return nil
     }
 
     private func opening() throws -> JournalQuestion {
@@ -127,13 +162,15 @@ struct JournalConversationTests {
         #expect(shown == JournalPresented(text: q.text, source: .template, promptID: "open.keep"))
     }
 
+    /// The model is released only after `present` has returned, so a `present` that waited for it
+    /// would never return.
     @Test func aModelThatHangsPastTheTimeoutFallsBackWithoutWaitingForIt() async throws {
         let q = try opening()
-        let wording = FakeWording(question: "What from this evening would you like to hold onto?", delay: 2)
-        let started = Date()
-        let shown = await present(q, wording, timeout: .milliseconds(100))
+        let stall = Stall()
+        let wording = FakeWording(question: "What from this evening would you like to hold onto?", stall: stall)
+        let shown = await returns(within: .seconds(30)) { await present(q, wording, timeout: .milliseconds(100)) }
+        stall.release()
         #expect(shown == JournalPresented(text: q.text, source: .template, promptID: "open.keep"))
-        #expect(Date().timeIntervalSince(started) < 1.5, "returned only after the stalled model finished")
         #expect(wording.callCount == 1)
     }
 
@@ -190,9 +227,11 @@ struct JournalConversationTests {
 
     @Test func aFollowUpModelThatHangsFallsBack() async throws {
         let request = try followUpRequest()
-        let wording = FakeWording(followUp: ("It went better than you hoped.", "What made the difference?"), delay: 2)
-        let shown = await present(request, wording, timeout: .milliseconds(100))
-        #expect(shown.source == .template)
+        let stall = Stall()
+        let wording = FakeWording(followUp: ("It went better than you hoped.", "What made the difference?"), stall: stall)
+        let shown = await returns(within: .seconds(30)) { await present(request, wording, timeout: .milliseconds(100)) }
+        stall.release()
+        #expect(shown?.source == .template)
         #expect(wording.callCount == 1)
     }
 
