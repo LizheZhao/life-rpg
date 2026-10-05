@@ -90,4 +90,20 @@ struct SamplingTests {
         #expect(picked.count == 2)
         #expect(Set(picked.map(\.id)).count == 2)
     }
+
+    /// SwiftData returns an unsorted fetch in an order that changes per store, so a seeded draw is
+    /// only repeatable when the pool is put in a fixed order before the RNG walks it.
+    @Test func aSeededDayDrawsTheSameQuestsInEveryStore() throws {
+        func draw(seed: UInt64) throws -> [String] {
+            let ctx = try Fixtures.context()
+            Fixtures.stockLibrary(ctx)
+            var rng = SeededRNG(seed: seed)
+            try DayService.ensureToday(ctx, now: Fixtures.date("2026-09-18"), in: tz, rng: &rng)
+            return try DayService.quests(on: "2026-09-18", in: ctx).map { "\($0.slot) \($0.textSnapshot)" }.sorted()
+        }
+        for seed in UInt64(1)...8 {
+            let first = try draw(seed: seed)
+            for _ in 0..<4 { #expect(try draw(seed: seed) == first, "seed \(seed)") }
+        }
+    }
 }
