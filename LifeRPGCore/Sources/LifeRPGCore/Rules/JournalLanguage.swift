@@ -6,6 +6,9 @@ public enum JournalLanguage: String, Codable, CaseIterable, Sendable {
     case en
     case zhHans = "zh-Hans"
 
+    /// The journal's language on this device: `resolve` applied to the system's preferred languages.
+    public static var system: JournalLanguage { resolve(preferred: Locale.preferredLanguages) }
+
     /// The first preferred language is the system language, and it alone decides. `preferred` is
     /// `Locale.preferredLanguages`, which carries region and script suffixes (`zh-Hans-CN`).
     public static func resolve(preferred: [String]) -> JournalLanguage {

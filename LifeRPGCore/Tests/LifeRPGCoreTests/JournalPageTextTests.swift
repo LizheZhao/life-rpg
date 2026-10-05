@@ -102,4 +102,32 @@ struct JournalPageTextTests {
         let turns = [F.turn(.opening, "Fine.", index: 0), F.freeWriting("", index: 1)]
         #expect(JournalReading.canAddFreeWriting(to: turns))
     }
+
+    // MARK: the editor and the reader of an entry
+
+    @Test func theEditorHeadingIsTonightForTodayAndTheDateForAnotherDay() {
+        #expect(JournalPageText.editorHeading(dayKey: "2026-10-04", today: "2026-10-04", language: .en, timeZone: tz)
+                == "Sunday, October 4 · tonight")
+        #expect(JournalPageText.editorHeading(dayKey: "2026-10-01", today: "2026-10-04", language: .en, timeZone: tz)
+                == "Thursday, October 1")
+    }
+
+    @Test func theReadingHeadingOfAnEntryHasTheTimeItWasWritten() {
+        let written = DayKey.date("2026-10-01", in: tz)!.addingTimeInterval(23 * 3600 + 14 * 60)
+        let entry = JournalEntryDay(dayKey: "2026-10-01", document: EntryFixtures.doc(EntryFixtures.text(1, "x")),
+                                    isDone: true, writtenAt: written)
+        let heading = JournalPageText.readingHeading(entry: entry, language: .en, timeZone: tz)
+        #expect(heading.hasPrefix("Thursday, October 1 · "))
+        #expect(heading.contains("11:14"))
+    }
+
+    @Test func theTagsOfAnEntryAreWordsQuestsAndTheDayType() {
+        let entry = JournalEntryDay(dayKey: "2026-10-01", document: EntryFixtures.doc(EntryFixtures.text(1, "one two")),
+                                    isDone: false, writtenAt: Date())
+        #expect(JournalPageText.chips(entry: entry, facts: nil) == ["2 words"])
+        #expect(JournalPageText.chips(entry: entry, facts: JournalDayFacts(completed: 3, tierText: "low day"))
+                == ["2 words", "3 quests done", "low day"])
+        #expect(JournalPageText.chips(entry: entry, facts: JournalDayFacts(completed: 0, tierText: nil))
+                == ["2 words"])
+    }
 }

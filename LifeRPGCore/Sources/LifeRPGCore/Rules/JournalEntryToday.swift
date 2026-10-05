@@ -44,6 +44,23 @@ public enum JournalEntryToday {
         }
     }
 
+    /// The card's line under its title.
+    public static let cardSubtitle = "A blank page. Pull in a question whenever you want one."
+
+    /// The newest entry before `today`, for "Last night · 412 words" on the card while today
+    /// has no row. `days` is `JournalEntryHistory.days`.
+    public struct LastNight: Equatable, Sendable {
+        public let dayKey: String
+        public let words: Int
+
+        public var text: String { "Last night \u{00B7} \(JournalPageText.words(words))" }
+    }
+
+    public static func lastNight(in days: [JournalEntryDay], today: String) -> LastNight? {
+        days.filter { $0.dayKey < today }.max { $0.dayKey < $1.dayKey }
+            .map { LastNight(dayKey: $0.dayKey, words: $0.wordCount) }
+    }
+
     /// From 20:00 local until the 05:00 rollover (hours 20 to 23 and 0 to 4), and at any hour once
     /// the day is cleared.
     public static func cardVisible(now: Date, timeZone: TimeZone = .current, allCleared: Bool) -> Bool {

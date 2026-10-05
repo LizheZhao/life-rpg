@@ -110,6 +110,29 @@ extension JournalDocument {
         return JournalEdit(document: JournalDocument(blocks: blocks), focus: BlockFocus(blockID: id, offset: answer.count))
     }
 
+    /// A keystroke: the text of a text block, or the answer of a prompt, becomes `text`. Nothing else
+    /// moves. Nil for an unknown block, so a late callback from a view that is gone changes nothing.
+    public func settingText(of blockID: UUID, to text: String) -> JournalDocument? {
+        guard let i = blocks.firstIndex(where: { $0.id == blockID }) else { return nil }
+        var blocks = self.blocks
+        switch blocks[i] {
+        case .text(let id, _):
+            blocks[i] = .text(id: id, text: text)
+        case .prompt(let id, let question, _, let source, let key):
+            blocks[i] = .prompt(id: id, question: question, answer: text, source: source, fixedKey: key)
+        }
+        return JournalDocument(blocks: blocks)
+    }
+
+    /// The document as the editor opens it: the blocks as they are, or one empty text when there are
+    /// none (the first thing typed needs a block to go in; it is dropped by `normalized` while
+    /// empty). The cursor is at the end of the last block.
+    public func openedForEditing(makeID: () -> UUID = UUID.init) -> JournalEdit {
+        let opened = blocks.isEmpty ? JournalDocument(blocks: [.text(id: makeID(), text: "")]) : self
+        let last = opened.blocks[opened.blocks.count - 1]
+        return JournalEdit(document: opened, focus: BlockFocus(blockID: last.id, offset: last.writtenText.count))
+    }
+
     private func promptIndex(_ id: UUID) -> Int? {
         blocks.firstIndex { if case .prompt = $0 { $0.id == id } else { false } }
     }

@@ -53,6 +53,18 @@ struct PaletteTests {
         #expect(Palette.largeTextPairs(appearance).contains { $0.label == "nightAccent on nightCard" })
     }
 
+    @Test func thePromptTokensAreTheDesignsPurplesAndThePromptTextClearsFourPointFive() {
+        #expect(Palette.promptRule.light == 0xC9C4E6)
+        // The design's #7C69B5 is 4.46:1 on the page; the light token is the nudge that passes.
+        #expect(ratio(0x7C69B5, Palette.canvas.light) < 4.5)
+        for appearance in Palette.Appearance.allCases {
+            for ground in [Palette.canvas, Palette.surface] {
+                let measured = ratio(Palette.promptInk.value(appearance), ground.value(appearance))
+                #expect(measured >= 4.5, "\(appearance) promptInk: \(measured)")
+            }
+        }
+    }
+
     @Test func textOnATintIsChosenPerTint() {
         // Dark on the light amber, sage and routine beige; white on steel blue, crimson, violet and
         // the epic umber, both appearances.

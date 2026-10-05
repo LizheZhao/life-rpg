@@ -34,6 +34,25 @@ public enum JournalPageText {
         return "\(dateText(dayKey: day.dayKey, language: language, timeZone: timeZone)) · \(clock.string(from: day.writtenAt))"
     }
 
+    /// The editor's date line: today's entry is "Sunday, October 4 · tonight", any other day
+    /// is its weekday and date. `today` is the app day (`JournalEntries.entryDayKey`).
+    public static func editorHeading(dayKey: String, today: String, language: JournalLanguage,
+                                     timeZone: TimeZone = .current) -> String {
+        dayKey == today ? writingHeading(dayKey: dayKey, evening: true, language: language, timeZone: timeZone)
+                        : dateText(dayKey: dayKey, language: language, timeZone: timeZone)
+    }
+
+    /// The reader's heading for an entry: the day and the time it was last written, "Thursday, October 1 · 11:14 PM".
+    public static func readingHeading(entry: JournalEntryDay, language: JournalLanguage,
+                                      timeZone: TimeZone = .current) -> String {
+        let clock = DateFormatter()
+        clock.locale = locale(language)
+        clock.timeZone = timeZone
+        clock.timeStyle = .short
+        clock.dateStyle = .none
+        return "\(dateText(dayKey: entry.dayKey, language: language, timeZone: timeZone)) \u{00B7} \(clock.string(from: entry.writtenAt))"
+    }
+
     /// The reading page's heading for a day with nothing written (none, or just cleared): the date alone.
     public static func dateHeading(dayKey: String, language: JournalLanguage, timeZone: TimeZone = .current) -> String {
         dateText(dayKey: dayKey, language: language, timeZone: timeZone)
@@ -49,6 +68,15 @@ public enum JournalPageText {
     /// With no facts (not read yet) only the words show.
     public static func chips(day: JournalDay, facts: JournalDayFacts?) -> [String] {
         var chips = [words(day.wordCount)]
+        guard let facts else { return chips }
+        if facts.completed > 0 { chips.append("\(facts.completed) \(facts.completed == 1 ? "quest" : "quests") done") }
+        if let tier = facts.tierText { chips.append(tier) }
+        return chips
+    }
+
+    /// The tags under the reader's heading, as `chips(day:facts:)` but for an entry.
+    public static func chips(entry: JournalEntryDay, facts: JournalDayFacts?) -> [String] {
+        var chips = [words(entry.wordCount)]
         guard let facts else { return chips }
         if facts.completed > 0 { chips.append("\(facts.completed) \(facts.completed == 1 ? "quest" : "quests") done") }
         if let tier = facts.tierText { chips.append(tier) }

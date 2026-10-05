@@ -62,6 +62,15 @@ public enum Palette {
     /// The hand "tonight" label and the moon on the night card.
     public static let nightAccent = Token(light: 0xA9C2E4, dark: 0xB4CAEA)
 
+    // MARK: the journal's prompts
+
+    /// A prompt's question in the editor and the reader (13 pt, weight 600). The design's #7C69B5 is
+    /// 4.46:1 on the page, a hair under the 4.5 bar, so light is nudged to the nearest value that
+    /// passes on both the page and a card.
+    public static let promptInk = Token(light: 0x7A67B3, dark: 0xB4A6E0)
+    /// The rule down the left of a prompt block. Decoration, not text.
+    public static let promptRule = Token(light: 0xC9C4E6, dark: 0x4A4466)
+
     // MARK: the Trends page
 
     /// The blue ramp of the Trends bars, heat grid and month circles, lightest to darkest in light
@@ -141,7 +150,7 @@ public enum Palette {
         ("chip", chip), ("pillFill", pillFill),
         ("clay", clay), ("clayBg", clayBg), ("avatarPink", avatarPink),
         ("nightCard", nightCard), ("onNight", onNight), ("onNightSecondary", onNightSecondary),
-        ("nightAccent", nightAccent),
+        ("nightAccent", nightAccent), ("promptInk", promptInk), ("promptRule", promptRule),
         ("trendLight", trendLight), ("trendMid", trendMid), ("trendDeep", trendDeep),
         ("trendGold", trendGold), ("rankGold", rankGold), ("rankSilver", rankSilver),
         ("rankBronze", rankBronze),

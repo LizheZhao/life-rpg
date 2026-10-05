@@ -145,4 +145,28 @@ struct JournalEntryTodayTests {
                                              occurrences: [checkIn], dayKey: day))
         #expect(!JournalEntryToday.allCleared(quests: [quest(done: false, slot: .epic)], occurrences: [checkIn], dayKey: day))
     }
+
+    // MARK: last night
+
+    private func day(_ key: String, words: String) -> JournalEntryDay {
+        JournalEntryDay(dayKey: key, document: F.doc(F.text(1, words)), isDone: false, writtenAt: Date())
+    }
+
+    @Test func lastNightIsTheNewestEntryBeforeToday() {
+        let days = [day("2026-09-18", words: "today"), day("2026-09-16", words: "one two three"),
+                    day("2026-09-10", words: "old")]
+        let last = JournalEntryToday.lastNight(in: days, today: "2026-09-18")
+        #expect(last == JournalEntryToday.LastNight(dayKey: "2026-09-16", words: 3))
+        #expect(last?.text == "Last night \u{00B7} 3 words")
+    }
+
+    @Test func lastNightIsNilWithNothingBeforeToday() {
+        #expect(JournalEntryToday.lastNight(in: [], today: "2026-09-18") == nil)
+        #expect(JournalEntryToday.lastNight(in: [day("2026-09-18", words: "x"), day("2026-09-19", words: "y")],
+                                            today: "2026-09-18") == nil)
+    }
+
+    @Test func theCardSubtitleIsTheDesigns() {
+        #expect(JournalEntryToday.cardSubtitle == "A blank page. Pull in a question whenever you want one.")
+    }
 }

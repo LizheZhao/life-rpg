@@ -181,4 +181,35 @@ struct JournalDocumentEditingTests {
         let edit = try #require(doc.removingQuestion(promptID: F.id(1)))
         #expect(!edit.document.containsFixedKey(.gratefulFor))
     }
+
+    // MARK: settingText
+
+    @Test func aKeystrokeChangesOnlyTheTypedBlock() throws {
+        let doc = F.doc(F.text(1, "a"), F.prompt(2, "Q?", answer: "x", source: .llm), F.text(3, "b"))
+        let typedText = try #require(doc.settingText(of: F.id(1), to: "ab"))
+        #expect(typedText.blocks == [F.text(1, "ab"), F.prompt(2, "Q?", answer: "x", source: .llm), F.text(3, "b")])
+        let typedAnswer = try #require(doc.settingText(of: F.id(2), to: "xy"))
+        #expect(typedAnswer.blocks == [F.text(1, "a"), F.prompt(2, "Q?", answer: "xy", source: .llm), F.text(3, "b")])
+    }
+
+    @Test func aKeystrokeInAnUnknownBlockChangesNothing() {
+        #expect(F.doc(F.text(1, "a")).settingText(of: F.id(9), to: "z") == nil)
+    }
+
+    // MARK: openedForEditing
+
+    @Test func anEmptyDocumentOpensWithOneEmptyTextToTypeIn() {
+        let edit = JournalDocument().openedForEditing(makeID: F.Ids(from: 7).make)
+        #expect(edit.document.blocks == [F.text(7, "")])
+        #expect(edit.focus == BlockFocus(blockID: F.id(7), offset: 0))
+        #expect(edit.document.normalized().blocks == [])
+    }
+
+    @Test func aWrittenDocumentOpensWithTheCursorAtTheEndOfItsLastBlock() {
+        let text = F.doc(F.prompt(1, answer: "q"), F.text(2, "a😀b")).openedForEditing()
+        #expect(text.focus == BlockFocus(blockID: F.id(2), offset: 3))
+        let prompt = F.doc(F.text(1, "a"), F.prompt(2, answer: "Heavy")).openedForEditing()
+        #expect(prompt.focus == BlockFocus(blockID: F.id(2), offset: 5))
+        #expect(prompt.document.blocks.count == 2)
+    }
 }
