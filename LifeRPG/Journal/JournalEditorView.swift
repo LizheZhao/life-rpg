@@ -7,11 +7,14 @@ import SwiftUI
 /// it ever locks: Done only marks the entry, and reopening shows the same blocks, editable.
 struct JournalEditorView: View {
     let dayKey: String
+    /// The app's day, which decides whether the date line says "tonight". The simulator's time
+    /// travel passes its own.
+    var today = JournalEntries.entryDayKey(now: Date())
 
     @Environment(\.modelContext) private var context
 
     var body: some View {
-        JournalEditorPage(dayKey: dayKey, context: context)
+        JournalEditorPage(dayKey: dayKey, today: today, context: context)
     }
 }
 
@@ -20,9 +23,10 @@ private struct JournalEditorPage: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var model: JournalEditorModel
 
-    private let today = JournalEntries.entryDayKey(now: Date())
+    private let today: String
 
-    init(dayKey: String, context: ModelContext) {
+    init(dayKey: String, today: String, context: ModelContext) {
+        self.today = today
         _model = State(initialValue: JournalEditorModel(dayKey: dayKey, context: context))
     }
 

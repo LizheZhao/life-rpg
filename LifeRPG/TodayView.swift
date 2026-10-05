@@ -55,7 +55,7 @@ struct TodayView: View {
     @State private var adding = false
     @State private var actionError: String?
     @State private var showingTrack = false
-    /// Which journal page is up: the free-writing page, or the reading page of a day.
+    /// Which journal page is up: today's editor, or the reading page of a day.
     private enum JournalSheet: Identifiable {
         case write
         case read(String)
@@ -68,14 +68,13 @@ struct TodayView: View {
         }
     }
     @State private var journalSheet: JournalSheet?
-    /// Bumped when a journal sheet closes, so the evening card reads last night again.
-    @State private var journalReload = 0
-    /// When the page last came to the foreground: what decides evening, so the card appears at
-    /// 18:00 for someone who left the app open.
+    /// When the page last came to the foreground: what decides whether the journal card shows, so
+    /// it appears at 20:00 for someone who left the app open.
     @State private var clock = Date()
     @Environment(\.scenePhase) private var scenePhase
     #if targetEnvironment(simulator)
-    /// Debug page: "evening" or "daytime" overrides the clock so both Today states can be seen.
+    /// Debug page: "evening", "daytime" or "cleared" overrides what decides the journal card, so
+    /// each Today state can be seen at any hour.
     @AppStorage("debugJournalTiming") private var debugJournalTiming = ""
     #endif
     /// A card's `⋯ → Rate / note`: the sheet that files a rating or a note under what the card was.
@@ -293,15 +292,21 @@ struct TodayView: View {
         reduceMotion ? .opacity : .opacity.combined(with: .scale(scale: 0.96))
     }
 
-    private var isEvening: Bool {
+    /// Whether the "Write about today" card shows: Core's rule over the clock and whether the day
+    /// is cleared.
+    private var showsJournalCard: Bool {
+        var now = clock
+        var cleared = JournalEntryToday.allCleared(quests: allQuests, occurrences: occurrences, dayKey: today)
         #if targetEnvironment(simulator)
+        func at(_ hour: Int) -> Date { LifeCalendar.gregorian().date(bySettingHour: hour, minute: 0, second: 0, of: clock) ?? clock }
         switch debugJournalTiming {
-        case "evening": return true
-        case "daytime": return false
+        case "evening": now = at(21)
+        case "daytime": now = at(12); cleared = false
+        case "cleared": now = at(12); cleared = true
         default: break
         }
         #endif
-        return JournalTiming.isEvening(at: clock, timeZone: .current)
+        return JournalEntryToday.cardVisible(now: now, allCleared: cleared)
     }
 
     private var greeting: TodayGreeting {
@@ -314,8 +319,8 @@ struct TodayView: View {
             LazyVStack(alignment: .leading, spacing: LR.Spacing.sectionGap) {
                 topBar
                 greetingBlock
-                if isEvening {
-                    JournalTonightCard(today: today, reloadToken: journalReload,
+                if showsJournalCard {
+                    JournalTonightCard(today: today,
                                        write: { journalSheet = .write },
                                        read: { journalSheet = .read($0) })
                 }
@@ -565,9 +570,9 @@ struct TodayView: View {
                 AdHocView(today: today, tier: tier, target: .routine(o, flexible: isFlexible(o)))
             }
             .sheet(item: $feedbackFor) { FeedbackSheet(subject: $0.subject, today: today) }
-            .sheet(item: $journalSheet, onDismiss: { journalReload += 1 }) { sheet in
+            .fullScreenCover(item: $journalSheet) { sheet in
                 switch sheet {
-                case .write: JournalWritingView(today: today, evening: isEvening)
+                case .write: JournalEditorView(dayKey: today, today: today)
                 case .read(let day): JournalReadingView(startDay: day)
                 }
             }

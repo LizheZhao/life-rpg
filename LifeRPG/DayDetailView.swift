@@ -9,18 +9,16 @@ struct DayDetailView: View {
 
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
-    /// That day's journal turns only; Core turns them into the day's entry.
-    @Query private var journalTurns: [JournalTurn]
+    /// That day's entry row, if it has one.
+    @Query private var journalEntries: [JournalEntry]
     @State private var reading = false
-
-    private let language = JournalLanguage.resolve(preferred: Locale.preferredLanguages)
 
     /// Characters of the entry the night card shows: about three lines at the card's width.
     private static let excerptLength = 120
 
     init(dayKey: String) {
         self.dayKey = dayKey
-        _journalTurns = Query(filter: #Predicate<JournalTurn> { $0.dayKey == dayKey })
+        _journalEntries = Query(filter: #Predicate<JournalEntry> { $0.dayKey == dayKey })
     }
 
     var body: some View {
@@ -41,7 +39,7 @@ struct DayDetailView: View {
                     Button("Done") { dismiss() }.foregroundStyle(LR.Color.ink)
                 }
             }
-            .sheet(isPresented: $reading) { JournalReadingView(startDay: dayKey) }
+            .fullScreenCover(isPresented: $reading) { JournalReadingView(startDay: dayKey) }
         }
     }
 
@@ -76,7 +74,7 @@ struct DayDetailView: View {
                     ForEach(record.quests) { questRow($0) }
                 }
 
-                if let night = JournalHistory.days(from: journalTurns, language: language).first {
+                if let night = JournalEntryHistory.days(from: journalEntries).first {
                     nightCard(night)
                 }
 
@@ -205,7 +203,7 @@ struct DayDetailView: View {
 
     // MARK: that night
 
-    private func nightCard(_ day: JournalDay) -> some View {
+    private func nightCard(_ day: JournalEntryDay) -> some View {
         let when = day.writtenAt.formatted(date: .omitted, time: .shortened)
         let words = JournalPageText.words(day.wordCount)
         let excerpt = day.excerpt(limit: Self.excerptLength)

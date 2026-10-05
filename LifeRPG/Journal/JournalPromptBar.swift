@@ -18,7 +18,6 @@ struct JournalPromptBar<Leading: View>: View {
                 }
                 .padding(.leading, 16)
             }
-            .scrollClipDisabled()
             Text(model.wordCountText).lr(.caption)
                 .foregroundStyle(LR.Color.inkSecondary)
                 .monospacedDigit()

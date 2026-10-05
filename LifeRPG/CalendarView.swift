@@ -12,7 +12,7 @@ struct CalendarView: View {
 
     @Query private var quests: [DailyQuest]
     @Query private var occurrences: [RoutineOccurrence]
-    @Query private var journalTurns: [JournalTurn]
+    @Query private var journalEntries: [JournalEntry]
 
     @State private var month: MonthKey?
     @State private var selected: SelectedDay?
@@ -30,8 +30,6 @@ struct CalendarView: View {
     private static let epicTint = QuestTint(.epic)
     private static let epicBandOpacity = 0.14
 
-    private let language = JournalLanguage.resolve(preferred: Locale.preferredLanguages)
-
     /// The pencil's ink at levels 1, 2 and 3: one step lighter than the next, the darkest at full ink.
     private static let pencilOpacity: [Double] = [0.32, 0.62, 1]
 
@@ -39,7 +37,7 @@ struct CalendarView: View {
 
     var body: some View {
         // Both rules live in Core; the page only hands over the rows its queries hold.
-        let journalLevels = JournalMarks.levels(days: JournalHistory.days(from: journalTurns, language: language))
+        let journalLevels = JournalMarks.levels(entryDays: JournalEntryHistory.days(from: journalEntries))
         let marks = CalendarMarks.marks(quests: quests, occurrences: occurrences, journalLevels: journalLevels)
         let epicWeeks = CalendarMarks.epicWeeks(quests)
         NavigationStack {

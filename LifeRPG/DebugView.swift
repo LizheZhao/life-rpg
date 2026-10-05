@@ -14,11 +14,12 @@ struct DebugView: View {
     var refresh: () async -> Void = {}
     #if targetEnvironment(simulator)
     @AppStorage("debugDayOffset") private var dayOffset = 0
-    /// "evening" or "daytime" overrides the clock Today reads for the journal card; "" is the real one.
+    /// "evening", "daytime" or "cleared" overrides what decides Today's journal card; "" is the real one.
     @AppStorage("debugJournalTiming") private var journalTiming = ""
     /// What the last press of the hand-off button returned: "" is a text that came back empty.
     @State private var handOffText: String?
     @State private var trendsSeedText: String?
+    @State private var turnSeedText: String?
     #else
     /// Time travel is simulator-only; on a device the day is today (as in `RootView`).
     private let dayOffset = 0
@@ -126,9 +127,25 @@ struct DebugView: View {
                         .disabled(dayOffset == 0)
                     }
                 }
-                section("Journal timing (simulator only)", footer: "Today shows the journal's evening card from 18:00 and a book icon with a dot in the daytime. This forces one of them so both can be seen at any hour.") {
-                    PillSegmentedControl(options: [("Real clock", ""), ("Evening", "evening"), ("Daytime", "daytime")],
-                                         selection: $journalTiming, accessibilityLabel: "Journal timing")
+                section("Journal card (simulator only)", footer: "Today shows the \"Write about today\" card from 20:00 until the day rolls over, and at any hour once everything is cleared. Evening forces the clock to 21:00, Daytime to 12:00 with nothing cleared, Cleared to 12:00 with the day cleared.") {
+                    PillSegmentedControl(options: [("Real", ""), ("Evening", "evening"), ("Daytime", "daytime"), ("Cleared", "cleared")],
+                                         selection: $journalTiming, accessibilityLabel: "Journal card")
+                }
+                section("Old journal turns (simulator only)", footer: "Writes turn-based days two, three and four days before the app's day, as the build before entries stored them. The migration runs once at launch, guarded by a flag: Reset the flag, then relaunch the app to see those days become entries. A second relaunch must not bring back a day you cleared.") {
+                    FlowRow(spacing: 8) {
+                        Button { seedTurns() } label: {
+                            Label("Seed old turns", systemImage: "text.badge.plus")
+                        }
+                        .buttonStyle(PillButtonStyle())
+                        Button {
+                            UserDefaults.standard.removeObject(forKey: JournalLaunchMigration.flagKey)
+                            turnSeedText = "Migration flag reset. Relaunch the app to run it."
+                        } label: {
+                            Label("Reset migration flag", systemImage: "arrow.counterclockwise")
+                        }
+                        .buttonStyle(PillButtonStyle())
+                    }
+                    if let turnSeedText { note(turnSeedText) }
                 }
                 section("Trends fixture (simulator only)", footer: "Writes journal entries for the 60 (or 365) days before the app's day, with a day setting and some done quests and routines to go with them, so the Trends page has something to show. None of it came from using the app; pressing it again rewrites the same entries.") {
                     FlowRow(spacing: 8) {
@@ -363,6 +380,15 @@ struct DebugView: View {
                 + "\(seeded.quests) quests and \(seeded.routines) routines before \(today)."
         } catch {
             trendsSeedText = "Seed failed: \(error)"
+        }
+    }
+
+    private func seedTurns() {
+        do {
+            let days = try JournalTurnSeed.seed(endingBefore: today, in: modelContext)
+            turnSeedText = days.isEmpty ? "Nothing written: those days already have turns." : "Wrote turns for \(days.joined(separator: ", "))."
+        } catch {
+            turnSeedText = "Seed failed: \(error)"
         }
     }
 

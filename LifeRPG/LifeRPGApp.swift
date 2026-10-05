@@ -14,6 +14,7 @@ import SwiftUI
             self.container = container
             startupError = nil
             seedStatus = Self.seed(container.mainContext)
+            JournalLaunchMigration.runOnce(container.mainContext)
         case .failure(let error):
             // Never delete or rebuild the store here: the file is the only copy of the history.
             container = nil

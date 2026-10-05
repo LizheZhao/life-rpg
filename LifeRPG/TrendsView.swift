@@ -21,8 +21,6 @@ struct TrendsView: View {
     /// A day of the period on screen; nil is the one holding today.
     @State private var anchor: String?
     @State private var page: TrendsPage?
-    /// Bumped when the writing sheet closes, which can change a day's words without changing a count.
-    @State private var reload = 0
     @State private var writing = false
 
     @Environment(\.dynamicTypeSize) private var dynamicType
@@ -45,14 +43,12 @@ struct TrendsView: View {
         var today: String
         var counts: [Int]
         var lastWritten: Double
-        var reload: Int
     }
 
     private var key: BuildKey {
         BuildKey(period: period, anchor: anchor ?? today, today: today,
                  counts: [entries.count, quests.count, occurrences.count, ratings.count, contexts.count],
-                 lastWritten: entries.map(\.updatedAt.timeIntervalSince1970).max() ?? 0,
-                 reload: reload)
+                 lastWritten: entries.map(\.updatedAt.timeIntervalSince1970).max() ?? 0)
     }
 
     var body: some View {
@@ -88,8 +84,8 @@ struct TrendsView: View {
             await Task.yield()
             page = build()
         }
-        .sheet(isPresented: $writing, onDismiss: { reload += 1 }) {
-            JournalWritingView(today: today, evening: true)
+        .fullScreenCover(isPresented: $writing) {
+            JournalEditorView(dayKey: today, today: today)
         }
         .onChange(of: period) { anchor = nil }
     }

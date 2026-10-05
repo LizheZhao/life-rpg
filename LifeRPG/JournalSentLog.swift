@@ -59,9 +59,7 @@ enum JournalHandOff {
     @MainActor
     static func textToSend(now: Date, in context: ModelContext) throws -> String {
         let dayKey = JournalSend.finishedDayKey(now: now, timeZone: .current)
-        let turns = try JournalService.turns(on: dayKey, in: context)
-        let language = JournalLanguage.system
-        let text = JournalSend.textToSend(turns: turns, language: language,
+        let text = JournalSend.textToSend(entry: try JournalEntries.entry(on: dayKey, in: context),
                                           lastSentFingerprint: JournalSentLog.entries()[dayKey]?.fingerprint)
         if !text.isEmpty {
             JournalSentLog.record(dayKey: dayKey, fingerprint: JournalSend.fingerprint(of: text), at: now)
