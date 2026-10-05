@@ -47,6 +47,9 @@ enum LR {
         static let onNight = color(Palette.onNight)
         static let onNightSecondary = color(Palette.onNightSecondary)
         static let nightAccent = color(Palette.nightAccent)
+        /// A prompt's question and the rule beside its answer, in the editor and the reader.
+        static let promptInk = color(Palette.promptInk)
+        static let promptRule = color(Palette.promptRule)
 
         /// The Trends page: a three-step blue ramp for bars, heat cells and month circles, gold for
         /// a low-energy day and a filled star, and the three rank circles.
@@ -66,9 +69,14 @@ enum LR {
         /// A colour that re-resolves when the appearance changes, including inside a view that
         /// overrides it with `.environment(\.colorScheme, ...)`.
         static func color(_ token: Palette.Token) -> SwiftUI.Color {
-            SwiftUI.Color(uiColor: UIColor { traits in
+            SwiftUI.Color(uiColor: ui(token))
+        }
+
+        /// The same colour for UIKit (the journal's text views), dynamic in the same way.
+        static func ui(_ token: Palette.Token) -> UIColor {
+            UIColor { traits in
                 uiColor(hex: token.value(traits.userInterfaceStyle == .dark ? .dark : .light))
-            })
+            }
         }
 
         private static func uiColor(hex: Int) -> UIColor {
@@ -101,6 +109,8 @@ enum LR {
         case titleCard, heading, bodyStrong, caption, pill, hand, handTitle, handDisplay
         /// The text of a journal page, and the starter chips above its keyboard.
         case journalBody, chipLabel
+        /// A prompt's question above its answer.
+        case promptQuestion
         /// The beginning of an entry on the day sheet's night card.
         case journalExcerpt
         /// The Trends page: its title, the number on a stat tile, and the two larger sizes of the
@@ -147,6 +157,8 @@ enum LR {
                 Spec(family: .jakarta, weight: 400, size: 18, textStyle: .body, maximumSize: 30, lineSpacing: 8)
             case .chipLabel:
                 Spec(family: .jakarta, weight: 400, size: 14, textStyle: .subheadline, maximumSize: 24)
+            case .promptQuestion:
+                Spec(family: .jakarta, weight: 600, size: 13, textStyle: .footnote, maximumSize: 22)
             case .journalExcerpt:
                 Spec(family: .jakarta, weight: 400, size: 16, textStyle: .callout, maximumSize: 26, lineSpacing: 6)
             case .pageTitle:
@@ -193,6 +205,7 @@ enum LR {
             case .handDisplay: "handDisplay"
             case .journalBody: "journalBody"
             case .chipLabel: "chipLabel"
+            case .promptQuestion: "promptQuestion"
             case .journalExcerpt: "journalExcerpt"
             case .pageTitle: "pageTitle"
             case .statNumber: "statNumber"

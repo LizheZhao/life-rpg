@@ -2,45 +2,8 @@ import LifeRPGCore
 import SwiftData
 import SwiftUI
 
-/// The words typed into the per-turn fields of an edit session, by turn. A plain class on purpose:
-/// a keystroke only records the text, so nothing that holds it re-renders until editing ends.
-@MainActor
-final class TurnEdits {
-    var texts: [UUID: String] = [:]
-}
-
-/// One answered turn in edit mode: the question it answered (if any) above its own field.
-private struct TurnEditField: View {
-    let entry: JournalReading.Entry
-    let edits: TurnEdits
-
-    @State private var text: String
-
-    init(entry: JournalReading.Entry, edits: TurnEdits) {
-        self.entry = entry
-        self.edits = edits
-        _text = State(initialValue: entry.answer)
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            if !entry.question.isEmpty {
-                Text(entry.question).lr(.bodyStrong).foregroundStyle(LR.Color.inkSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            TextField("", text: $text, axis: .vertical)
-                .lr(.journalBody).foregroundStyle(LR.Color.ink)
-                .padding(12)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .lrCard(.surface, radius: LR.Radius.row)
-                .onChange(of: text) { _, new in edits.texts[entry.id] = new }
-                .accessibilityLabel(entry.question.isEmpty ? "Free writing" : "Your answer")
-        }
-    }
-}
-
-/// The sheet's root: it only has the store's context to hand to the page, which reads its first
-/// day from it before the first frame.
+/// The sheet's root: it only has the store's context to hand to the page, which reads the day's
+/// facts from it before the first frame.
 struct JournalReadingView: View {
     let startDay: String
 
@@ -51,76 +14,68 @@ struct JournalReadingView: View {
     }
 }
 
-/// A day of the journal to read, with the day before and after that have writing, and a pencil to
-/// edit it. Editing never drops a turn: a day that is only free writing edits as one autosaved
-/// text, a day with questions edits each answer in its own field and writes them when editing
-/// ends, and free writing can be added to such a day.
+/// A day's entry to read: the blocks drawn as the editor draws them, without a cursor. Share sends
+/// the plain text, Edit opens the editor on this date, and the floating buttons go to the days
+/// either side that have an entry.
 struct JournalReadingPage: View {
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
+    @Query private var rows: [JournalEntry]
 
     @State private var dayKey: String
-    /// Every day with writing, read when the page opens, after editing ends and on moving to
-    /// another day, never per keystroke.
-    @State private var days: [JournalDay]
     @State private var facts: JournalDayFacts?
-    @State private var editing = false
-    @State private var writing: FreeWritingModel?
-    @State private var edits = TurnEdits()
-    @State private var notice: String?
-    @FocusState private var focused: Bool
+    @State private var editing: JournalEditTarget?
     /// The sent log, watched so a day handed over while the page is open shows at once.
     @AppStorage(JournalSentLog.key) private var sentLog = Data()
 
-    private let language: JournalLanguage
+    private let language = JournalLanguage.system
 
     init(startDay: String, context: ModelContext) {
-        let language = JournalLanguage.system
-        self.language = language
         _dayKey = State(initialValue: startDay)
-        _days = State(initialValue: (try? JournalService.history(language: language, in: context)) ?? [])
-        _facts = State(initialValue: try? JournalService.facts(on: startDay, in: context))
+        _facts = State(initialValue: try? JournalDayFacts.read(dayKey: startDay, in: context))
     }
 
-    private var day: JournalDay? { days.first { $0.dayKey == dayKey } }
-    private var turns: [JournalTurn] { day?.turns ?? [] }
-    private var layout: JournalReading.Layout { JournalReading.layout(of: turns) }
+    private var days: [JournalEntryDay] { JournalEntryHistory.days(from: rows) }
+    private var day: JournalEntryDay? { days.first { $0.dayKey == dayKey } }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             topBar
-            VStack(alignment: .leading, spacing: 0) {
-                heading
-                content
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    heading
+                    blocks.padding(.top, 22)
+                }
+                .padding(.horizontal, 24)
+                .padding(.top, 20)
             }
-            .padding(.horizontal, 24)
+            .id(dayKey)
+            // The neighbours float over the end of the text, which scrolls clear of them.
+            .contentMargins(.bottom, 120, for: .scrollContent)
         }
         .background(LR.Color.canvas.ignoresSafeArea())
-        .overlay(alignment: .bottom) { if !editing { neighborBar } }
-        // A swipe down closes the sheet mid-edit; what was typed is kept all the same.
-        .onDisappear { if editing { _ = endEditing() } }
+        .overlay(alignment: .bottom) { neighborBar }
+        .fullScreenCover(item: $editing, onDismiss: { facts = try? JournalDayFacts.read(dayKey: dayKey, in: context) }) {
+            JournalEditorView(dayKey: $0.dayKey)
+        }
     }
 
     // MARK: top bar and heading
 
     private var topBar: some View {
         HStack(spacing: 8) {
-            Button { leave() } label: { circleIcon("chevron.left") }
+            Button { dismiss() } label: { circleIcon("chevron.left") }
                 .buttonStyle(PressableCardStyle())
                 .accessibilityLabel("Back")
             Spacer()
-            if editing {
-                Button("Done") { _ = endEditing() }.buttonStyle(InkPillButtonStyle())
-            } else {
-                if let day {
-                    ShareLink(item: day.text) { circleIcon("square.and.arrow.up") }
-                        .buttonStyle(PressableCardStyle())
-                        .accessibilityLabel("Share")
-                }
-                Button { beginEditing() } label: { circleIcon("pencil") }
+            if let day {
+                ShareLink(item: day.plainText()) { circleIcon("square.and.arrow.up") }
                     .buttonStyle(PressableCardStyle())
-                    .accessibilityLabel("Edit")
+                    .accessibilityLabel("Share")
             }
+            Button { editing = JournalEditTarget(dayKey: dayKey) } label: { circleIcon("pencil") }
+                .buttonStyle(PressableCardStyle())
+                .accessibilityLabel("Edit")
         }
         .padding(.horizontal, 20)
         .padding(.top, 12)
@@ -135,105 +90,69 @@ struct JournalReadingPage: View {
     }
 
     @ViewBuilder private var heading: some View {
-        HandText(day.map { JournalPageText.readingHeading(day: $0, language: language) }
+        HandText(day.map { JournalPageText.readingHeading(entry: $0, language: language) }
                  ?? JournalPageText.dateHeading(dayKey: dayKey, language: language), .hand)
-            .foregroundStyle(LR.Color.accent)
-            .padding(.top, 20)
-        if let day, !editing {
+            .foregroundStyle(LR.Color.trendDeep)
+        if let day {
             FlowRow(spacing: 6) {
-                ForEach(JournalPageText.chips(day: day, facts: facts),
-                        id: \.self) { PillLabel(text: $0) }
+                ForEach(JournalPageText.chips(entry: day, facts: facts), id: \.self) { PillLabel(text: $0) }
             }
             .padding(.top, 8)
-            if let line = sentLine(for: day) { caption(line) }
+            if let line = sentLine(for: day) {
+                Text(line).lr(.caption).foregroundStyle(LR.Color.inkSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, 8)
+            }
         }
-        if let notice { caption(notice) }
-    }
-
-    private func caption(_ text: String) -> some View {
-        Text(text).lr(.caption).foregroundStyle(LR.Color.inkSecondary)
-            .fixedSize(horizontal: false, vertical: true)
-            .padding(.top, 8)
     }
 
     /// Whether this day went to Apple Journal, and if it was edited afterwards. Reading only: the
     /// page has no send button, because Journal can not replace an entry (Share is the way out).
-    private func sentLine(for day: JournalDay) -> String? {
+    private func sentLine(for day: JournalEntryDay) -> String? {
         guard let entry = JournalSentLog.decode(sentLog)[day.dayKey] else { return nil }
-        switch JournalSend.sentState(text: day.text, lastSentFingerprint: entry.fingerprint) {
+        switch JournalSend.sentState(text: day.plainText(), lastSentFingerprint: entry.fingerprint) {
         case .notSent: return nil
         case .sent: return "Sent to Apple Journal, \(JournalSentLog.timeText(entry.sentAt))"
         case .editedSince: return "Edited since it was sent; the copy in Apple Journal is the earlier version"
         }
     }
 
-    // MARK: the day
+    // MARK: the blocks
 
-    @ViewBuilder private var content: some View {
-        if editing { editor } else { reader }
-    }
-
-    private var reader: some View {
-        ScrollView {
+    @ViewBuilder private var blocks: some View {
+        if let day {
             VStack(alignment: .leading, spacing: 16) {
-                let entries = JournalReading.entries(of: turns)
-                if entries.isEmpty {
-                    Text("Nothing is written for this day.").lr(.bodyStrong).foregroundStyle(LR.Color.inkSecondary)
-                }
-                ForEach(entries) { entry in
-                    VStack(alignment: .leading, spacing: 6) {
-                        if !entry.question.isEmpty {
-                            Text(entry.question).lr(.bodyStrong).foregroundStyle(LR.Color.inkSecondary)
+                ForEach(day.document.blocks, id: \.id) { block in
+                    switch block {
+                    case .text(_, let text):
+                        paragraph(text)
+                    case .prompt(_, let question, let answer, _, _):
+                        JournalPromptLayout(question: question) {
+                            if answer.isEmpty {
+                                Text("Not answered").lr(.caption).foregroundStyle(LR.Color.inkSecondary)
+                            } else {
+                                paragraph(answer)
+                            }
                         }
-                        Text(entry.answer).lr(.journalBody).foregroundStyle(LR.Color.ink)
                     }
-                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
             .textSelection(.enabled)
-            .padding(.top, 20)
+        } else {
+            Text("Nothing is written for this day.").lr(.bodyStrong).foregroundStyle(LR.Color.inkSecondary)
         }
-        .id(dayKey)
-        // The neighbours float over the end of the text, which scrolls clear of them.
-        .contentMargins(.bottom, 120, for: .scrollContent)
     }
 
-    @ViewBuilder private var editor: some View {
-        switch layout {
-        case .empty, .freeWriting:
-            if let writing {
-                FreeWritingEditor(model: writing, focus: $focused)
-                    .frame(maxHeight: .infinity)
-                    .padding(.top, 12)
-                FreeWritingMeta(model: writing)
-            }
-        case .turns:
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    ForEach(JournalReading.entries(of: turns)) { TurnEditField(entry: $0, edits: edits) }
-                    if let writing {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Add free writing").lr(.bodyStrong).foregroundStyle(LR.Color.inkSecondary)
-                            FreeWritingEditor(model: writing, focus: $focused)
-                                .frame(minHeight: 140)
-                                .padding(.horizontal, 12)
-                                .lrCard(.surface, radius: LR.Radius.row)
-                        }
-                    }
-                }
-                .padding(.top, 20)
-                .padding(.bottom, 24)
-            }
-            .scrollDismissesKeyboard(.interactively)
-            // The cards' shadows reach past the text column; the scroll view would cut them square.
-            .scrollClipDisabled()
-        }
+    private func paragraph(_ text: String) -> some View {
+        Text(text).lr(.journalBody).foregroundStyle(LR.Color.ink)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .fixedSize(horizontal: false, vertical: true)
     }
 
     // MARK: the days either side
 
     private var neighborBar: some View {
-        let near = JournalHistory.neighbors(of: dayKey, in: days)
+        let near = JournalEntryHistory.neighbors(of: dayKey, in: days)
         return HStack(spacing: 10) {
             if let previous = near.previous { neighborButton(previous) }
             if let next = near.next { neighborButton(next) }
@@ -246,66 +165,16 @@ struct JournalReadingPage: View {
     }
 
     private func neighborButton(_ key: String) -> some View {
-        Button(JournalPageText.shortDate(dayKey: key, language: language)) { go(to: key) }
-            .buttonStyle(PillButtonStyle())
-    }
-
-    // MARK: moving and editing
-
-    private func reload() {
-        days = (try? JournalService.history(language: language, in: context)) ?? []
-        facts = try? JournalService.facts(on: dayKey, in: context)
-    }
-
-    private func go(to key: String) {
-        dayKey = key
-        notice = nil
-        reload()
-    }
-
-    private func leave() {
-        if editing, !endEditing() { return }
-        dismiss()
-    }
-
-    private func beginEditing() {
-        notice = nil
-        switch layout {
-        case .empty, .freeWriting:
-            writing = FreeWritingModel(dayKey: dayKey, language: language, context: context)
-        case .turns:
-            writing = JournalReading.canAddFreeWriting(to: turns)
-                ? FreeWritingModel(dayKey: dayKey, language: language, context: context) : nil
+        Button(JournalPageText.shortDate(dayKey: key, language: language)) {
+            dayKey = key
+            facts = try? JournalDayFacts.read(dayKey: key, in: context)
         }
-        editing = true
-        focused = layout != .turns
+        .buttonStyle(PillButtonStyle())
     }
+}
 
-    /// Writes what was edited and leaves edit mode. False, staying in it, when the store refused,
-    /// so no words are shown as saved that are not.
-    private func endEditing() -> Bool {
-        if let writing, !writing.flush() {
-            notice = Self.notSaved
-            return false
-        }
-        var blanked = false
-        do {
-            for entry in JournalReading.entries(of: turns) {
-                guard let words = edits.texts[entry.id] else { continue }
-                do { try JournalService.edit(entry.turn, answer: words) } catch JournalEditError.empty { blanked = true }
-            }
-            try context.save()
-        } catch {
-            notice = Self.notSaved
-            return false
-        }
-        notice = blanked ? "An answer can't be blank, so it was left as it was." : nil
-        writing = nil
-        edits = TurnEdits()
-        editing = false
-        reload()
-        return true
-    }
-
-    private static let notSaved = "Could not save. Your words are still on the page."
+/// The date an editor is opened on, as the item a cover is presented for.
+struct JournalEditTarget: Identifiable, Equatable {
+    let dayKey: String
+    var id: String { dayKey }
 }

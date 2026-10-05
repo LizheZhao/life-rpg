@@ -1,4 +1,5 @@
 import Foundation
+import SwiftData
 
 /// What the reading page says about the day around a journal, none of which is stored in turns:
 /// how much was done and what kind of day it was. Read from the day's rows, never cached, so it
@@ -15,5 +16,13 @@ public struct JournalDayFacts: Equatable, Sendable {
         let signals = JournalSignals(dayKey: dayKey, quests: quests, occurrences: occurrences,
                                      context: context, ratings: [])
         return JournalDayFacts(completed: signals.completedCount, tierText: context?.tier.dayText)
+    }
+
+    /// The facts of `dayKey` from the store: the day's quests, the occurrences, and its context.
+    public static func read(dayKey: String, in context: ModelContext) throws -> JournalDayFacts {
+        of(dayKey: dayKey,
+           quests: try DayService.quests(on: dayKey, in: context),
+           occurrences: try context.fetch(FetchDescriptor<RoutineOccurrence>()),
+           context: try DayService.dailyContext(for: dayKey, in: context))
     }
 }
