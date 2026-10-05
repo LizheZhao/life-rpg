@@ -24,7 +24,7 @@ extension JournalTrends {
         /// Two different words in a row must repeat this often to count as a phrase ("light version").
         static let minimumPhraseCount = 3
 
-        public static func distinctive(period: [JournalDay], others: [JournalDay], language: JournalLanguage,
+        public static func distinctive(period: [JournalEntryDay], others: [JournalEntryDay], language: JournalLanguage,
                                        limit: Int = 5) -> [Entry] {
             guard limit > 0 else { return [] }
             let mine = tally(period, language: language)
@@ -77,11 +77,11 @@ extension JournalTrends {
             var total = 0
         }
 
-        static func tally(_ days: [JournalDay], language: JournalLanguage) -> Tally {
+        static func tally(_ days: [JournalEntryDay], language: JournalLanguage) -> Tally {
             var tally = Tally()
             for day in days {
-                for turn in JournalComposer.written(day.turns) {
-                    for paragraph in turn.answer.split(whereSeparator: \.isNewline) {
+                for block in day.document.blocks {
+                    for paragraph in block.writtenText.split(whereSeparator: \.isNewline) {
                         var previous: String?
                         for token in tokens(in: JournalStarters.strippingStarter(from: String(paragraph)),
                                             language: language) {

@@ -6,7 +6,7 @@ struct JournalTrendsYearTests {
     typealias Year = JournalTrends.Year
 
     @Test func monthCountsHaveTwelveEntriesOfTheGivenYearOnly() {
-        let days = TrendsFixtures.days([
+        let days = TrendsFixtures.entryDays([
             ("2026-01-05", 10), ("2026-01-06", 10), ("2026-03-31", 10), ("2026-09-01", 10),
             ("2026-09-30", 10), ("2026-09-17", 10), ("2025-12-31", 10), ("2027-01-01", 10),
         ])

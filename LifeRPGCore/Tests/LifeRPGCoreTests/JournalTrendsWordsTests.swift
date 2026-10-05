@@ -7,7 +7,7 @@ struct JournalTrendsWordsTests {
 
     private func entries(_ period: [(String, String)], others: [(String, String)] = [],
                          language: JournalLanguage = .en, limit: Int = 5) -> [Words.Entry] {
-        Words.distinctive(period: TrendsFixtures.days(texts: period), others: TrendsFixtures.days(texts: others),
+        Words.distinctive(period: TrendsFixtures.entryDays(texts: period), others: TrendsFixtures.entryDays(texts: others),
                           language: language, limit: limit)
     }
 
@@ -53,12 +53,10 @@ struct JournalTrendsWordsTests {
     }
 
     @Test func onlyTheUsersAnswersAreReadNotTheQuestionOrTheStarter() throws {
-        let asked = JournalFixtures.turn(.good, "Yes, kayaking", index: 0, on: "2026-09-01")
-        asked.questionText = "Did you enjoy kayaking kayaking kayaking kayaking?"
+        let asked = EntryFixtures.prompt(1, "Did you enjoy kayaking kayaking kayaking kayaking?", answer: "Yes, kayaking")
         // "keep" and "thinking" are content words: only stripping the starter keeps them off the list.
-        let free = JournalFixtures.freeWriting("I keep thinking about sunshine\nI keep thinking about sunshine and soup",
-                                               index: 1, on: "2026-09-01")
-        let days = JournalHistory.days(from: [asked, free], language: .en)
+        let free = EntryFixtures.text(2, "I keep thinking about sunshine\nI keep thinking about sunshine and soup")
+        let days = [TrendsFixtures.day("2026-09-01", [asked, free])]
         let result = Words.distinctive(period: days, others: [], language: .en, limit: 5)
         #expect(pairs(result) == ["sunshine 2"])
     }

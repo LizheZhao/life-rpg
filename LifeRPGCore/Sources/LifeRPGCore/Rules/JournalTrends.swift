@@ -1,7 +1,7 @@
 import Foundation
 
 /// The rules behind the Trends page. Everything here is a pure function of rows the page already
-/// holds (`JournalDay`, `DailyQuest` and the like), so a number on the page cannot drift from the
+/// holds (`JournalEntryDay`, `DailyQuest` and the like), so a number on the page cannot drift from the
 /// journal or the calendar it summarises. Nothing is stored.
 public enum JournalTrends {
     /// What the Weeks / Months / Year switch selects.
@@ -66,18 +66,18 @@ extension JournalTrends {
             public let level: Int
         }
 
-        private let all: [JournalDay]
+        private let all: [JournalEntryDay]
         private let range: DayRange
         private let timeZone: TimeZone
 
         /// `days` may be the whole history: the period is cut here.
-        public init(days: [JournalDay], range: DayRange, timeZone: TimeZone = .current) {
+        public init(days: [JournalEntryDay], range: DayRange, timeZone: TimeZone = .current) {
             self.all = days
             self.range = range
             self.timeZone = timeZone
         }
 
-        private var inRange: [JournalDay] { all.filter { range.contains($0.dayKey) } }
+        private var inRange: [JournalEntryDay] { all.filter { range.contains($0.dayKey) } }
 
         public var entries: Int { inRange.count }
 
@@ -118,7 +118,7 @@ extension JournalTrends {
 
         /// The hour (0-23) the period's entries were usually written, by `JournalHabits`' rule.
         public var usualHour: Int? {
-            JournalHabits.typicalHour(of: inRange.map(\.writtenAt), in: timeZone)
+            JournalHabits.typicalHour(of: inRange.map(\.createdAt), in: timeZone)
         }
 
         /// Over all time, not the period.
@@ -129,7 +129,7 @@ extension JournalTrends {
 
     public enum Year {
         /// Entries per month of `year`, January first.
-        public static func monthCounts(of days: [JournalDay], year: Int) -> [Int] {
+        public static func monthCounts(of days: [JournalEntryDay], year: Int) -> [Int] {
             var counts = Array(repeating: 0, count: 12)
             for key in Set(days.map(\.dayKey)) {
                 guard let month = MonthKey(dayKey: key), month.year == year else { continue }

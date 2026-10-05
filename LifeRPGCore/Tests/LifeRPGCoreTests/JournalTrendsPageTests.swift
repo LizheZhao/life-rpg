@@ -17,7 +17,7 @@ struct JournalTrendsPageTests {
                       occurrences: [RoutineOccurrence] = [], ratings: [QuestRating] = [],
                       contexts: [DailyContext] = [], language: JournalLanguage = .en,
                       locale: Locale? = nil) -> TrendsPage {
-        let days = texts.map { TrendsFixtures.days(texts: $0) } ?? TrendsFixtures.days(spec ?? september())
+        let days = texts.map { TrendsFixtures.entryDays(texts: $0) } ?? TrendsFixtures.entryDays(spec ?? september())
         return TrendsPage.build(period: period, anchor: anchor, today: today, days: days, quests: quests,
                                 occurrences: occurrences, ratings: ratings, contexts: contexts,
                                 language: language, timeZone: tz, locale: locale ?? english)

@@ -6,7 +6,7 @@ struct JournalTrendsGratitudeTests {
     typealias Gratitude = JournalTrends.Gratitude
 
     private func phrases(_ texts: [(String, String)], limit: Int = 7) -> [String] {
-        Gratitude.phrases(in: TrendsFixtures.days(texts: texts), limit: limit).map { "\($0.text) \($0.count)" }
+        Gratitude.phrases(in: TrendsFixtures.entryDays(texts: texts), limit: limit).map { "\($0.text) \($0.count)" }
     }
 
     // Equal counts on one day tie on recency too, so they list alphabetically.
@@ -54,7 +54,7 @@ struct JournalTrendsGratitudeTests {
     }
 
     @Test func itemsAreCountedAcrossDaysIgnoringCaseAndShowTheCommonestCasing() {
-        let result = Gratitude.phrases(in: TrendsFixtures.days(texts: [
+        let result = Gratitude.phrases(in: TrendsFixtures.entryDays(texts: [
             ("2026-09-01", "Grateful for coffee."),
             ("2026-09-02", "Grateful for Coffee."),
             ("2026-09-03", "Grateful for Coffee, the cat."),
@@ -70,8 +70,8 @@ struct JournalTrendsGratitudeTests {
     }
 
     @Test func gratitudeInAQuestionedAnswerCountsToo() throws {
-        let turn = JournalFixtures.turn(.good, "Grateful for the walk", on: "2026-09-01")
-        let days = JournalHistory.days(from: [turn], language: .en)
+        let answered = EntryFixtures.prompt(1, "What went well?", answer: "Grateful for the walk")
+        let days = [TrendsFixtures.day("2026-09-01", [answered])]
         #expect(Gratitude.phrases(in: days).map(\.text) == ["the walk"])
     }
 }

@@ -9,7 +9,7 @@ struct JournalTrendsWritingTests {
 
     private func writing(_ spec: [(String, Int)], in range: JournalTrends.DayRange? = nil,
                          hour: Int = 22) -> JournalTrends.Writing {
-        JournalTrends.Writing(days: TrendsFixtures.days(spec, hour: hour), range: range ?? september, timeZone: tz)
+        JournalTrends.Writing(days: TrendsFixtures.entryDays(spec, hour: hour), range: range ?? september, timeZone: tz)
     }
 
     @Test func entriesAndWordsCountOnlyTheDaysInTheRange() {
@@ -73,9 +73,9 @@ struct JournalTrendsWritingTests {
     }
 
     @Test func aNightOwlsLateAndEarlyHoursAverageToMidnight() {
-        let turns = [("2026-09-01", 23), ("2026-09-02", 23), ("2026-09-03", 0), ("2026-09-04", 1), ("2026-09-05", 1)]
-            .map { JournalFixtures.freeWriting("word", on: $0.0, hour: $0.1) }
-        let w = JournalTrends.Writing(days: JournalHistory.days(from: turns, language: .en), range: september, timeZone: tz)
+        let days = [("2026-09-01", 23), ("2026-09-02", 23), ("2026-09-03", 0), ("2026-09-04", 1), ("2026-09-05", 1)]
+            .map { TrendsFixtures.day($0.0, text: "word", hour: $0.1) }
+        let w = JournalTrends.Writing(days: days, range: september, timeZone: tz)
         #expect(w.usualHour == 0)
     }
 

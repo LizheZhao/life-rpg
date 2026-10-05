@@ -15,7 +15,7 @@ extension JournalTrends {
         /// The commonest items first, then the most recently written, then alphabetically so the
         /// order is the same every time. The starter matches in both languages whichever one the
         /// system is in: someone can write in either.
-        public static func phrases(in days: [JournalDay], limit: Int = 7) -> [Phrase] {
+        public static func phrases(in days: [JournalEntryDay], limit: Int = 7) -> [Phrase] {
             guard limit > 0 else { return [] }
             struct Seen {
                 var count = 0
@@ -24,8 +24,8 @@ extension JournalTrends {
             }
             var seen: [String: Seen] = [:]
             for day in days {
-                for turn in JournalComposer.written(day.turns) {
-                    for paragraph in turn.answer.split(whereSeparator: \.isNewline) {
+                for block in day.document.blocks {
+                    for paragraph in block.writtenText.split(whereSeparator: \.isNewline) {
                         for item in items(inParagraph: String(paragraph)) {
                             let key = item.lowercased()
                             seen[key, default: Seen()].count += 1
