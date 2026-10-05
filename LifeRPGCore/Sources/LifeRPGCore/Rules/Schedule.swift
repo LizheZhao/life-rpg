@@ -175,23 +175,8 @@ public enum Schedule {
         sorted(occurrences.filter { $0.completedDayKey == dayKey && $0.dueDayKey > dayKey })
     }
 
-    /// What the settlement gave up on — auto-skipped on day 4, or closed at Sunday's settlement —
-    /// and was never done, newest due day first. "Did not finish" on the calendar.
-    ///
-    /// `skipped` alone can't say who closed it: a routine you paid to cancel and one you swapped
-    /// are skipped too. Only `Overdue` books a `skip` ledger entry, so that entry is the mark.
-    /// - Parameter month: only occurrences due in it, the month the calendar is showing.
-    public static func missed(_ occurrences: [RoutineOccurrence], ledger: [LedgerEntry],
-                              in month: MonthKey? = nil) -> [RoutineOccurrence] {
-        let settled = settledIDs(ledger)
-        return occurrences
-            .filter { o in
-                isMissed(o, settled: settled) && (month.map { MonthKey(dayKey: o.dueDayKey) == $0 } ?? true)
-            }
-            .sorted { $0.dueDayKey == $1.dueDayKey ? $0.textSnapshot < $1.textSnapshot
-                                                   : $0.dueDayKey > $1.dueDayKey }
-    }
-
+    /// What the settlement gave up on is told apart from a paid cancel and a swap by the `skip`
+    /// ledger entry: `skipped` alone can't say who closed it, and only `Overdue` books that entry.
     /// The occurrences `Overdue` closed: the `refID` of every `skip` entry.
     public static func settledIDs(_ ledger: [LedgerEntry]) -> Set<UUID> {
         let skip = Economy.Kind.skip.rawValue

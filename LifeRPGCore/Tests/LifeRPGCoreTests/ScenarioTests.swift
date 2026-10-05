@@ -71,10 +71,7 @@ struct ScenarioTests {
         }
 
         var missed: [RoutineOccurrence] {
-            get throws {
-                Schedule.missed(try ctx.fetch(FetchDescriptor<RoutineOccurrence>()),
-                                ledger: try ctx.fetch(FetchDescriptor<LedgerEntry>()))
-            }
+            get throws { try Fixtures.missed(ctx) }
         }
     }
 

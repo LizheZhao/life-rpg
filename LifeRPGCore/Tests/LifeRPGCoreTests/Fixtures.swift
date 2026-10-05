@@ -33,6 +33,13 @@ extension Fixtures {
         return ModelContext(container)
     }
 
+    /// The occurrences the settlement gave up on, by the rule `DayRecord` marks them with.
+    static func missed(_ context: ModelContext) throws -> [RoutineOccurrence] {
+        let settled = Schedule.settledIDs(try context.fetch(FetchDescriptor<LedgerEntry>()))
+        return try context.fetch(FetchDescriptor<RoutineOccurrence>())
+            .filter { Schedule.isMissed($0, settled: settled) }
+    }
+
     @discardableResult
     static func quest(_ context: ModelContext,
                       _ text: String,

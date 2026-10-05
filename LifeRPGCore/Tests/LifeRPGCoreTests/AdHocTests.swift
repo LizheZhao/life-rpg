@@ -318,8 +318,7 @@ struct AdHocTests {
         #expect(fresh.basePoints == 38 && fresh.dueDayKey == fri && fresh.countsForClear)
         #expect(fresh.routineID == nil)
         #expect(try ctx.fetch(FetchDescriptor<LedgerEntry>()).isEmpty)
-        #expect(Schedule.missed(try ctx.fetch(FetchDescriptor<RoutineOccurrence>()),
-                                ledger: try ctx.fetch(FetchDescriptor<LedgerEntry>())).isEmpty)
+        #expect(try Fixtures.missed(ctx).isEmpty)
         #expect(DayRecord.status(of: o) == .replaced)
         #expect(throws: AdHoc.Failure.routineNotReplaceable) {
             try AdHoc.replaceRoutine(o, flexible: false, with: .custom(text: "y", difficulty: .hard),

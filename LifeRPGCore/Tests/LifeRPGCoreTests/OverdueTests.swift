@@ -280,7 +280,6 @@ struct OverdueTests {
         #expect(Schedule.openThisWeek([fixed, f], flexible: flexIDs, on: mon, in: tz).isEmpty)
 
         try settle(ctx, sat, sun, mon)
-        #expect(Schedule.missed([fixed, f], ledger: try ctx.fetch(FetchDescriptor<LedgerEntry>())).map(\.textSnapshot)
-                == ["fixed", "flex"])
+        #expect(try Fixtures.missed(ctx).map(\.textSnapshot).sorted() == ["fixed", "flex"])
     }
 }

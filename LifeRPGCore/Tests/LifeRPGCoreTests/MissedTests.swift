@@ -20,10 +20,6 @@ struct MissedTests {
         return o
     }
 
-    private func rows(_ ctx: ModelContext) throws -> (occurrences: [RoutineOccurrence], ledger: [LedgerEntry]) {
-        (try ctx.fetch(FetchDescriptor<RoutineOccurrence>()), try ctx.fetch(FetchDescriptor<LedgerEntry>()))
-    }
-
     // MARK: status
 
     @Test func theSettlementsSkipIsMissedAndACancelIsSkipped() throws {
@@ -56,40 +52,6 @@ struct MissedTests {
         #expect(try DayRecord.load(sat, in: ctx).otherLedger.map(\.kind) == ["skip"])
     }
 
-    // MARK: the list
-
-    @Test func missedListsOnlyWhatTheSettlementGaveUpOn() throws {
-        let ctx = try Fixtures.context()
-        try settledSkip(ctx, "gave up", due: fri)
-        let cancelled = Fixtures.occurrence(ctx, "cancelled", due: fri)
-        cancelled.skipped = true
-        Economy.record(ctx, kind: .redeem, points: -200, dayKey: sat, refID: cancelled.id)
-        let swapped = try settledSkip(ctx, "swapped", due: fri)
-        swapped.replacedByID = UUID()
-        Fixtures.occurrence(ctx, "open", due: fri)
-        Fixtures.occurrence(ctx, "done", due: fri, completed: fri)
-        try ctx.save()
-
-        let (occurrences, ledger) = try rows(ctx)
-        #expect(Schedule.missed(occurrences, ledger: ledger).map(\.textSnapshot) == ["gave up"])
-    }
-
-    @Test func missedIsNewestDueDayFirstAndCanBeCutToAMonth() throws {
-        let ctx = try Fixtures.context()
-        try settledSkip(ctx, "b sep", due: "2026-09-26")
-        try settledSkip(ctx, "a sep", due: "2026-09-26")
-        try settledSkip(ctx, "oct", due: "2026-10-02")
-        try settledSkip(ctx, "aug", due: "2026-08-31")
-        try ctx.save()
-
-        let (occurrences, ledger) = try rows(ctx)
-        #expect(Schedule.missed(occurrences, ledger: ledger).map(\.textSnapshot)
-                == ["oct", "a sep", "b sep", "aug"])
-        let september = try #require(MonthKey(year: 2026, month: 9))
-        #expect(Schedule.missed(occurrences, ledger: ledger, in: september).map(\.textSnapshot)
-                == ["a sep", "b sep"])
-    }
-
     /// End to end through the real settlement: a day-4 auto-skip and Sunday's shortfall are both
     /// missed; a cancel bought before the ladder ends is not.
     @Test func theRealSettlementProducesMissedRows() throws {
@@ -108,8 +70,7 @@ struct MissedTests {
         try ctx.save()
 
         #expect(fixed.skipped && paid.skipped)
-        let (occurrences, ledger) = try rows(ctx)
-        #expect(Schedule.missed(occurrences, ledger: ledger).map(\.id) == [fixed.id])
+        #expect(try Fixtures.missed(ctx).map(\.id) == [fixed.id])
         let status = Dictionary(uniqueKeysWithValues: try DayRecord.load(sat, in: ctx).routines.map { ($0.occurrence.id, $0.status) })
         #expect(status[fixed.id] == .missed && status[paid.id] == .skipped)
     }
