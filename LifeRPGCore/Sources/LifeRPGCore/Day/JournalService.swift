@@ -1,8 +1,8 @@
 import Foundation
 import SwiftData
 
-/// The journal's inputs read from the store. The day's facts the question step reads
-/// (`JournalSignals`) are built here from the same history rows `DayRecord` reads. Writing the
+/// The journal's inputs read from the store. The day's facts the "Ask me something"
+/// request reads (`JournalSignals`) are built here from the same history rows `DayRecord` reads. Writing the
 /// journal is `JournalEntries`; nothing here writes.
 public enum JournalService {
     /// The day's facts, read from the history rows the same way `DayRecord` reads them.

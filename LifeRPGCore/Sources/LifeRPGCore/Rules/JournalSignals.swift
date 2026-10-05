@@ -11,8 +11,6 @@ public struct JournalSignals: Equatable, Sendable {
     /// One thing done that day.
     public struct Item: Equatable, Sendable {
         public let subject: JournalSubject
-        /// The value drawn from a parameterized quest (`DailyQuest.variantSnapshot`).
-        public let variant: String?
         /// The newest rating of this completion, -2...2.
         public let rating: Int?
         public let completedAt: Date?
@@ -83,20 +81,20 @@ public struct JournalSignals: Equatable, Sendable {
             if let seen = newest[id], seen.timestamp >= rating.timestamp { continue }
             newest[id] = rating
         }
-        func item(_ kind: FeedbackTarget, _ id: UUID, _ text: String, variant: String?, at: Date?,
+        func item(_ kind: FeedbackTarget, _ id: UUID, _ text: String, at: Date?,
                   light: Bool, coins: Int?) -> Item {
-            Item(subject: JournalSubject(kind: kind, id: id, text: text), variant: variant,
+            Item(subject: JournalSubject(kind: kind, id: id, text: text),
                  rating: newest[id]?.rating, completedAt: at,
                  isChoice: Self.isChoice(text), isLight: light, coins: coins ?? 0)
         }
 
         var done: [Item] = quests
             .filter { $0.dayKey == dayKey && !$0.replaced && $0.points != nil }
-            .map { item(.quest, $0.id, $0.textSnapshot, variant: $0.variantSnapshot, at: $0.completedAt,
+            .map { item(.quest, $0.id, $0.textSnapshot, at: $0.completedAt,
                         light: false, coins: $0.points) }
         done += occurrences
             .filter { $0.completedDayKey == dayKey && !$0.isReplaced }
-            .map { item(.routine, $0.id, $0.displayText, variant: nil, at: $0.completedAt,
+            .map { item(.routine, $0.id, $0.displayText, at: $0.completedAt,
                         light: $0.usedDegraded && $0.degradedTextSnapshot != nil, coins: $0.awardedPoints) }
         self.completed = done.sorted { ($0.completedAt ?? .distantPast, $0.subject.text)
                                      < ($1.completedAt ?? .distantPast, $1.subject.text) }
