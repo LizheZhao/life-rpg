@@ -29,7 +29,7 @@ enum RootTab: CaseIterable, Identifiable {
 }
 
 /// The app's tab bar: a surface capsule with a hairline and a soft shadow floating above the bottom
-/// edge, four round buttons, the selected one on a `tabPill` circle (`doc/UI_DESIGN.md`).
+/// edge, one round button per tab, the selected one on a `tabPill` circle (`doc/UI_DESIGN.md`).
 ///
 /// Meant as the bottom overlay of a `TabView` whose system bar is hidden. Seen on the simulator:
 /// a safe-area inset or safe-area padding outside a page's `NavigationStack` never reaches the

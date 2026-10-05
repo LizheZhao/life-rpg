@@ -14,10 +14,6 @@ struct JournalTimingTests {
         return JournalTiming.isEvening(at: date, timeZone: zone)
     }
 
-    @Test func eveningStartsAtSixPM() {
-        #expect(JournalTiming.eveningStartHour == 18)
-    }
-
     @Test func theBoundariesAreFiveAndSix() {
         #expect(evening(hour: 4, minute: 59))
         #expect(!evening(hour: 5, minute: 0))

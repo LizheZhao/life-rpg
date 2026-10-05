@@ -44,8 +44,7 @@ struct FoundationModelsWording: JournalWording {
 /// Where the journal gets its model, if the device has one. The app targets iOS 17.6, so every
 /// answer below iOS 26 is "none" and the journal runs on the pool rows alone.
 enum JournalWordingProvider {
-    static func current(language: JournalLanguage = .resolve(preferred: Locale.preferredLanguages))
-        -> (any JournalWording)? {
+    static func current(language: JournalLanguage = .system) -> (any JournalWording)? {
         #if canImport(FoundationModels)
         guard #available(iOS 26.0, *) else { return nil }
         let model = SystemLanguageModel.default
@@ -60,7 +59,7 @@ enum JournalWordingProvider {
 
     /// Why `current` is nil, for the Debug page: a missing model otherwise looks like a model that
     /// was asked and rejected.
-    static func status(language: JournalLanguage = .resolve(preferred: Locale.preferredLanguages)) -> String {
+    static func status(language: JournalLanguage = .system) -> String {
         #if canImport(FoundationModels)
         guard #available(iOS 26.0, *) else { return "iOS 26 or later is needed" }
         let model = SystemLanguageModel.default

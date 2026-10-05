@@ -13,7 +13,7 @@ public struct JournalDayFacts: Equatable, Sendable {
     public static func of(dayKey: String, quests: [DailyQuest], occurrences: [RoutineOccurrence],
                           context: DailyContext?) -> JournalDayFacts {
         let signals = JournalSignals(dayKey: dayKey, quests: quests, occurrences: occurrences,
-                                     context: context, ratings: [], comments: [])
+                                     context: context, ratings: [])
         return JournalDayFacts(completed: signals.completedCount, tierText: context?.tier.dayText)
     }
 }

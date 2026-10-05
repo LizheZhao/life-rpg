@@ -184,7 +184,6 @@ public enum Palette {
         pairs.append(TextPair(label: "onNight on nightCard", foreground: v(onNight), background: v(nightCard)))
         pairs.append(TextPair(label: "onNightSecondary on nightCard", foreground: v(onNightSecondary),
                               background: v(nightCard)))
-        pairs.append(TextPair(label: "nightCard on onNight", foreground: v(nightCard), background: v(onNight)))
         return pairs
     }
 

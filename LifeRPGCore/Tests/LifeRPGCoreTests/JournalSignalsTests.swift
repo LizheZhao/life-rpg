@@ -123,16 +123,8 @@ struct JournalSignalsTests {
         #expect(F.signals(occurrences: [flexible], flexible: [routineID]).skipped.isEmpty)
     }
 
-    @Test func commentsAreTheDaysOwnInOrder() {
-        func note(_ text: String, _ day: String, hour: Int) -> QuestComment {
-            let c = QuestComment()
-            c.comment = text; c.dayKey = day; c.timestamp = Fixtures.date(day, hour: hour)
-            return c
-        }
-        let signals = JournalSignals(dayKey: F.day, quests: [], occurrences: [], context: nil, ratings: [],
-                                     comments: [note("later", F.day, hour: 20), note("other day", "2026-09-17", hour: 9),
-                                                note("earlier", F.day, hour: 8)])
-        #expect(signals.comments == ["earlier", "later"])
+    @Test func aDayWithNoContextReadsAsNormal() {
+        let signals = JournalSignals(dayKey: F.day, quests: [], occurrences: [], context: nil, ratings: [])
         #expect(signals.tier == .normal)
     }
 }

@@ -68,8 +68,7 @@ struct JournalConversationTests {
 
     private func present(_ q: JournalQuestion, _ wording: (any JournalWording)?,
                          timeout: Duration = .seconds(5)) async -> JournalPresented {
-        await JournalConversation.present(q, signals: F.signals(), habits: .none, wording: wording,
-                                          language: .en, timeout: timeout)
+        await JournalConversation.present(q, signals: F.signals(), habits: .none, wording: wording, timeout: timeout)
     }
 
     private func present(_ r: JournalFollowUpRequest, _ wording: (any JournalWording)?,
@@ -107,11 +106,13 @@ struct JournalConversationTests {
         #expect(wording.callCount == 1)
     }
 
-    @Test func wordingThatBreaksAVoiceRuleFallsBack() async throws {
+    @Test func wordingThatBreaksAVoiceRuleFallsBackAndIsNotRetried() async throws {
         let q = try opening()
-        let shown = await present(q, FakeWording(question: "Why did today feel so long?"))
+        let wording = FakeWording(question: "Why did today feel so long?")
+        let shown = await present(q, wording)
         #expect(shown.source == .template)
         #expect(shown.text == q.text)
+        #expect(wording.callCount == 1)
     }
 
     @Test func aNilWordingMeansTheFallback() async throws {
@@ -144,19 +145,11 @@ struct JournalConversationTests {
         #expect(wording.callCount == 0)
     }
 
-    @Test func aRejectedAnswerIsNotRetried() async throws {
-        let q = try opening()
-        let wording = FakeWording(question: "Why?")
-        _ = await present(q, wording)
-        #expect(wording.callCount == 1)
-    }
-
     @Test func theChineseQuestionIsCheckedAndInstructedInChinese() async throws {
         guard case .ask(let q) = JournalPlanner.next(signals: F.signals(), habits: .none, today: [], language: .zhHans)
         else { throw Failure.noQuestion }
         let wording = FakeWording(question: "今晚有哪一刻你想多留一会儿？")
-        let shown = await JournalConversation.present(q, signals: F.signals(), habits: .none, wording: wording,
-                                                      language: .zhHans, timeout: .seconds(5))
+        let shown = await present(q, wording)
         #expect(shown == JournalPresented(text: "今晚有哪一刻你想多留一会儿？", source: .model, promptID: q.promptID))
         #expect(wording.instructions == [JournalPromptBuilder.questionInstructions(language: .zhHans)])
     }
@@ -178,7 +171,6 @@ struct JournalConversationTests {
         let wording = FakeWording(followUp: ("Good to hear.", "What made the difference?"))
         let shown = await present(request, wording)
         #expect(shown == JournalPresented(text: request.fallback.text, source: .template, promptID: "follow.stand"))
-        #expect(shown.text == "You said \"That one went better than I expected\". What stands out to you about that?")
         #expect(wording.callCount == 1)
     }
 

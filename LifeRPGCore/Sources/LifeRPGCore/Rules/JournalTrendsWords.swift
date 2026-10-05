@@ -1,7 +1,5 @@
 import Foundation
-#if canImport(NaturalLanguage)
 import NaturalLanguage
-#endif
 
 extension JournalTrends {
     /// "What this month was about": the words the period leans on that the other months do not.
@@ -119,17 +117,12 @@ extension JournalTrends {
         }
 
         /// The lowercased words of one paragraph, apostrophes straightened. The system tokenizer
-        /// knows where Chinese words end; without it a plain split is the fallback.
+        /// knows where Chinese words end.
         static func tokens(in paragraph: String, language: JournalLanguage) -> [Token] {
             let text = paragraph.lowercased().replacingOccurrences(of: "\u{2019}", with: "'")
-            #if canImport(NaturalLanguage)
             return systemTokens(in: text, language: language)
-            #else
-            return fallbackTokens(in: text)
-            #endif
         }
 
-        #if canImport(NaturalLanguage)
         private static func systemTokens(in text: String, language: JournalLanguage) -> [Token] {
             let tokenizer = NLTokenizer(unit: .word)
             tokenizer.string = text
@@ -143,54 +136,6 @@ extension JournalTrends {
                 return true
             }
             return out
-        }
-        #endif
-
-        /// Letter runs, an apostrophe or hyphen between letters keeping one together ("don't"). A run
-        /// of Chinese characters is cut into overlapping pairs, which is crude but never wrong about
-        /// where a word is not, and pairs are not joined into phrases (they already overlap).
-        static func fallbackTokens(in text: String) -> [Token] {
-            var out: [Token] = []
-            var latin = ""
-            var cjk: [Character] = []
-            // The last token was a letter run and only whitespace has come since.
-            var joinable = false
-            func flushLatin() {
-                guard !latin.isEmpty else { return }
-                out.append(Token(text: latin, joinsPrevious: joinable))
-                latin = ""
-                joinable = true
-            }
-            func flushCJK() {
-                guard !cjk.isEmpty else { return }
-                let pieces = cjk.count == 1 ? [String(cjk)] : (0..<cjk.count - 1).map { String(cjk[$0...$0 + 1]) }
-                out += pieces.map { Token(text: $0, joinsPrevious: false) }
-                cjk = []
-                joinable = false
-            }
-            let characters = Array(text)
-            for (i, ch) in characters.enumerated() {
-                if isCJK(ch) {
-                    flushLatin()
-                    cjk.append(ch)
-                } else if ch.isLetter || ch.isNumber {
-                    flushCJK()
-                    latin.append(ch)
-                } else if ch == "'" || ch == "-", !latin.isEmpty, i + 1 < characters.count, characters[i + 1].isLetter {
-                    latin.append(ch)
-                } else {
-                    flushLatin()
-                    flushCJK()
-                    if !ch.isWhitespace { joinable = false }
-                }
-            }
-            flushLatin()
-            flushCJK()
-            return out
-        }
-
-        private static func isCJK(_ ch: Character) -> Bool {
-            ch.unicodeScalars.contains { $0.properties.isIdeographic }
         }
     }
 }

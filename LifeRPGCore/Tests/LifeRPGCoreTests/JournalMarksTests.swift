@@ -47,19 +47,12 @@ struct JournalMarksTests {
         #expect(marks["2026-09-19"] == nil)
     }
 
-    @Test func aDayWithOnlyAJournalMarkIsNotEmpty() {
-        #expect(!DayMarks(journalLevel: 2).isEmpty)
-        #expect(DayMarks().isEmpty)
-    }
-
     @Test func withoutJournalLevelsTheMarksAreAsBefore() {
         let day = "2026-09-17"
         let quest = JournalFixtures.quest("walk", on: day)
         quest.slot = .easy
         let plain = CalendarMarks.marks(quests: [quest], occurrences: [])
-        #expect(plain == CalendarMarks.marks(quests: [quest], occurrences: [], journalLevels: [:]))
         #expect(plain[day] == DayMarks(randomTiers: [.easy]))
-        #expect(plain[day]?.journalLevel == 0)
         #expect(CalendarMarks.marks(quests: [], occurrences: []).isEmpty)
     }
 }

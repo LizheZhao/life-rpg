@@ -5,12 +5,9 @@ import Testing
 struct JournalTrendsLockedTests {
     typealias Locked = JournalTrends.Locked
 
-    @Test func progressIsNightsWrittenOutOfSevenAndNeverPastIt() {
+    @Test func progressIsNightsWrittenOutOfSeven() {
         #expect(Locked.progress(nightsWritten: 3) == Locked.Progress(written: 3, of: 7))
         #expect(Locked.progress(nightsWritten: 0) == Locked.Progress(written: 0, of: 7))
-        #expect(Locked.progress(nightsWritten: 7) == Locked.Progress(written: 7, of: 7))
-        #expect(Locked.progress(nightsWritten: 40) == Locked.Progress(written: 7, of: 7))
-        #expect(Locked.progress(nightsWritten: -2) == Locked.Progress(written: 0, of: 7))
     }
 
     @Test func theProgressLineReadsAsTheDesignHasIt() {

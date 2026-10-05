@@ -38,9 +38,11 @@ struct JournalSafetyTests {
         for text in misses { #expect(!JournalSafety.needsSafetyLine(answer: text), "\(text)") }
     }
 
-    @Test func theTwoCategoriesAreToldApart() {
-        #expect(JournalSafety.categories(in: "I want to die, it is hopeless") == [.selfHarm, .hopelessness])
-        #expect(JournalSafety.categories(in: "觉得很绝望") == [.hopelessness])
+    /// People write in the language they feel in, so a hit is caught inside an answer that is
+    /// mostly in the other language.
+    @Test func aHitInEitherLanguageIsCaughtInAMixedAnswer() {
+        #expect(JournalSafety.needsSafetyLine(answer: "Long day at work. 觉得很绝望"))
+        #expect(JournalSafety.needsSafetyLine(answer: "今天很累。I just want to die."))
     }
 
     @Test func theLineIsThePoolRowInEachLanguage() {

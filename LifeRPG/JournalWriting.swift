@@ -3,6 +3,11 @@ import Observation
 import SwiftData
 import SwiftUI
 
+extension JournalLanguage {
+    /// The journal's language on this device: Core's rule applied to the system's preferred languages.
+    static var system: JournalLanguage { resolve(preferred: Locale.preferredLanguages) }
+}
+
 /// What a free-writing editor holds while the user types: the draft (Core's `FreeWritingDraft`)
 /// and when it reaches the store. A keystroke only changes the draft in memory; the store is
 /// written about a second after the last one, and at once on `flush` (Close, Done, leaving the
@@ -63,7 +68,7 @@ final class FreeWritingModel {
     func reload() {
         guard !draft.hasUnsavedChanges,
               let stored = try? JournalService.freeWritingDraft(on: dayKey, in: context) else { return }
-        draft.reset(text: stored.text, writingSeconds: stored.writingSeconds)
+        draft = stored
         openingText = stored.text
         set(draft.text.isEmpty ? .blank : .saved)
     }
@@ -115,14 +120,12 @@ final class FreeWritingModel {
 struct FreeWritingEditor: View {
     let model: FreeWritingModel
     var focus: FocusState<Bool>.Binding
-    var placeholder = "Start anywhere."
 
     @State private var text: String
 
-    init(model: FreeWritingModel, focus: FocusState<Bool>.Binding, placeholder: String = "Start anywhere.") {
+    init(model: FreeWritingModel, focus: FocusState<Bool>.Binding) {
         self.model = model
         self.focus = focus
-        self.placeholder = placeholder
         _text = State(initialValue: model.openingText)
     }
 
@@ -136,7 +139,7 @@ struct FreeWritingEditor: View {
             .padding(.horizontal, -5)
             .overlay(alignment: .topLeading) {
                 if text.isEmpty {
-                    Text(placeholder).lr(.journalBody).foregroundStyle(LR.Color.inkSecondary)
+                    Text("Start anywhere.").lr(.journalBody).foregroundStyle(LR.Color.inkSecondary)
                         .allowsHitTesting(false)
                         .accessibilityHidden(true)
                 }
@@ -218,19 +221,19 @@ struct JournalWritingPage: View {
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
-    @Environment(\.modelContext) private var context
 
     @State private var model: FreeWritingModel
     @State private var starters: [JournalStarter]
     @State private var guiding = false
     @FocusState private var focused: Bool
 
-    private let language = JournalLanguage.resolve(preferred: Locale.preferredLanguages)
+    private let language: JournalLanguage
 
     init(today: String, evening: Bool, context: ModelContext) {
         self.today = today
         self.evening = evening
-        let language = JournalLanguage.resolve(preferred: Locale.preferredLanguages)
+        let language = JournalLanguage.system
+        self.language = language
         _model = State(initialValue: FreeWritingModel(dayKey: today, language: language, context: context))
         _starters = State(initialValue: (try? JournalService.starters(on: today, language: language, in: context)) ?? [])
     }
@@ -259,7 +262,7 @@ struct JournalWritingPage: View {
             if phase != .active { model.flush() }
         }
         // A swipe down closes the sheet without Close or Done; the words are saved all the same.
-        .onDisappear { if !guiding { model.flush() } }
+        .onDisappear { model.flush() }
         .sheet(isPresented: $guiding, onDismiss: { model.reload(); focused = true }) {
             JournalView(today: today)
         }

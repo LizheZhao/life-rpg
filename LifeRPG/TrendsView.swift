@@ -35,7 +35,7 @@ struct TrendsView: View {
         return Font(LRFonts.uiFont(LR.Typography.bodyStrong.spec.family, weight: weight, size: size) as CTFont)
     }
 
-    private let language = JournalLanguage.resolve(preferred: Locale.preferredLanguages)
+    private let language = JournalLanguage.system
 
     /// What the page reads. A row count is enough to notice an added entry or completion; an edit
     /// to an existing day is caught by `reload` and by the rebuild when the tab appears.
@@ -142,7 +142,7 @@ struct TrendsView: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.top, 6)
                 HStack(spacing: 8) {
-                    ForEach(0..<7, id: \.self) { index in
+                    ForEach(0..<locked.progress.of, id: \.self) { index in
                         let filled = index < locked.progress.written
                         Text(String("MTWTFSS".map { $0 }[index])).lr(.pill)
                             .foregroundStyle(filled ? LR.Color.onTintDark : LR.Color.onNightSecondary.opacity(0.7))
@@ -153,7 +153,7 @@ struct TrendsView: View {
                 }
                 .padding(.top, 18)
                 .accessibilityElement(children: .ignore)
-                .accessibilityLabel("\(locked.progress.written) of \(locked.progress.of) nights written")
+                .accessibilityLabel(locked.progress.text)
                 Button { writing = true } label: {
                     Text("Write tonight's entry").lr(.bodyStrong).foregroundStyle(LR.Color.nightCard)
                         .padding(.horizontal, 20)
@@ -197,15 +197,17 @@ struct TrendsView: View {
     // MARK: unlocked
 
     private func unlockedContent(_ page: TrendsPage.Unlocked, period: JournalTrends.Period) -> some View {
-        VStack(spacing: 12) {
+        // The calendar's cells are the chart's days at the chart's levels, so one count speaks for both.
+        let daysWritten = page.calendar.filter { $0.level > 0 }.count
+        return VStack(spacing: 12) {
             HStack(spacing: 8) {
                 tile(page.totalWords.formatted(), "words")
                 tile(page.streak.formatted(), "day streak")
                 tile(page.usualHour ?? "\u{2014}", "usual hour")
             }
-            if let chart = page.wordsPerDay { wordsPerDay(chart) } else { nothingWritten(period) }
+            if let chart = page.wordsPerDay { wordsPerDay(chart, daysWritten: daysWritten) } else { nothingWritten(period) }
             if let about = page.about { aboutCard(about) }
-            if !page.calendar.isEmpty { calendarCard(page.calendar, period: period) }
+            if !page.calendar.isEmpty { calendarCard(page.calendar, period: period, daysWritten: daysWritten) }
             if let favorites = page.favorites { favoritesCard(favorites) }
             if let energy = page.energy { energyCard(energy) }
             if !page.gratitude.isEmpty { gratitudeCard(page.gratitude) }
@@ -255,18 +257,24 @@ struct TrendsView: View {
         .lrCard(.surface, radius: LR.Radius.card)
     }
 
-    private func wordsPerDay(_ chart: TrendsPage.WordsPerDay) -> some View {
-        let spacing: CGFloat = chart.bars.count > 60 ? 0.5 : 3
-        return card("Words per day", trailing: "avg \(chart.average)") {
+    /// A bar per day standing on the baseline; past 60 days the bars pack tighter with smaller corners.
+    private func barStrip(_ bars: [(dayKey: String, fraction: Double, color: Color)], height: CGFloat) -> some View {
+        let dense = bars.count > 60
+        return HStack(alignment: .bottom, spacing: dense ? 0.5 : 3) {
+            ForEach(bars, id: \.dayKey) { bar in
+                TopRoundedBar(radius: dense ? 1 : 3)
+                    .fill(bar.color)
+                    .frame(height: max(3, height * bar.fraction))
+            }
+        }
+        .frame(height: height, alignment: .bottom)
+    }
+
+    private func wordsPerDay(_ chart: TrendsPage.WordsPerDay, daysWritten: Int) -> some View {
+        card("Words per day", trailing: "avg \(chart.average)") {
             VStack(spacing: 8) {
-                HStack(alignment: .bottom, spacing: spacing) {
-                    ForEach(chart.bars, id: \.dayKey) { bar in
-                        TopRoundedBar(radius: spacing < 3 ? 1 : 3)
-                            .fill(barColor(bar.level))
-                            .frame(height: max(3, 110 * bar.fraction))
-                    }
-                }
-                .frame(height: 110, alignment: .bottom)
+                barStrip(chart.bars.map { (dayKey: $0.dayKey, fraction: $0.fraction, color: barColor($0.level)) },
+                         height: 110)
                 HStack {
                     ForEach(Array(chart.axis.enumerated()), id: \.offset) { index, label in
                         if index > 0 { Spacer(minLength: 0) }
@@ -280,7 +288,7 @@ struct TrendsView: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Words per day, average \(chart.average)")
         .accessibilityValue(chart.axis.first.map { first in
-            "\(chart.bars.filter { $0.words > 0 }.count) days written, from \(first) to \(chart.axis.last ?? first)"
+            "\(daysWritten) days written, from \(first) to \(chart.axis.last ?? first)"
         } ?? "")
     }
 
@@ -318,7 +326,8 @@ struct TrendsView: View {
         }
     }
 
-    private func calendarCard(_ cells: [TrendsPage.CalendarCell], period: JournalTrends.Period) -> some View {
+    private func calendarCard(_ cells: [TrendsPage.CalendarCell], period: JournalTrends.Period,
+                              daysWritten: Int) -> some View {
         let columns: Int = switch period {
         case .week: 7
         case .month: 16
@@ -337,7 +346,7 @@ struct TrendsView: View {
             .accessibilityHidden(true)
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Writing calendar, \(cells.filter { $0.level > 0 }.count) of \(cells.count) days written")
+        .accessibilityLabel("Writing calendar, \(daysWritten) of \(cells.count) days written")
     }
 
     private func favoritesCard(_ favorites: TrendsPage.Favorites) -> some View {
@@ -374,15 +383,12 @@ struct TrendsView: View {
         card("Low energy days", trailing: "vs quests done",
              subtitle: "Days you set \"very low\" against how much still got done") {
             VStack(alignment: .leading, spacing: 10) {
-                HStack(alignment: .bottom, spacing: energy.bars.count > 60 ? 0.5 : 3) {
-                    ForEach(energy.bars, id: \.dayKey) { bar in
-                        TopRoundedBar(radius: energy.bars.count > 60 ? 1 : 3)
-                            .fill(bar.isLow ? LR.Color.trendGold : LR.Color.trendMid)
-                            .frame(height: max(3, 100 * bar.fraction))
-                    }
-                }
-                .frame(height: 100, alignment: .bottom)
-                .accessibilityHidden(true)
+                barStrip(energy.bars.map { bar in
+                             (dayKey: bar.dayKey, fraction: bar.fraction,
+                              color: bar.isLow ? LR.Color.trendGold : LR.Color.trendMid)
+                         },
+                         height: 100)
+                    .accessibilityHidden(true)
                 HStack(spacing: 14) {
                     legend(LR.Color.trendMid, "normal day")
                     legend(LR.Color.trendGold, "low energy day")

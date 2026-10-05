@@ -36,7 +36,7 @@ struct JournalView: View {
         case failed(String)
     }
 
-    private let language = JournalLanguage.resolve(preferred: Locale.preferredLanguages)
+    private let language = JournalLanguage.system
 
     init(today: String) {
         self.today = today
@@ -205,18 +205,18 @@ struct JournalView: View {
         answer = ""
         freeWriting = false
         do {
-            let signals = try JournalService.signals(on: today, in: context)
-            let habits = try JournalService.habits(asOf: today, in: context)
-            let step = JournalPlanner.next(signals: signals, habits: habits,
-                                           today: try JournalService.turns(on: today, in: context),
-                                           language: language)
-            switch step {
+            switch try JournalService.next(on: today, in: context, language: language) {
             case .ask(let question):
+                // The wording reads the same facts the planner did.
+                let signals = try JournalService.signals(on: today, in: context)
+                let habits = try JournalService.habits(asOf: today, in: context)
                 let presented = await JournalConversation.present(question, signals: signals, habits: habits,
-                                                                  wording: wording, language: language)
+                                                                  wording: wording)
                 phase = .ask(Shown(kind: question.kind, presented: presented, subject: question.subject,
                                    askedAt: Date()))
             case .followUp(let request):
+                let signals = try JournalService.signals(on: today, in: context)
+                let habits = try JournalService.habits(asOf: today, in: context)
                 let presented = await JournalConversation.present(request, signals: signals, habits: habits,
                                                                   wording: wording)
                 phase = .ask(Shown(kind: .followUp, presented: presented, subject: request.subject,

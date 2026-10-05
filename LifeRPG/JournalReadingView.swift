@@ -72,10 +72,11 @@ struct JournalReadingPage: View {
     /// The sent log, watched so a day handed over while the page is open shows at once.
     @AppStorage(JournalSentLog.key) private var sentLog = Data()
 
-    private let language = JournalLanguage.resolve(preferred: Locale.preferredLanguages)
+    private let language: JournalLanguage
 
     init(startDay: String, context: ModelContext) {
-        let language = JournalLanguage.resolve(preferred: Locale.preferredLanguages)
+        let language = JournalLanguage.system
+        self.language = language
         _dayKey = State(initialValue: startDay)
         _days = State(initialValue: (try? JournalService.history(language: language, in: context)) ?? [])
         _facts = State(initialValue: try? JournalService.facts(on: startDay, in: context))
@@ -144,17 +145,15 @@ struct JournalReadingPage: View {
                         id: \.self) { PillLabel(text: $0) }
             }
             .padding(.top, 8)
+            if let line = sentLine(for: day) { caption(line) }
         }
-        if let day, !editing, let line = sentLine(for: day) {
-            Text(line).lr(.caption).foregroundStyle(LR.Color.inkSecondary)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.top, 8)
-        }
-        if let notice {
-            Text(notice).lr(.caption).foregroundStyle(LR.Color.inkSecondary)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.top, 8)
-        }
+        if let notice { caption(notice) }
+    }
+
+    private func caption(_ text: String) -> some View {
+        Text(text).lr(.caption).foregroundStyle(LR.Color.inkSecondary)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.top, 8)
     }
 
     /// Whether this day went to Apple Journal, and if it was edited afterwards. Reading only: the
@@ -275,7 +274,6 @@ struct JournalReadingPage: View {
         case .empty, .freeWriting:
             writing = FreeWritingModel(dayKey: dayKey, language: language, context: context)
         case .turns:
-            edits = TurnEdits()
             writing = JournalReading.canAddFreeWriting(to: turns)
                 ? FreeWritingModel(dayKey: dayKey, language: language, context: context) : nil
         }
@@ -285,10 +283,9 @@ struct JournalReadingPage: View {
 
     /// Writes what was edited and leaves edit mode. False, staying in it, when the store refused,
     /// so no words are shown as saved that are not.
-    @discardableResult
     private func endEditing() -> Bool {
         if let writing, !writing.flush() {
-            notice = "Could not save. Your words are still on the page."
+            notice = Self.notSaved
             return false
         }
         var blanked = false
@@ -299,7 +296,7 @@ struct JournalReadingPage: View {
             }
             try context.save()
         } catch {
-            notice = "Could not save. Your words are still on the page."
+            notice = Self.notSaved
             return false
         }
         notice = blanked ? "An answer can't be blank, so it was left as it was." : nil
@@ -309,4 +306,6 @@ struct JournalReadingPage: View {
         reload()
         return true
     }
+
+    private static let notSaved = "Could not save. Your words are still on the page."
 }

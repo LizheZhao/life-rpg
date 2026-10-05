@@ -46,13 +46,11 @@ public enum JournalService {
     /// turn keeps its place, its question and the time it was first answered. Clearing an answer is
     /// not an edit (`.empty`), and the safety line was never the user's words (`.notEditable`, as is
     /// a skipped or misfit turn, which has no words to change). The same text is a no-op.
-    @discardableResult
-    public static func edit(_ turn: JournalTurn, answer: String) throws -> JournalTurn {
+    public static func edit(_ turn: JournalTurn, answer: String) throws {
         guard turn.outcome == .answered, turn.kind != .safety else { throw JournalEditError.notEditable }
         let words = answer.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !words.isEmpty else { throw JournalEditError.empty }
         if words != turn.answer { turn.answer = words }
-        return turn
     }
 
     /// Free writing added to `dayKey`: a closing turn with no question, after whatever the day has,
@@ -146,8 +144,6 @@ public enum JournalService {
             occurrences: try context.fetch(FetchDescriptor<RoutineOccurrence>()),
             context: try DayService.dailyContext(for: dayKey, in: context),
             ratings: try context.fetch(FetchDescriptor<QuestRating>()),
-            comments: try context.fetch(FetchDescriptor<QuestComment>(
-                predicate: #Predicate { $0.dayKey == dayKey })),
             ledger: try context.fetch(FetchDescriptor<LedgerEntry>(
                 predicate: #Predicate { $0.kind == skipKind && $0.dayKey == dayKey })),
             flexible: flexible,

@@ -23,19 +23,9 @@ struct JournalFollowUpTests {
         #expect(JournalFollowUp.phrase(in: word, language: .en) == String(repeating: "a", count: 40))
     }
 
-    @Test func aBlankAnswerHasNoTemplateAndAllPunctuationIsQuotedAsItIs() {
-        #expect(JournalFollowUp.template(answer: "  \n ", language: .en) == nil)
+    @Test func aBlankAnswerHasNoPhraseAndAllPunctuationIsQuotedAsItIs() {
+        #expect(JournalFollowUp.phrase(in: "  \n ", language: .en) == nil)
         #expect(JournalFollowUp.phrase(in: "!!!!!!", language: .en) == "!!!!!!")
-    }
-
-    @Test func theTemplateIsTheStandRowFilledWithThePhrase() throws {
-        let en = try #require(JournalFollowUp.template(
-            answer: "I walked home in the rain and it felt good, mostly.", language: .en))
-        #expect(en.promptID == "follow.stand")
-        #expect(en.kind == .followUp)
-        #expect(en.text == "You said \"I walked home in the rain and it felt\". What stands out to you about that?")
-        let zh = try #require(JournalFollowUp.template(answer: "很累。但是还好", language: .zhHans))
-        #expect(zh.text == "你说到「很累」。关于这一点，你最在意的是什么？")
     }
 
     /// Quoting something the user didn't write would be worse than not quoting.
@@ -52,7 +42,7 @@ struct JournalFollowUpTests {
                 #expect(!phrase.isEmpty)
                 #expect(answer.contains(phrase), "\(phrase) / \(answer)")
                 #expect(phrase.count <= JournalFollowUp.phraseLimit(language))
-                #expect(JournalFollowUp.template(answer: answer, language: language) != nil)
+                #expect(JournalPool.render(id: "follow.stand", language: language, fills: [.phrase: phrase]) != nil)
             }
         }
     }

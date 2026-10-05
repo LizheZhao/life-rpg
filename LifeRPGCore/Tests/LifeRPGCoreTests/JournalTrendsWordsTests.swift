@@ -55,7 +55,9 @@ struct JournalTrendsWordsTests {
     @Test func onlyTheUsersAnswersAreReadNotTheQuestionOrTheStarter() throws {
         let asked = JournalFixtures.turn(.good, "Yes, kayaking", index: 0, on: "2026-09-01")
         asked.questionText = "Did you enjoy kayaking kayaking kayaking kayaking?"
-        let free = JournalFixtures.freeWriting("Grateful for sunshine, sunshine and soup", index: 1, on: "2026-09-01")
+        // "keep" and "thinking" are content words: only stripping the starter keeps them off the list.
+        let free = JournalFixtures.freeWriting("I keep thinking about sunshine\nI keep thinking about sunshine and soup",
+                                               index: 1, on: "2026-09-01")
         let days = JournalHistory.days(from: [asked, free], language: .en)
         let result = Words.distinctive(period: days, others: [], language: .en, limit: 5)
         #expect(pairs(result) == ["sunshine 2"])
@@ -99,19 +101,6 @@ struct JournalTrendsWordsTests {
             ("2026-08-01", "看书看书看书看书看书看书"),
         ], language: .zhHans)
         #expect(result.first?.word.contains("散步") == true)
-    }
-
-    @Test func theFallbackTokenizerSplitsLetterRunsAndKeepsApostrophesAndHyphens() {
-        let tokens = Words.fallbackTokens(in: "don't stop, well-known light version")
-        #expect(tokens.map(\.text) == ["don't", "stop", "well-known", "light", "version"])
-        #expect(tokens.map(\.joinsPrevious) == [false, true, false, true, true])
-    }
-
-    @Test func theFallbackCutsChineseRunsIntoOverlappingPairsAndNeverJoinsThem() {
-        let tokens = Words.fallbackTokens(in: "跑步训练 walk小猫")
-        #expect(tokens.map(\.text) == ["跑步", "步训", "训练", "walk", "小猫"])
-        #expect(tokens.map(\.joinsPrevious) == [false, false, false, false, false])
-        #expect(Words.fallbackTokens(in: "猫").map(\.text) == ["猫"])
     }
 
     @Test func theSystemTokenizerStraightensCurlyApostrophesAndMarksPhraseJoins() {

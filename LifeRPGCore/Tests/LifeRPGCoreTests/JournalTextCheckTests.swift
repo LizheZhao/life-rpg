@@ -93,9 +93,12 @@ struct JournalTextCheckTests {
 
     @Test func aRenderedFollowUpPasses() throws {
         for language in JournalLanguage.allCases {
-            let question = try #require(JournalFollowUp.template(
-                answer: "I walked home in the rain and it felt good, mostly.", language: language))
-            #expect(found(question.text, language) == [], "\(question.text)")
+            let phrase = try #require(JournalFollowUp.phrase(
+                in: "I walked home in the rain and it felt good, mostly.", language: language))
+            for row in JournalPool.prompts(of: .followUp) {
+                let text = try #require(JournalPool.render(id: row.id, language: language, fills: [.phrase: phrase]))
+                #expect(found(text, language) == [], "\(text)")
+            }
         }
     }
 

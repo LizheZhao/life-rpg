@@ -27,8 +27,6 @@ public struct DayMarks: Equatable, Sendable {
 
     /// Random quests shown as dots, 0…`CalendarMarks.maxRandomDots`.
     public var randomsDone: Int { randomTiers.count }
-
-    public var isEmpty: Bool { randomTiers.isEmpty && !routinesCleared && !hiddenDone && journalLevel == 0 }
 }
 
 /// The month page's marks. The rules live only here; the page hands in the rows its `@Query`

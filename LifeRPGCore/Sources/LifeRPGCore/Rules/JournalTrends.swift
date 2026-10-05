@@ -49,14 +49,6 @@ public enum JournalTrends {
                             last: String(format: "%04d-12-31", month.year))
         }
     }
-
-    /// The whole period before the one holding `dayKey`.
-    public static func previous(of period: Period, containing dayKey: String,
-                                in timeZone: TimeZone = .current) -> DayRange? {
-        guard let current = range(of: period, containing: dayKey, in: timeZone),
-              let before = DayKey.adding(-1, to: current.first, in: timeZone) else { return nil }
-        return range(of: period, containing: before, in: timeZone)
-    }
 }
 
 extension JournalTrends {
@@ -105,11 +97,6 @@ extension JournalTrends {
                 let count = words[key] ?? 0
                 return DayWords(dayKey: key, words: count, level: Year.level(forWords: count, among: written))
             }
-        }
-
-        /// The darkest bars: the longest third of the written days, ties included, at least one.
-        public var longestDayKeys: Set<String> {
-            Set(wordsByDay.filter { $0.level == 3 }.map(\.dayKey))
         }
 
         /// Consecutive written days ending today, or ending yesterday while today is still unwritten,

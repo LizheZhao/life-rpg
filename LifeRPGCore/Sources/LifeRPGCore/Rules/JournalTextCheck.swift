@@ -7,11 +7,12 @@ import Foundation
 /// staged rhythms that make generated text recognisable (contrast, dramatic openers and closers,
 /// em dashes), more than one question, a question that opens with "why", a markdown marker, a wall
 /// of text, and a copy of a pool row or of a recent question (`JournalNovelty`). A failure means
-/// the caller falls back to the pool row (`JournalQuestion.text`, `JournalFollowUp.template`),
-/// never to a retry.
+/// the caller falls back to the pool row (`JournalQuestion.text`,
+/// `JournalFollowUpRequest.fallback`), never to a retry.
 ///
-/// The pool itself has to pass, which `JournalTextCheckTests` asserts, so the check can't drift
-/// into rejecting the app's own questions.
+/// The pool itself passes every rule except the one-question rule on three deliberate two-part
+/// rows, which `JournalTextCheckTests` asserts, so the check can't drift into rejecting the app's
+/// own questions.
 public enum JournalTextCheck {
     public enum Violation: String, CaseIterable, Sendable {
         case contrastStaging, stagedOpener, stagedCloser, emDash
@@ -71,21 +72,26 @@ public enum JournalTextCheck {
         for tell in tells where text.range(of: tell.pattern, options: .regularExpression) != nil {
             found.insert(tell.violation)
         }
-        if text.filter({ $0 == "?" || $0 == "？" }).count > 1 { found.insert(.manyQuestions) }
+        if text.filter(isQuestionMark).count > 1 { found.insert(.manyQuestions) }
         if text.count > maxLength(language) { found.insert(.tooLong) }
         return Violation.allCases.filter(found.contains)
+    }
+
+    private static func isQuestionMark(_ character: Character) -> Bool {
+        character == "?" || character == "？"
     }
 
     /// Whether the model's follow-up may be shown: a reflection and one question, both clean as a
     /// whole, the question actually a question, the reflection built from the user's own words
     /// (a verbatim run of at least two words, or three characters in Chinese) rather than a
-    /// paraphrase, not a repeat of most of the answer (`parrotsAnswer`), and the whole not a copy of anything in `avoiding` (`JournalNovelty`): the
-    /// follow-up examples it was shown and the follow-ups asked lately.
+    /// paraphrase, not a repeat of most of the answer (`parrotsAnswer`), and the whole not a copy
+    /// of anything in `avoiding` (`JournalNovelty`): the follow-up examples it was shown and the
+    /// follow-ups asked lately.
     public static func accept(reflection: String, question: String, answer: String,
                               language: JournalLanguage, avoiding: [String] = []) -> Bool {
         let whole = reflection + " " + question
         return violations(of: whole, language: language).isEmpty
-            && question.contains(where: { $0 == "?" || $0 == "？" })
+            && question.contains(where: isQuestionMark)
             && reusesWords(reflection, from: answer, language: language)
             && !parrotsAnswer(reflection, answer: answer, language: language)
             && JournalNovelty.isFresh(whole, avoiding: avoiding, language: language)
@@ -94,10 +100,12 @@ public enum JournalTextCheck {
     /// Whether the model's wording of a question may be shown: clean, exactly one question mark, no
     /// placeholder left unfilled, and below `JournalNovelty.threshold` against everything in
     /// `avoiding`, which is the pool examples it was shown plus what was asked lately. A model
-    /// that echoes an example or yesterday's question is rejected the same as one that breaks a voice rule.
+    /// that echoes an example or yesterday's question is rejected the same as one that breaks a
+    /// voice rule.
     public static func acceptQuestion(_ text: String, language: JournalLanguage, avoiding: [String]) -> Bool {
+        // A clean text has at most one mark, so one is there exactly when any is.
         violations(of: text, language: language).isEmpty
-            && text.filter({ $0 == "?" || $0 == "？" }).count == 1
+            && text.contains(where: isQuestionMark)
             && text.range(of: #"\{[^{}]*\}"#, options: .regularExpression) == nil
             && JournalNovelty.isFresh(text, avoiding: avoiding, language: language)
     }

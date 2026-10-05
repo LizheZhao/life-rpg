@@ -3,14 +3,11 @@ import Foundation
 /// A short phrase for the free-writing page to start a sentence with, which the user finishes.
 public struct JournalStarter: Equatable, Sendable {
     public let id: String
-    /// The question kind it stands closest to; the habit weight of that kind ranks it.
-    public let kind: JournalPromptKind
     /// The phrase in the language it was picked for.
     public let text: String
 
-    public init(id: String, kind: JournalPromptKind, text: String) {
+    public init(id: String, text: String) {
         self.id = id
-        self.kind = kind
         self.text = text
     }
 
@@ -28,17 +25,18 @@ public struct JournalStarter: Equatable, Sendable {
 ///
 /// "Grateful for" is always first: the Trends page counts what follows it. The rest are picked by
 /// the day, ranked as the planner ranks the kinds it asks about (base score times the habit weight
-/// of the kind), and two fillers that fit any day come last. A tie goes to the starter used least
-/// recently, which is read from the turns (`JournalHabits.starterLastUsedDay`) so the same phrase
-/// does not come every night, and then to table order; the fillers take turns by the day's hash,
-/// as the planner's pool rows do.
+/// of the kind), alongside two fillers that fit any day. A filler's base score is 1, the lowest, so
+/// it comes after the day's starters unless the habit weights pull one of those under it. A tie
+/// goes to the starter used least recently, which is read from the turns
+/// (`JournalHabits.starterLastUsedDay`) so the same phrase does not come every night, and then to
+/// table order; the fillers take turns by the day's hash, as the planner's pool rows do.
 public enum JournalStarters {
     struct Row {
         let id: String
         let kind: JournalPromptKind
         let en: String
         let zh: String
-        /// Nil when the day does not call for it. No score is the pinned first row or a filler.
+        /// Nil when the day does not call for it. No score at all is the pinned first row.
         let score: ((JournalSignals) -> Double?)?
         var isFiller = false
 
@@ -92,7 +90,7 @@ public enum JournalStarters {
         .sorted { ($1.rank, $0.lastUsed, $0.tie) < ($0.rank, $1.lastUsed, $1.tie) }
 
         return ([grateful] + ranked.map(\.row)).prefix(limit).map {
-            JournalStarter(id: $0.id, kind: $0.kind, text: $0.text(in: language))
+            JournalStarter(id: $0.id, text: $0.text(in: language))
         }
     }
 

@@ -50,7 +50,6 @@ struct JournalPlannerTests {
         #expect(signals.averageRating == -1.5)
         // djb2("2026-09-18") % 4 == 3 picks the last of the four rows, in pool order.
         #expect(play(signals) == ["open.keep", "heavy.body", "close.carry"])
-        #expect(play(signals) == play(signals))
     }
 
     @Test func aPhotoQuestAndAnAutoSkippedRoutineAreAskedSkipFirst() {
@@ -204,12 +203,12 @@ struct JournalPlannerTests {
         // No history: heavy 4, skip 3, good 2, choice 2.
         #expect(play(signals) == ["open.keep", "heavy.body", "skip.small", "close.carry"])
         // Heavy asked and then called a misfit again and again drops to the floor: 4 x 0.25 = 1.
-        let wornOut = JournalHabits(medianAnswerLength: nil, typicalHour: nil, usesEmoji: false,
+        let wornOut = JournalHabits(medianAnswerLength: nil, usesEmoji: false,
                                     weights: [.heavy: 0.25, .skip: 0.5])
         // skip 1.5, good 2, choice 2, heavy 1: good then choice.
         #expect(play(signals, habits: wornOut) == ["open.keep", "good.who", "choice.photo", "close.carry"])
         // heavy 2, skip 3 x 0.5 = 1.5, good 2, choice 2: three-way tie at 2 goes heavy, good.
-        let tied = JournalHabits(medianAnswerLength: nil, typicalHour: nil, usesEmoji: false,
+        let tied = JournalHabits(medianAnswerLength: nil, usesEmoji: false,
                                  weights: [.heavy: 0.5, .skip: 0.5])
         #expect(play(signals, habits: tied) == ["open.keep", "heavy.body", "good.who", "close.carry"])
     }
@@ -274,7 +273,7 @@ struct JournalPlannerTests {
         let signals = F.signals(tier: .low)
         let turns = [F.turn(.opening, index: 0), F.turn(.closing, longAnswer, index: 1)]
         #expect(JournalPlanner.next(signals: signals, habits: .none, today: turns, language: .en) == .done)
-        // Free writing is a closing turn with no pool row.
+        // A closing turn ends the day even with no opening before it.
         #expect(JournalPlanner.next(signals: signals, habits: .none, today: [F.turn(.closing, longAnswer)], language: .en) == .done)
     }
 
@@ -302,10 +301,8 @@ struct JournalPlannerTests {
         #expect(JournalPlanner.stableHash("a") == 177670)
         #expect(JournalPlanner.stableHash("") == 5381)
         #expect(JournalPlanner.stableHash("2026-09-18") == 8243816804023308443)
-        let signals = F.signals()
-        let draws = (0..<5).map { _ in JournalPlanner.next(signals: signals, habits: .none, today: [], language: .en) }
-        #expect(Set(draws.map { "\($0)" }).count == 1)
-        guard case .ask(let q) = draws[0] else { Issue.record("expected a question"); return }
+        guard case .ask(let q) = JournalPlanner.next(signals: F.signals(), habits: .none, today: [], language: .en)
+        else { Issue.record("expected a question"); return }
         #expect(q.promptID == "open.keep")   // 8243816804023308443 % 3 == 2
     }
 

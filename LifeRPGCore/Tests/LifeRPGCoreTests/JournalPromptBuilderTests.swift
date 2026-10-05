@@ -32,7 +32,7 @@ struct JournalPromptBuilderTests {
 
     private func request(question: String, answer: String, language: JournalLanguage = .en,
                          subject: JournalSubject? = nil) -> JournalFollowUpRequest {
-        let fallback = JournalFollowUp.template(answer: answer, language: language)!
+        let fallback = JournalQuestion(promptID: "follow.stand", kind: .followUp, text: "fallback")
         return JournalFollowUpRequest(question: question, answer: answer, subject: subject,
                                       language: language, fallback: fallback)
     }
@@ -41,7 +41,7 @@ struct JournalPromptBuilderTests {
         let walk = F.quest("Walk"), read = F.quest("Read")
         let signals = F.signals(tier: .low, quests: [walk, read],
                                 ratings: [F.rating(of: walk.id, -2), F.rating(of: read.id, -1)])
-        let habits = JournalHabits(medianAnswerLength: 10, typicalHour: nil, usesEmoji: false, weights: [:])
+        let habits = JournalHabits(medianAnswerLength: 10, usesEmoji: false, weights: [:])
         let prompt = JournalPromptBuilder.followUpPrompt(
             request(question: "Where did the day weigh on you most?", answer: "Mostly my shoulders, all afternoon.",
                     subject: JournalSubject(kind: .quest, id: walk.id, text: "Walk")),
@@ -112,7 +112,7 @@ struct JournalPromptBuilderTests {
                              avoid: avoid)
     }
 
-    private let shortWriter = JournalHabits(medianAnswerLength: 10, typicalHour: nil, usesEmoji: false, weights: [:])
+    private let shortWriter = JournalHabits(medianAnswerLength: 10, usesEmoji: false, weights: [:])
 
     @Test func theQuestionPromptStatesTheIntentTheFactsTheAnchorsAndWhatToAvoid() {
         let walk = F.quest("Walk"), read = F.quest("Read")
@@ -222,13 +222,13 @@ struct JournalPromptBuilderTests {
     }
 
     @Test func aQuestionWithoutABriefHasNoPrompt() {
-        let template = JournalFollowUp.template(answer: "I walked home in the rain", language: .en)!
+        let template = JournalQuestion(promptID: "follow.stand", kind: .followUp, text: "fallback")
         #expect(JournalPromptBuilder.questionPrompt(template, signals: F.signals(), habits: .none) == nil)
     }
 
     @Test func aFollowUpPromptListsItsExamplesAndRecentQuestionsWhenItHasThem() {
         let answer = "Mostly my shoulders, all afternoon."
-        let fallback = JournalFollowUp.template(answer: answer, language: .en)!
+        let fallback = JournalQuestion(promptID: "follow.stand", kind: .followUp, text: "fallback")
         let request = JournalFollowUpRequest(question: "Q", answer: answer, subject: nil, language: .en, fallback: fallback,
                                              examples: [JournalExample(id: "follow.more", text: "Say more about \"Mostly my shoulders\".")],
                                              avoid: ["You said \"tired\". What stands out to you about that?"])

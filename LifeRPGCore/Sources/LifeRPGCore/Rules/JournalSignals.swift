@@ -26,8 +26,6 @@ public struct JournalSignals: Equatable, Sendable {
     /// Routines to ask about without blame, most recently due first: still open in round day 2 or
     /// 3, or closed by the settlement that opened this day. Never one that is still open today.
     public let skipped: [JournalSubject]
-    /// The day's notes, oldest first.
-    public let comments: [String]
 
     public var completedCount: Int { completed.count }
 
@@ -77,7 +75,6 @@ public struct JournalSignals: Equatable, Sendable {
                 occurrences: [RoutineOccurrence],
                 context: DailyContext?,
                 ratings: [QuestRating],
-                comments: [QuestComment],
                 ledger: [LedgerEntry] = [],
                 flexible: Set<UUID> = [],
                 timeZone: TimeZone = .current) {
@@ -118,8 +115,5 @@ public struct JournalSignals: Equatable, Sendable {
         self.skipped = given
             .sorted { $0.dueDayKey == $1.dueDayKey ? $0.textSnapshot < $1.textSnapshot : $0.dueDayKey > $1.dueDayKey }
             .map { JournalSubject(kind: .routine, id: $0.id, text: $0.displayText) }
-
-        self.comments = comments.filter { $0.dayKey == dayKey }
-            .sorted { $0.timestamp < $1.timestamp }.map(\.comment)
     }
 }

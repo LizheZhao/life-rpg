@@ -188,23 +188,6 @@ struct SettingsView: View {
         .contentShape(Rectangle())
     }
 
-    private func row<Trailing: View>(_ title: LocalizedStringKey, systemImage: String, tint: QuestTint,
-                                     @ViewBuilder trailing: () -> Trailing) -> some View {
-        HStack(spacing: 12) {
-            Image(systemName: systemImage)
-                .font(.system(size: 15, weight: .medium))
-                .foregroundStyle(LR.Color.iconNeutral)
-                .frame(width: 32, height: 32)
-                .background(Circle().fill(LR.Color.sectionCircle(tint)))
-                .accessibilityHidden(true)
-            Text(title)
-                .lr(.bodyStrong)
-                .foregroundStyle(LR.Color.ink)
-            trailing()
-        }
-        .frame(minHeight: 44)
-    }
-
     private func header(_ title: LocalizedStringKey) -> some View {
         Text(title)
             .lr(.heading)

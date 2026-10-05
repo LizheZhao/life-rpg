@@ -102,6 +102,6 @@ struct JournalEditConsequencesTests {
         try JournalService.edit(turns[0], answer: "new words")
         #expect(JournalComposer.text(turns: turns, language: .en)
                 == "Journal 2026-09-18\n\nquestion\nnew words\n\nquestion\nbye")
-        #expect(JournalHistory.days(from: turns, language: .en).first?.preview == "new words")
+        #expect(JournalHistory.days(from: turns, language: .en).first?.excerpt(limit: 100) == "new words bye")
     }
 }

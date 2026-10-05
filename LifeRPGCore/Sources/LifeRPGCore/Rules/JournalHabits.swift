@@ -21,9 +21,6 @@ public struct JournalHabits: Equatable, Sendable {
 
     /// Median length, in characters, of the answers that say something. Nil with none.
     public let medianAnswerLength: Int?
-    /// The usual hour (0-23) the user responds, counted from the day boundary so a night owl's
-    /// 23:00 and 01:00 average to midnight. Nil with fewer than `minimumTurnsForHour` turns.
-    public let typicalHour: Int?
     public let usesEmoji: Bool
     /// Smoothed answered-rate per kind that has history; `weight(for:)` fills in the rest.
     public let weights: [JournalPromptKind: Double]
@@ -38,12 +35,11 @@ public struct JournalHabits: Equatable, Sendable {
     /// that begins with its text. Starters are not turns, so use is read from the writing.
     public let starterLastUsedDay: [String: String]
 
-    public init(medianAnswerLength: Int?, typicalHour: Int?, usesEmoji: Bool,
+    public init(medianAnswerLength: Int?, usesEmoji: Bool,
                 weights: [JournalPromptKind: Double],
                 lastUsedDay: [String: String] = [:], recentQuestionTexts: [String] = [],
                 starterLastUsedDay: [String: String] = [:]) {
         self.medianAnswerLength = medianAnswerLength
-        self.typicalHour = typicalHour
         self.usesEmoji = usesEmoji
         self.weights = weights
         self.lastUsedDay = lastUsedDay
@@ -51,7 +47,7 @@ public struct JournalHabits: Equatable, Sendable {
         self.starterLastUsedDay = starterLastUsedDay
     }
 
-    public static let none = JournalHabits(medianAnswerLength: nil, typicalHour: nil, usesEmoji: false, weights: [:])
+    public static let none = JournalHabits(medianAnswerLength: nil, usesEmoji: false, weights: [:])
 
     /// 1.0 for a kind with no history: ranking is by base score alone until there is something to learn.
     public func weight(for kind: JournalPromptKind) -> Double { weights[kind] ?? 1.0 }
@@ -68,8 +64,6 @@ public struct JournalHabits: Equatable, Sendable {
             .filter { $0 > 0 }
             .sorted()
         let median = lengths.isEmpty ? nil : (lengths[(lengths.count - 1) / 2] + lengths[lengths.count / 2]) / 2
-
-        let hour = typicalHour(of: history.map(\.answeredAt), in: timeZone)
 
         var weights: [JournalPromptKind: Double] = [:]
         for (kind, rows) in Dictionary(grouping: history, by: \.kind) {
@@ -99,14 +93,14 @@ public struct JournalHabits: Equatable, Sendable {
             }
         }
 
-        return JournalHabits(medianAnswerLength: median, typicalHour: hour,
+        return JournalHabits(medianAnswerLength: median,
                              usesEmoji: history.contains { $0.answer.contains(where: Self.isEmoji) },
                              weights: weights, lastUsedDay: lastUsed, recentQuestionTexts: recent,
                              starterLastUsedDay: starters)
     }
 
-    /// The median hour (0-23) of `times`, counted from the day boundary, or nil with fewer than
-    /// `minimumTurnsForHour`. The Trends page's "usual hour" reads the same rule over days.
+    /// The median hour (0-23) of `times`, counted from the day boundary so a night owl's 23:00 and
+    /// 01:00 average to midnight, or nil with fewer than `minimumTurnsForHour`. The Trends page's "usual hour" reads the same rule over days.
     static func typicalHour(of times: [Date], in timeZone: TimeZone) -> Int? {
         guard times.count >= minimumTurnsForHour else { return nil }
         let calendar = LifeCalendar.gregorian(timeZone)

@@ -54,7 +54,7 @@ enum TrendsSeed {
         for back in 1...count {
             guard let dayKey = DayKey.adding(-back, to: today) else { continue }
             // One generator per day, so a second press rewrites the same text whatever it skips.
-            var rng = SeededGenerator(seed: UInt64(back) &* 7919)
+            var rng = SeededRNG(seed: UInt64(back) &* 7919)
             let isRecent = back <= 30
             let lowDay = back % 5 == 0 || back % 11 == 0
 
@@ -95,13 +95,15 @@ enum TrendsSeed {
             if !questDays.contains(dayKey) {
                 let randoms = lowDay ? Int.random(in: 1...2, using: &rng) : Int.random(in: 2...4, using: &rng)
                 for index in 0..<randoms {
-                    let (id, text) = [(liftID, "Workout: weight training"), (groomID, "Cat grooming"),
-                                      (UUID(), "Read 20 pages")][index % 3]
+                    // "Read 20 pages" has no template, like a quest typed in by hand.
+                    let picks: [(UUID?, String)] = [(liftID, "Workout: weight training"), (groomID, "Cat grooming"),
+                                                    (nil, "Read 20 pages")]
+                    let (id, text) = picks[index % 3]
                     let quest = DailyQuest()
                     quest.dayKey = dayKey
                     quest.weekKey = DayKey.weekKey(of: dayKey) ?? ""
                     quest.slotRaw = Difficulty.easy.rawValue
-                    quest.templateID = text == "Read 20 pages" ? nil : id
+                    quest.templateID = id
                     quest.textSnapshot = text
                     quest.points = 10
                     quest.completedAt = noon
@@ -145,21 +147,6 @@ enum TrendsSeed {
         }
         try context.save()
         return result
-    }
-}
-
-/// SplitMix64: the same fixture on every run.
-private struct SeededGenerator: RandomNumberGenerator {
-    var state: UInt64
-
-    init(seed: UInt64) { state = seed }
-
-    mutating func next() -> UInt64 {
-        state &+= 0x9E37_79B9_7F4A_7C15
-        var z = state
-        z = (z ^ (z >> 30)) &* 0xBF58_476D_1CE4_E5B9
-        z = (z ^ (z >> 27)) &* 0x94D0_49BB_1331_11EB
-        return z ^ (z >> 31)
     }
 }
 #endif

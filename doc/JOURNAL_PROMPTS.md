@@ -34,7 +34,7 @@ Language follows the system language (`zh-Hans` → Chinese, anything else → E
 | heavy.friend | If a friend had a day like this, what would you say to them? | 如果朋友过了这样的一天，你会对他说什么？ |
 | heavy.body | Your body had less to give today. What did it ask for? | 今天身体能给的比平时少。它想要什么？ |
 
-## Good day — high rating or an easy completion
+## Good day — something done today rated 1 or higher
 
 | id | en | zh-Hans |
 |---|---|---|
@@ -58,7 +58,7 @@ Language follows the system language (`zh-Hans` → Chinese, anything else → E
 | skip.exception | Was there a recent time this went more easily? What was different then? | 最近有没有哪次做这件事比较顺？那次有什么不一样？ |
 | skip.small | What would make it 10% easier tomorrow? | 怎样能让它明天容易一成？ |
 
-## Follow-ups — after the user answers (model fills `{phrase}`)
+## Follow-ups — after the user answers (Core fills `{phrase}` with a quote of the answer)
 
 | id | en | zh-Hans |
 |---|---|---|

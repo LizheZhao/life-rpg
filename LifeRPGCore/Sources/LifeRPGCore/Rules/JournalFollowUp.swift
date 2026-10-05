@@ -1,8 +1,8 @@
 import Foundation
 
-/// The follow-up that needs no model: a pool row with a short quote of the user's own answer.
-/// This is what the app shows when the model is unavailable or its wording fails
-/// `JournalTextCheck.accept`.
+/// The follow-up that needs no model: a pool row with a short quote of the user's own answer. The
+/// planner fills the follow-up rows with `phrase(in:)`, and the first of them is what the app shows
+/// when the model is unavailable or its wording fails `JournalTextCheck.accept`.
 public enum JournalFollowUp {
     /// The quote is cut to this many characters. A quote is a handle on what they said, not a
     /// transcript, and a Chinese character carries about three English ones.
@@ -11,15 +11,6 @@ public enum JournalFollowUp {
     }
 
     private static let clauseEnds: Set<Character> = [".", "!", "?", ",", ";", ":", "\n", "。", "！", "？", "，", "；", "：", "、", "…"]
-
-    /// `follow.stand` filled with `phrase(in: answer)`; nil only when the answer is blank.
-    public static func template(answer: String, language: JournalLanguage,
-                                promptID: String = "follow.stand") -> JournalQuestion? {
-        guard let phrase = phrase(in: answer, language: language),
-              let text = JournalPool.render(id: promptID, language: language, fills: [.phrase: phrase])
-        else { return nil }
-        return JournalQuestion(promptID: promptID, kind: .followUp, text: text)
-    }
 
     /// The answer's first clause, cut at the language's limit on a word boundary (English) or at
     /// the limit (Chinese). Always a contiguous piece of the answer, never reworded, so quoting it

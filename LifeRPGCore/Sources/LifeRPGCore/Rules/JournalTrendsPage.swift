@@ -27,7 +27,6 @@ public struct TrendsPage: Equatable, Sendable {
     }
 
     public struct Unlocked: Equatable, Sendable {
-        public let entries: Int
         public let totalWords: Int
         /// All-time, as of today: a period filter would get it wrong.
         public let streak: Int
@@ -93,7 +92,6 @@ public struct TrendsPage: Equatable, Sendable {
     public struct Energy: Equatable, Sendable {
         public struct Bar: Equatable, Sendable {
             public let dayKey: String
-            public let done: Int
             /// 0 to 1 against the busiest day shown.
             public let fraction: Double
             public let isLow: Bool
@@ -184,7 +182,7 @@ extension TrendsPage {
             guard energyDays.contains(where: \.isLow) else { return nil }
             let busiest = max(1, energyDays.map(\.done).max() ?? 1)
             return Energy(bars: energyDays.map {
-                              Energy.Bar(dayKey: $0.dayKey, done: $0.done, fraction: Double($0.done) / Double(busiest),
+                              Energy.Bar(dayKey: $0.dayKey, fraction: Double($0.done) / Double(busiest),
                                          isLow: $0.isLow)
                           },
                           lowDayPercent: JournalTrends.Energy.lowDayRatio(energyDays))
@@ -192,12 +190,11 @@ extension TrendsPage {
 
         let year = MonthKey(dayKey: range.first)?.year ?? 0
         let counts = JournalTrends.Year.monthCounts(of: days, year: year)
-        let circles = counts.isEmpty || counts.allSatisfy({ $0 == 0 }) ? [] : counts.enumerated().map { index, count in
+        let circles = counts.allSatisfy({ $0 == 0 }) ? [] : counts.enumerated().map { index, count in
             MonthCircle(label: formatter.monthName(index), entries: count, level: JournalTrends.Year.level(for: count))
         }
 
         let unlocked = Unlocked(
-            entries: entries,
             totalWords: writing.totalWords,
             streak: writing.writingStreak(asOf: today),
             usualHour: writing.usualHour.map(formatter.hour),

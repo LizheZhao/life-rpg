@@ -10,7 +10,7 @@ struct JournalStartersTests {
     }
 
     private func habits(weights: [JournalPromptKind: Double] = [:], used: [String: String] = [:]) -> JournalHabits {
-        JournalHabits(medianAnswerLength: nil, typicalHour: nil, usesEmoji: false, weights: weights,
+        JournalHabits(medianAnswerLength: nil, usesEmoji: false, weights: weights,
                       starterLastUsedDay: used)
     }
 
@@ -23,15 +23,11 @@ struct JournalStartersTests {
         }
     }
 
-    @Test func noStarterOpensWithWhyAndIdsAreUnique() {
-        for row in JournalStarters.table {
-            #expect(!row.en.lowercased().hasPrefix("why"), "\(row.id)")
-            #expect(!row.zh.hasPrefix("为什么"), "\(row.id)")
-        }
+    @Test func starterIdsAreUnique() {
         #expect(Set(JournalStarters.table.map(\.id)).count == JournalStarters.table.count)
     }
 
-    @Test func noStarterIsAQuestionOrEndsInPunctuationItNeedsToContinueFrom() {
+    @Test func noStarterIsAQuestion() {
         for row in JournalStarters.table {
             #expect(!row.en.contains("?") && !row.zh.contains("？"), "\(row.id)")
         }
@@ -152,7 +148,6 @@ struct JournalStartersTests {
         }
         let seen = Set((10...19).map { first("2026-09-\($0)") })
         #expect(seen == ["I keep thinking about", "Tomorrow I want to"])
-        #expect(first("2026-09-18") == first("2026-09-18"))
     }
 
     @Test func aFactBasedStarterBeatsAFillerEvenIfItWasUsedYesterday() {
@@ -189,10 +184,19 @@ struct JournalStartersTests {
         #expect(derived.starterLastUsedDay.isEmpty)
     }
 
+    // MARK: reading the writing without the starter
+
+    @Test func theStarterAParagraphBeginsWithIsStrippedInEitherLanguage() {
+        #expect(JournalStarters.strippingStarter(from: "Favorite moment was the soup") == " the soup")
+        #expect(JournalStarters.strippingStarter(from: "今天感恩的是雨") == "雨")
+        #expect(JournalStarters.strippingStarter(from: "The soup was my favorite moment")
+                == "The soup was my favorite moment")
+    }
+
     // MARK: inserting
 
     private func starter(_ text: String = "Grateful for") -> JournalStarter {
-        JournalStarter(id: "starter.grateful", kind: .good, text: text)
+        JournalStarter(id: "starter.grateful", text: text)
     }
 
     @Test func insertOntoAnEmptyPageIsThePhraseAndASpace() {

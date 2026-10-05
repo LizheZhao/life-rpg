@@ -36,14 +36,6 @@ struct JournalTrendsWritingTests {
         let w = writing([("2026-09-14", 10), ("2026-09-15", 20), ("2026-09-16", 30),
                          ("2026-09-17", 40), ("2026-09-18", 50), ("2026-09-19", 60)], in: week)
         #expect(w.wordsByDay.map(\.level) == [1, 1, 2, 2, 3, 3, 0])
-        #expect(w.longestDayKeys == ["2026-09-18", "2026-09-19"])
-    }
-
-    @Test func theLongestSetHasAtLeastOneDayAndKeepsTies() {
-        #expect(writing([("2026-09-14", 10)], in: week).longestDayKeys == ["2026-09-14"])
-        #expect(writing([("2026-09-14", 10), ("2026-09-15", 10), ("2026-09-16", 10)], in: week).longestDayKeys
-                == ["2026-09-14", "2026-09-15", "2026-09-16"])
-        #expect(writing([], in: week).longestDayKeys.isEmpty)
     }
 
     @Test func theStreakCountsConsecutiveWrittenDaysEndingToday() {

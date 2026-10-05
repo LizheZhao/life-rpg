@@ -42,18 +42,17 @@ public enum JournalConversation {
                                signals: JournalSignals,
                                habits: JournalHabits,
                                wording: (any JournalWording)?,
-                               language: JournalLanguage,
                                timeout: Duration = defaultTimeout) async -> JournalPresented {
         let fallback = JournalPresented(text: question.text, source: .template, promptID: question.promptID)
         guard let wording, let brief = question.brief,
               let prompt = JournalPromptBuilder.questionPrompt(question, signals: signals, habits: habits)
         else { return fallback }
 
-        let instructions = JournalPromptBuilder.questionInstructions(language: language)
+        let instructions = JournalPromptBuilder.questionInstructions(language: brief.language)
         guard let raw = await raced(timeout, { await wording.word(instructions: instructions, prompt: prompt) })
         else { return fallback }
         let text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard JournalTextCheck.acceptQuestion(text, language: language, avoiding: brief.avoiding)
+        guard JournalTextCheck.acceptQuestion(text, language: brief.language, avoiding: brief.avoiding)
         else { return fallback }
         return JournalPresented(text: text, source: .model, promptID: question.promptID)
     }
@@ -102,7 +101,6 @@ public enum JournalConversation {
         private let lock = NSLock()
         private var continuation: CheckedContinuation<T?, Never>?
         private var tasks: [Task<Void, Never>] = []
-        private var finished = false
 
         init(_ continuation: CheckedContinuation<T?, Never>) {
             self.continuation = continuation
@@ -111,7 +109,7 @@ public enum JournalConversation {
         /// Tasks start before they can be attached, so one may already have finished the race.
         func attach(_ tasks: [Task<Void, Never>]) {
             lock.lock()
-            let done = finished
+            let done = continuation == nil
             if !done { self.tasks = tasks }
             lock.unlock()
             if done { tasks.forEach { $0.cancel() } }
@@ -121,7 +119,6 @@ public enum JournalConversation {
             lock.lock()
             let pending = continuation
             continuation = nil
-            finished = true
             let running = tasks
             lock.unlock()
             guard let pending else { return }

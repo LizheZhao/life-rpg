@@ -25,8 +25,6 @@ struct LibraryView: View {
     @AppStorage("library.openRoutineGroups") private var openGroups =
         RoutineSchedulePresentation.Group.allCases.map(\.rawValue).joined(separator: ",")
 
-    private var latest: [UUID: QuestRating] { Feedback.latestRatings(ratings) }
-
     private func matches(_ text: String) -> Bool {
         search.isEmpty || text.localizedCaseInsensitiveContains(search)
     }
@@ -65,7 +63,7 @@ struct LibraryView: View {
     }
 
     var body: some View {
-        let latest = latest
+        let latest = Feedback.latestRatings(ratings)
         ScrollView {
             VStack(alignment: .leading, spacing: LR.Spacing.sectionGap) {
                 PillSegmentedControl(options: [("Quests", FeedbackTarget.quest), ("Routines", FeedbackTarget.routine)],

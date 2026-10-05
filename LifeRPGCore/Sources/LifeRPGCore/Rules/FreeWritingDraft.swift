@@ -3,7 +3,7 @@ import Foundation
 /// What the free-writing page holds between keystrokes: the words, the active writing time
 /// (`JournalWritingClock`) and what the store already has. Pure, so the page can keep it in
 /// memory and touch the store only when `hasUnsavedChanges` says there is something to write.
-public struct FreeWritingDraft: Equatable, Sendable {
+public struct FreeWritingDraft: Sendable {
     public private(set) var text: String
     public private(set) var writingSeconds: Int
     /// The last keystroke of this session. Nil at the start, so the hours between two sessions are
@@ -43,11 +43,5 @@ public struct FreeWritingDraft: Equatable, Sendable {
     public mutating func markSaved() {
         savedText = text
         savedSeconds = writingSeconds
-    }
-
-    /// The store holds `text` and `writingSeconds` (written by another screen); the draft starts over
-    /// from them. The session's clock is not carried over.
-    public mutating func reset(text: String, writingSeconds: Int) {
-        self = FreeWritingDraft(text: text, writingSeconds: writingSeconds)
     }
 }

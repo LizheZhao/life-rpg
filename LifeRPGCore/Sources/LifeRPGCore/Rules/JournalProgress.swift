@@ -1,21 +1,8 @@
 import Foundation
 
-/// Where a day's journal stands, for the one line on the Today page. Read from the day's turns
-/// alone, like the planner, so it can not disagree with what the journal would ask next.
-public enum JournalProgress: Equatable, Sendable {
-    case notStarted
-    /// `answered` counts the turns that will appear in the composed text.
-    case inProgress(answered: Int)
-    case done(answered: Int)
-
-    public static func of(_ allTurns: [JournalTurn]) -> JournalProgress {
-        // A cleared free-writing page is not a day that was started.
-        let turns = allTurns.filter { !$0.isBlankFreeWriting }
-        guard !turns.isEmpty else { return .notStarted }
-        let answered = JournalComposer.written(turns).count
-        return isClosed(turns) ? .done(answered: answered) : .inProgress(answered: answered)
-    }
-
+/// When a day's journal is closed, read from the day's turns alone: the rule the planner follows
+/// when it decides to ask nothing more.
+public enum JournalProgress {
     /// The closing turn, whether it answers the closing question or is free writing, ends the day.
     /// A free-writing turn that is blank (the page was cleared) has not closed anything.
     public static func isClosed(_ turns: [JournalTurn]) -> Bool {

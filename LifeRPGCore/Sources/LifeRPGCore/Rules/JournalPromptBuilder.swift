@@ -1,7 +1,7 @@
 import Foundation
 
 /// The text handed to the on-device model, written here so the rules it is held to exist in one
-/// place and are the same ones `JournalTextCheck` enforces afterwards.
+/// place. `JournalTextCheck` afterwards enforces only the ones a pattern can catch.
 public enum JournalPromptBuilder {
     /// One hand-written rule, in both languages. `JournalPromptBuilderTests` pins the wording of
     /// each, because a softened rule is the failure nobody notices until the voice drifts.

@@ -109,7 +109,8 @@ public struct JournalFollowUpRequest: Equatable, Sendable {
     public let answer: String
     public let subject: JournalSubject?
     public let language: JournalLanguage
-    /// The template follow-up built from the same answer: always valid.
+    /// The first of `examples` as a question: a follow-up row filled with a quote of the answer,
+    /// always valid.
     public let fallback: JournalQuestion
     /// The follow-up rows, least recently used first, as tone anchors.
     public let examples: [JournalExample]

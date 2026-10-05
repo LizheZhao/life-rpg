@@ -35,10 +35,9 @@ struct JournalTrendsPageTests {
         #expect(result.subtitle == "unlocks after 7 nights")
         guard case .locked(let locked) = result.content else { Issue.record("expected locked"); return }
         #expect(locked.progress.text == "3 of 7 nights written")
-        #expect(locked.progress.written == 3)
-        #expect(locked.explanation == "Patterns need a week of entries before they mean anything. Short entries count.")
-        #expect(locked.previews.map(\.title) == ["Words that defined the month", "Favorite quests",
-                                                 "Low energy days vs. what got done", "Writing streak and usual hour"])
+        // The wording itself is pinned in JournalTrendsLockedTests.
+        #expect(locked.explanation == JournalTrends.Locked.explanation)
+        #expect(locked.previews == JournalTrends.Locked.previews)
     }
 
     @Test func noEntriesIsZeroOfSevenAndTheLockCountsNightsOverAllTimeNotThePeriod() {
@@ -86,7 +85,6 @@ struct JournalTrendsPageTests {
         let result = unlocked(page(.month, spec: september([("2026-09-18", 50)])))
         #expect(result.totalWords == 850)
         #expect(result.streak == 9)
-        #expect(result.entries == 9)
         let hour = result.usualHour?.replacingOccurrences(of: "\u{202F}", with: " ")
             .replacingOccurrences(of: "\u{00A0}", with: " ")
         #expect(hour == "10 PM")
@@ -95,7 +93,11 @@ struct JournalTrendsPageTests {
     }
 
     @Test func aPeriodWithNothingWrittenHasZeroWordsNoUsualHourAndNoChartSections() {
-        let result = unlocked(page(.week, anchor: "2026-09-25", today: "2026-09-27"))
+        // Writing, quests, a low day and gratitude, all 10 to 17 September; the week shown is the one
+        // before, so each section is empty only if it is cut to the week.
+        let texts = (10...17).map { (String(format: "2026-09-%02d", $0), "Grateful for tea") }
+        let contexts = [JournalFixtures.context(tier: .low, on: "2026-09-11")]
+        let result = unlocked(page(.week, anchor: "2026-09-02", texts: texts, quests: walk(), contexts: contexts))
         #expect(result.totalWords == 0)
         #expect(result.usualHour == nil)
         #expect(result.wordsPerDay == nil)
@@ -104,8 +106,8 @@ struct JournalTrendsPageTests {
         #expect(result.favorites == nil)
         #expect(result.energy == nil)
         #expect(result.gratitude.isEmpty)
-        // Yet the streak still ends yesterday, outside the empty week's rows.
-        #expect(result.streak == 0)
+        // The streak is all-time: 10 to 17 September, outside the empty week's rows.
+        #expect(result.streak == 8)
     }
 
     // MARK: words per day
@@ -120,7 +122,7 @@ struct JournalTrendsPageTests {
         #expect(chart.bars.map(\.fraction) == [0.25, 1, 0.25, 0.25, 0.0625, 0, 0])
         #expect(chart.bars[1].level == 3)
         #expect(chart.bars[5].level == 0)
-        // 6 written days of 100, 400, 100, 100, 25 (5): average 145.
+        // 5 written days of 100, 400, 100, 100, 25: average 145.
         #expect(chart.average == 145)
         #expect(chart.axis == ["Sep 14", "Sep 17", "Sep 20"])
     }
@@ -133,8 +135,9 @@ struct JournalTrendsPageTests {
 
     @Test func aDayOfOnlyEmojiIsAnEntryWithAnEmptyBar() {
         let texts = (10...16).map { (String(format: "2026-09-%02d", $0), "word word") } + [("2026-09-17", "\u{1F600}")]
-        let result = unlocked(page(.week, anchor: "2026-09-17", texts: texts))
-        #expect(result.entries == 4)
+        let built = page(.week, anchor: "2026-09-17", texts: texts)
+        #expect(built.subtitle == "Sep 14 \u{2013} Sep 20 \u{00B7} 4 entries")
+        let result = unlocked(built)
         let bar = try! #require(result.wordsPerDay?.bars.first { $0.dayKey == "2026-09-17" })
         #expect(bar.words == 0)
         #expect(bar.fraction == 0)

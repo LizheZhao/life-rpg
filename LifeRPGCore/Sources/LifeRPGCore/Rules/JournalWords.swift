@@ -19,7 +19,7 @@ public enum JournalWords {
                 if !inRun { words += 1 }
                 inRun = true
             } else if inRun, connectors.contains(scalar), i + 1 < scalars.count,
-                      !isCJK(scalars[i + 1]), isWordCharacter(scalars[i + 1]) {
+                      isWordCharacter(scalars[i + 1]) {
                 continue
             } else {
                 inRun = false

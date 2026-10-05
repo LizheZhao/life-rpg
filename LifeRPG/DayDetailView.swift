@@ -200,16 +200,18 @@ struct DayDetailView: View {
     private func nightCard(_ day: JournalDay) -> some View {
         let when = day.writtenAt.formatted(date: .omitted, time: .shortened)
         let words = JournalPageText.words(day.wordCount)
+        let excerpt = day.excerpt(limit: Self.excerptLength)
         return VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .firstTextBaseline) {
                 Text("THAT NIGHT").lr(.pill).tracking(1.2).foregroundStyle(LR.Color.inkSecondary)
                 Spacer(minLength: 8)
                 Text("\(when) · \(words)").lr(.caption).monospacedDigit().foregroundStyle(LR.Color.inkSecondary)
             }
-            .accessibilityElement(children: .combine)
+            // The button below says all of it.
+            .accessibilityHidden(true)
             Button { reading = true } label: {
                 VStack(alignment: .leading, spacing: 14) {
-                    Text(day.excerpt(limit: Self.excerptLength)).lr(.journalExcerpt)
+                    Text(excerpt).lr(.journalExcerpt)
                         .foregroundStyle(LR.Color.onNight)
                         .lineLimit(3)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -228,7 +230,7 @@ struct DayDetailView: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(PressableCardStyle())
-            .accessibilityLabel("That night, \(when), \(words). \(day.excerpt(limit: Self.excerptLength))")
+            .accessibilityLabel("That night, \(when), \(words). \(excerpt)")
             .accessibilityHint("Opens the whole entry to read")
         }
     }

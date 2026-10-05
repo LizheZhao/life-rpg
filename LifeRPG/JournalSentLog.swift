@@ -7,7 +7,7 @@ import SwiftData
 /// Core decides what is new (`JournalSend.textToSend`); this only remembers, and the fingerprint is
 /// passed in and out so Core stays free of `UserDefaults`.
 enum JournalSentLog {
-    struct Entry: Codable, Equatable {
+    struct Entry: Codable {
         let fingerprint: String
         let sentAt: Date
     }
@@ -18,14 +18,14 @@ enum JournalSentLog {
         (try? JSONDecoder().decode([String: Entry].self, from: data)) ?? [:]
     }
 
-    static func entries(in defaults: UserDefaults = .standard) -> [String: Entry] {
-        decode(defaults.data(forKey: key) ?? Data())
+    static func entries() -> [String: Entry] {
+        decode(UserDefaults.standard.data(forKey: key) ?? Data())
     }
 
-    static func record(dayKey: String, fingerprint: String, at date: Date, in defaults: UserDefaults = .standard) {
-        var all = entries(in: defaults)
+    static func record(dayKey: String, fingerprint: String, at date: Date) {
+        var all = entries()
         all[dayKey] = Entry(fingerprint: fingerprint, sentAt: date)
-        if let data = try? JSONEncoder().encode(all) { defaults.set(data, forKey: key) }
+        if let data = try? JSONEncoder().encode(all) { UserDefaults.standard.set(data, forKey: key) }
     }
 
     /// The most recent hand-over, for the Settings status line.
@@ -57,14 +57,14 @@ enum JournalHandOff {
     /// it over. If Create Journal Entry then fails, the day stays marked and the user can send it
     /// from the share sheet.
     @MainActor
-    static func textToSend(now: Date, in context: ModelContext, defaults: UserDefaults = .standard) throws -> String {
+    static func textToSend(now: Date, in context: ModelContext) throws -> String {
         let dayKey = JournalSend.finishedDayKey(now: now, timeZone: .current)
         let turns = try JournalService.turns(on: dayKey, in: context)
-        let language = JournalLanguage.resolve(preferred: Locale.preferredLanguages)
+        let language = JournalLanguage.system
         let text = JournalSend.textToSend(turns: turns, language: language,
-                                          lastSentFingerprint: JournalSentLog.entries(in: defaults)[dayKey]?.fingerprint)
+                                          lastSentFingerprint: JournalSentLog.entries()[dayKey]?.fingerprint)
         if !text.isEmpty {
-            JournalSentLog.record(dayKey: dayKey, fingerprint: JournalSend.fingerprint(of: text), at: now, in: defaults)
+            JournalSentLog.record(dayKey: dayKey, fingerprint: JournalSend.fingerprint(of: text), at: now)
         }
         return text
     }

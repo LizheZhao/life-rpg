@@ -6,21 +6,19 @@ import SwiftUI
 /// resigns it first), the page disappearing, or the app leaving the foreground.
 struct CommittedTextField: View {
     let title: LocalizedStringKey
-    let prompt: LocalizedStringKey
     let key: String
 
     @Environment(\.scenePhase) private var scenePhase
     @State private var draft: String
 
-    init(_ title: LocalizedStringKey, prompt: LocalizedStringKey? = nil, key: String) {
+    init(_ title: LocalizedStringKey, key: String) {
         self.title = title
-        self.prompt = prompt ?? title
         self.key = key
         _draft = State(initialValue: UserDefaults.standard.string(forKey: key) ?? "")
     }
 
     var body: some View {
-        TextField(title, text: $draft, prompt: Text(prompt).foregroundStyle(LR.Color.inkSecondary))
+        TextField(title, text: $draft, prompt: Text(title).foregroundStyle(LR.Color.inkSecondary))
             .lr(.bodyStrong).foregroundStyle(LR.Color.ink)
             .textInputAutocapitalization(.never)
             .autocorrectionDisabled()

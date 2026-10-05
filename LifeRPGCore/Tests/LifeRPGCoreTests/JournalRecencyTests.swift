@@ -9,7 +9,7 @@ struct JournalRecencyTests {
     typealias F = JournalFixtures
 
     private func habits(_ used: [String: String] = [:], texts: [String] = []) -> JournalHabits {
-        JournalHabits(medianAnswerLength: nil, typicalHour: nil, usesEmoji: false, weights: [:],
+        JournalHabits(medianAnswerLength: nil, usesEmoji: false, weights: [:],
                       lastUsedDay: used, recentQuestionTexts: texts)
     }
 
@@ -26,10 +26,6 @@ struct JournalRecencyTests {
     }
 
     // MARK: the fallback draw
-
-    @Test func withNoHistoryTheDrawIsTheDaysHashAsBefore() {
-        #expect(ask(F.signals())?.promptID == "open.keep")      // 2 mod 3
-    }
 
     @Test func theLeastRecentlyUsedRowIsDrawn() {
         let used = ["open.keep": "2026-09-17", "open.scale": "2026-09-10", "open.feel": "2026-09-05"]
@@ -99,7 +95,6 @@ struct JournalRecencyTests {
         model.promptID = "open.keep"
         model.source = .model
         let h = JournalHabits.derive(from: [model], asOf: F.day, timeZone: Fixtures.tokyo)
-        #expect(h.lastUsedDay == ["open.keep": "2026-09-17"])
         #expect(ask(F.signals(), h)?.promptID == "open.feel")
     }
 
@@ -220,7 +215,7 @@ struct JournalRecencyTests {
         #expect(brief.examples.allSatisfy { $0.text.contains(where: { "\u{4E00}"..."\u{9FFF}" ~= $0 }) })
     }
 
-    @Test func aTemplateFollowUpFallbackHasNoBriefOfItsOwn() {
-        #expect(JournalFollowUp.template(answer: "I walked home in the rain", language: .en)?.brief == nil)
+    @Test func aFollowUpFallbackHasNoBriefOfItsOwn() throws {
+        #expect(try #require(followUp(.none)).fallback.brief == nil)
     }
 }

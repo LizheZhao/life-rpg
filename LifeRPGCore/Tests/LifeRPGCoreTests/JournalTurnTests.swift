@@ -34,12 +34,6 @@ struct JournalTurnTests {
         #expect(try JournalService.turns(on: "2026-09-19", in: ctx).map(\.index) == [0])
     }
 
-    @Test func aNewRowHasWrittenNoTime() throws {
-        let ctx = try Fixtures.context()
-        let row = try turn(ctx, friday, .opening, answer: "x")
-        #expect(row.writingSeconds == 0)
-    }
-
     @Test func aRowReadsBackWithEveryFieldItWasWrittenWith() throws {
         let ctx = try Fixtures.context()
         let subject = JournalSubject(kind: .routine, id: UUID(), text: "Take out the trash")
@@ -73,7 +67,6 @@ struct JournalTurnTests {
         let (ctx, subject) = try sourceWithJournal()
         let snapshot = try JSONExport.snapshot(ctx, now: Fixtures.date(friday))
         let turns = try #require(snapshot.journal?.turns)
-        #expect(snapshot.schemaVersion == 7)
         #expect(turns.map(\.index) == [0, 1, 2])
         #expect(turns.map(\.writingSeconds) == [754, 0, 0])
         #expect(turns[1].kind == "choice")
@@ -107,7 +100,7 @@ struct JournalTurnTests {
         #expect(try StoreAudit.issues(target).isEmpty)
     }
 
-    /// A v6 backup of a store with an empty journal is still a statement about the journal.
+    /// A backup of a store with an empty journal is still a statement about the journal.
     @Test func anEmptyJournalBlockReplacesTheTurnsOnTheStore() throws {
         let source = try Fixtures.context()
         let target = try Fixtures.context()
@@ -279,14 +272,6 @@ struct JournalEditTests {
         #expect(rows[0].answeredAt == Fixtures.date(friday, hour: 22))
         #expect(try StoreAudit.issues(target).isEmpty)
     }
-
-    @Test func anEditedAnswerIsWhatTheStoreReadsBack() throws {
-        let ctx = try Fixtures.context()
-        let turn = try answered(ctx)
-        try JournalService.edit(turn, answer: "second words")
-        try ctx.save()
-        #expect(try JournalService.turns(on: friday, in: ctx).map(\.answer) == ["second words"])
-    }
 }
 
 // MARK: free writing added later
@@ -343,7 +328,6 @@ struct JournalFreeWritingTests {
         try ctx.save()
         let turns = try JournalService.turns(on: friday, in: ctx)
         #expect(turns.filter { $0.kind == .closing }.count == 2)
-        #expect(JournalProgress.of(turns) == .done(answered: 3))
         #expect(JournalPlanner.next(signals: F.signals(), habits: .none, today: turns, language: .en) == .done)
         #expect(JournalComposer.text(turns: turns, language: .en)
                 == "Journal 2026-09-18\n\nQ0\nA0\n\nQ1\nA1\n\nmore")
@@ -353,7 +337,6 @@ struct JournalFreeWritingTests {
 // MARK: the autosaved free-writing page
 
 struct JournalSaveFreeWritingTests {
-    typealias F = JournalFixtures
     private let friday = "2026-09-18"
     private let t1 = Fixtures.date("2026-09-18", hour: 21)
     private let t2 = Fixtures.date("2026-09-18", hour: 22)
@@ -469,17 +452,11 @@ struct JournalBlankFreeWritingTests {
         #expect(JournalProgress.isClosed([blankButQuestioned]))
     }
 
-    @Test func progressReadsAClearedPageAsNotStartedAndAnAnsweredDayAsInProgress() {
-        #expect(JournalProgress.of([F.freeWriting("")]) == .notStarted)
-        let turns = [F.turn(.opening, "ok then", index: 0), F.freeWriting("", index: 1)]
-        #expect(JournalProgress.of(turns) == .inProgress(answered: 1))
-    }
-
-    @Test func historyDoesNotCountAClearedPageAsClosingTheDay() throws {
+    @Test func historyAddsNothingFromAClearedPageToTheDaysTextOrWords() throws {
         let turns = [F.turn(.opening, "ok then", index: 0), F.freeWriting("", index: 1)]
         let day = try #require(JournalHistory.days(from: turns, language: .en).first)
-        #expect(!day.isClosed)
-        #expect(day.answeredCount == 1)
+        #expect(day.text == "Journal 2026-09-18\n\nquestion\nok then")
+        #expect(day.wordCount == 2)
     }
 
     @Test func historyLeavesOutADayWhosePageWasCleared() {

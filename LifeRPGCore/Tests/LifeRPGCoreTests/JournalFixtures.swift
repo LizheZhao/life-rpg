@@ -69,7 +69,7 @@ enum JournalFixtures {
                         ratings: [QuestRating] = [], ledger: [LedgerEntry] = [], flexible: Set<UUID> = [],
                         on dayKey: String = day) -> JournalSignals {
         JournalSignals(dayKey: dayKey, quests: quests, occurrences: occurrences,
-                       context: context(tier: tier, on: dayKey), ratings: ratings, comments: [],
+                       context: context(tier: tier, on: dayKey), ratings: ratings,
                        ledger: ledger, flexible: flexible, timeZone: Fixtures.tokyo)
     }
 

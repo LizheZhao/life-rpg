@@ -17,9 +17,9 @@ extension JournalTrends {
             public let subtitle: String
         }
 
-        /// Capped at `Writing.unlockNights`: an eighth night is not "8 of 7".
+        /// Only asked while the page is locked, so `nightsWritten` is below `Writing.unlockNights`.
         public static func progress(nightsWritten: Int) -> Progress {
-            Progress(written: min(max(0, nightsWritten), Writing.unlockNights), of: Writing.unlockNights)
+            Progress(written: nightsWritten, of: Writing.unlockNights)
         }
 
         public static let explanation = "Patterns need a week of entries before they mean anything. Short entries count."

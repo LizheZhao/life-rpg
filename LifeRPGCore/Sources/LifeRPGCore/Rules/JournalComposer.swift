@@ -7,7 +7,7 @@ import Foundation
 /// skipped or misfit turn has nothing to say and is left out, as is the safety line, which was
 /// never the user's.
 public enum JournalComposer {
-    public static func title(dayKey: String, language: JournalLanguage) -> String {
+    static func title(dayKey: String, language: JournalLanguage) -> String {
         language == .zhHans ? "日记 \(dayKey)" : "Journal \(dayKey)"
     }
 

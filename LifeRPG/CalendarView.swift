@@ -36,8 +36,8 @@ struct CalendarView: View {
 
     private let language = JournalLanguage.resolve(preferred: Locale.preferredLanguages)
 
-    /// The pencil's ink at each level: one step lighter than the next, the darkest at full ink.
-    private static let pencilOpacity: [Int: Double] = [1: 0.32, 2: 0.62, 3: 1]
+    /// The pencil's ink at levels 1, 2 and 3: one step lighter than the next, the darkest at full ink.
+    private static let pencilOpacity: [Double] = [0.32, 0.62, 1]
 
     private let weekdays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 
@@ -187,7 +187,7 @@ struct CalendarView: View {
                 }
                 .frame(height: 6)
                 HStack(spacing: 3) {
-                    if marks.journalLevel > 0 { pencil(level: marks.journalLevel, size: 10) }
+                    if marks.journalLevel > 0 { pencil(level: marks.journalLevel) }
                     if marks.routinesCleared {
                         Image(systemName: "checkmark")
                             .font(.system(size: 8, weight: .heavy))
@@ -237,7 +237,7 @@ struct CalendarView: View {
                 }
             }
             LegendChip(text: "Journal, darker is longer") {
-                pencil(level: 3, size: 10)
+                pencil(level: 3)
             }
             LegendChip(text: "Routines") {
                 Image(systemName: "checkmark").font(.system(size: 8, weight: .heavy))
@@ -259,32 +259,46 @@ struct CalendarView: View {
             + "A tick is routines cleared, a star the hidden quest, a tinted row an epic week.")
     }
 
-    private func pencil(level: Int, size: CGFloat) -> some View {
+    /// `level` is 1 to 3 (`JournalMarks.levels`).
+    private func pencil(level: Int) -> some View {
         Image(systemName: "pencil")
-            .font(.system(size: size, weight: .heavy))
-            .foregroundStyle(LR.Color.ink.opacity(Self.pencilOpacity[level] ?? 1))
+            .font(.system(size: 10, weight: .heavy))
+            .foregroundStyle(LR.Color.ink.opacity(Self.pencilOpacity[level - 1]))
     }
 
-    private var tapHint: some View {
+    /// A row card: an icon on a disc, a title over a caption, and a chevron when it leads somewhere.
+    private func infoRow(_ systemImage: String, disc: Color, title: LocalizedStringKey, caption: LocalizedStringKey,
+                         chevron: Bool = false) -> some View {
         HStack(spacing: 12) {
-            Image(systemName: "book")
+            Image(systemName: systemImage)
                 .font(.system(size: 15, weight: .medium))
                 .foregroundStyle(LR.Color.iconNeutral)
                 .frame(width: 32, height: 32)
-                .background(Circle().fill(LR.Color.tabPill))
+                .background(Circle().fill(disc))
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
-                Text("Tap any day").lr(.bodyStrong).foregroundStyle(LR.Color.ink)
-                Text("Quests done and what you wrote that night").lr(.caption)
+                Text(title).lr(.bodyStrong).foregroundStyle(LR.Color.ink)
+                Text(caption).lr(.caption)
                     .foregroundStyle(LR.Color.inkSecondary)
             }
             Spacer(minLength: 8)
+            if chevron {
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(LR.Color.iconNeutral)
+                    .accessibilityHidden(true)
+            }
         }
         .padding(12)
         .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
         .lrCard(.surface, radius: LR.Radius.row)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Tap any day, quests done and what you wrote that night")
+    }
+
+    private var tapHint: some View {
+        infoRow("book", disc: LR.Color.tabPill, title: "Tap any day",
+                caption: "Quests done and what you wrote that night")
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Tap any day, quests done and what you wrote that night")
     }
 
     // MARK: did not finish
@@ -348,27 +362,8 @@ struct CalendarView: View {
 
     private var ratingsLink: some View {
         NavigationLink { RatingSummaryView(today: today) } label: {
-            HStack(spacing: 12) {
-                Image(systemName: "star.bubble")
-                    .font(.system(size: 15, weight: .medium))
-                    .foregroundStyle(LR.Color.iconNeutral)
-                    .frame(width: 32, height: 32)
-                    .background(Circle().fill(LR.Color.sectionCircle(.hidden)))
-                    .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Ratings").lr(.bodyStrong).foregroundStyle(LR.Color.ink)
-                    Text("What has been landing well lately").lr(.caption)
-                        .foregroundStyle(LR.Color.inkSecondary)
-                }
-                Spacer(minLength: 8)
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(LR.Color.iconNeutral)
-                    .accessibilityHidden(true)
-            }
-            .padding(12)
-            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-            .lrCard(.surface, radius: LR.Radius.row)
+            infoRow("star.bubble", disc: LR.Color.sectionCircle(.hidden), title: "Ratings",
+                    caption: "What has been landing well lately", chevron: true)
         }
         .buttonStyle(PressableCardStyle())
         .accessibilityElement(children: .ignore)

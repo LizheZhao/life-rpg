@@ -19,7 +19,6 @@ struct JournalHabitsTests {
         let habits = derive([])
         #expect(habits == .none)
         #expect(habits.medianAnswerLength == nil)
-        #expect(habits.typicalHour == nil)
         #expect(!habits.usesEmoji)
         for kind in JournalPromptKind.allCases { #expect(habits.weight(for: kind) == 1.0) }
     }
@@ -66,28 +65,24 @@ struct JournalHabitsTests {
         #expect(even.medianAnswerLength == 15)                 // (10 + 20) / 2
     }
 
+    private func typicalHour(_ hours: [Int]) -> Int? {
+        JournalHabits.typicalHour(of: hours.map { turn(.opening, hour: $0).answeredAt }, in: Fixtures.tokyo)
+    }
+
     @Test func typicalHourNeedsFiveTurns() {
-        let four = (0..<4).map { _ in turn(.opening, hour: 22) }
-        #expect(derive(four).typicalHour == nil)
-        let five = [21, 22, 22, 23, 23].map { turn(.opening, hour: $0) }
-        #expect(derive(five).typicalHour == 22)
+        #expect(typicalHour([22, 22, 22, 22]) == nil)
+        #expect(typicalHour([21, 22, 22, 23, 23]) == 22)
     }
 
     /// A night owl's 23:00 and 01:00 belong to the same evening; the median must not land at midday.
     @Test func typicalHourWrapsPastMidnightWithTheDayBoundary() {
-        let hours = [23, 23, 0, 1, 1]
-        #expect(derive(hours.map { turn(.opening, hour: $0) }).typicalHour == 0)
+        #expect(typicalHour([23, 23, 0, 1, 1]) == 0)
     }
 
     @Test func emojiAreDetectedInTheAnswersOnly() {
         #expect(derive([turn(.opening, "great day \u{1F600}")]).usesEmoji)
         #expect(derive([turn(.opening, "\u{2764}\u{FE0F} that")]).usesEmoji)
         #expect(!derive([turn(.opening, "plain 5 #1 (c) 100%")]).usesEmoji)
-    }
-
-    @Test func safetyTurnsAreNotHabits() {
-        let habits = derive([turn(.safety, "", outcome: .answered)])
-        #expect(habits == .none)
     }
 
     // MARK: recency
@@ -142,7 +137,7 @@ struct JournalHabitsTests {
 
     @Test func theHintFollowsTheMedianLengthAndRegister() {
         func hint(_ median: Int?, emoji: Bool = false, _ language: JournalLanguage = .en) -> String {
-            JournalHabits(medianAnswerLength: median, typicalHour: nil, usesEmoji: emoji, weights: [:])
+            JournalHabits(medianAnswerLength: median, usesEmoji: emoji, weights: [:])
                 .styleHint(language: language)
         }
         #expect(hint(10) == "The user writes short answers. Keep the question under 12 words. Use a plain, calm register.")

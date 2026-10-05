@@ -10,11 +10,6 @@ struct JournalTrendsPeriodTests {
         return [r.first, r.last]
     }
 
-    private func previous(_ period: JournalTrends.Period, _ dayKey: String) throws -> [String] {
-        let r = try #require(JournalTrends.previous(of: period, containing: dayKey, in: tz))
-        return [r.first, r.last]
-    }
-
     @Test func aWeekRunsMondayToSunday() throws {
         // 2026-09-17 is a Thursday.
         #expect(try range(.week, "2026-09-17") == ["2026-09-14", "2026-09-20"])
@@ -40,19 +35,9 @@ struct JournalTrendsPeriodTests {
         #expect(try range(.year, "2027-01-01") == ["2027-01-01", "2027-12-31"])
     }
 
-    @Test func previousIsTheWholePeriodBeforeThisOne() throws {
-        #expect(try previous(.week, "2026-09-17") == ["2026-09-07", "2026-09-13"])
-        #expect(try previous(.week, "2027-01-01") == ["2026-12-21", "2026-12-27"])
-        #expect(try previous(.month, "2026-09-17") == ["2026-08-01", "2026-08-31"])
-        #expect(try previous(.month, "2027-01-15") == ["2026-12-01", "2026-12-31"])
-        #expect(try previous(.month, "2026-03-05") == ["2026-02-01", "2026-02-28"])
-        #expect(try previous(.year, "2027-06-01") == ["2026-01-01", "2026-12-31"])
-    }
-
     @Test func aMalformedKeyHasNoRange() {
         #expect(JournalTrends.range(of: .week, containing: "nope", in: tz) == nil)
         #expect(JournalTrends.range(of: .month, containing: "2026-13-01", in: tz) == nil)
-        #expect(JournalTrends.previous(of: .year, containing: "", in: tz) == nil)
     }
 
     @Test func daysListsEveryKeyOfTheRangeInOrder() throws {

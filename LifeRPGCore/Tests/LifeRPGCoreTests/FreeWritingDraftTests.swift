@@ -47,22 +47,12 @@ struct FreeWritingDraftTests {
     }
 
     @Test func aStarterIsInsertedAsAParagraphAndCountsAsTyping() {
-        var draft = FreeWritingDraft(text: "First paragraph.", writingSeconds: 0)
-        let starter = JournalStarter(id: "starter.grateful", kind: .good, text: "Grateful for")
-        draft.insert(starter, at: t0)
-        #expect(draft.text == "First paragraph.\n\nGrateful for ")
-        #expect(draft.hasUnsavedChanges)
-    }
-
-    @Test func resetStartsOverFromWhatTheStoreHolds() {
         var draft = FreeWritingDraft()
-        draft.edit(to: "x", at: t0)
-        draft.edit(to: "xy", at: t0.addingTimeInterval(5))
-        draft.reset(text: "From store", writingSeconds: 30)
-        #expect(draft.text == "From store")
-        #expect(draft.writingSeconds == 30)
-        #expect(!draft.hasUnsavedChanges)
-        draft.edit(to: "From store!", at: t0.addingTimeInterval(100))
-        #expect(draft.writingSeconds == 30)
+        draft.edit(to: "First paragraph.", at: t0)
+        let starter = JournalStarter(id: "starter.grateful", text: "Grateful for")
+        draft.insert(starter, at: t0.addingTimeInterval(10))
+        #expect(draft.text == "First paragraph.\n\nGrateful for ")
+        // The tap is a keystroke: the gap since the last one is writing time.
+        #expect(draft.writingSeconds == 10)
     }
 }

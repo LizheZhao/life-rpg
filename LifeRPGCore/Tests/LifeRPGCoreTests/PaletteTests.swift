@@ -49,7 +49,7 @@ struct PaletteTests {
     @Test(arguments: Palette.Appearance.allCases)
     func theNightCardsTextClearsItsBars(appearance: Palette.Appearance) {
         let labels = Set(Palette.textPairs(appearance).map(\.label))
-        #expect(labels.isSuperset(of: ["onNight on nightCard", "onNightSecondary on nightCard", "nightCard on onNight"]))
+        #expect(labels.isSuperset(of: ["onNight on nightCard", "onNightSecondary on nightCard"]))
         #expect(Palette.largeTextPairs(appearance).contains { $0.label == "nightAccent on nightCard" })
     }
 

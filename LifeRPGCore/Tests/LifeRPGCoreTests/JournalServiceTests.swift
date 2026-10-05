@@ -37,8 +37,6 @@ struct JournalServiceTests {
         ctx.insert(flexible)
         let gym = Fixtures.occurrence(ctx, "Gym session", due: "2026-09-16")
         gym.routineID = flexible.id
-        Feedback.comment(ctx, target: .quest, id: rated.templateID, questID: rated.id,
-                         text: rated.textSnapshot, comment: "loved it", dayKey: friday)
         try ctx.save()
 
         let signals = try JournalService.signals(on: friday, in: ctx, timeZone: tz)
@@ -46,7 +44,6 @@ struct JournalServiceTests {
         #expect(signals.completedCount == done)
         #expect(signals.completed.first { $0.subject.id == rated.id }?.rating == 2)
         #expect(signals.skipped.map(\.text) == ["Take out the trash"])
-        #expect(signals.comments == ["loved it"])
     }
 
     @Test func aSettledRoutineIsFoundThroughTheLedger() throws {
@@ -165,7 +162,10 @@ struct JournalPagesServiceTests {
         let ctx = try Fixtures.context()
         try JournalService.record(ctx, dayKey: friday, kind: .opening, promptID: "open.keep", question: "Q",
                                   answer: "A", language: .en, askedAt: now, answeredAt: now)
-        #expect(try JournalService.freeWritingDraft(on: friday, in: ctx) == FreeWritingDraft())
+        let draft = try JournalService.freeWritingDraft(on: friday, in: ctx)
+        #expect(draft.text.isEmpty)
+        #expect(draft.writingSeconds == 0)
+        #expect(!draft.hasUnsavedChanges)
     }
 
     @Test func theDraftOpensWithTheStoredTextAndTime() throws {

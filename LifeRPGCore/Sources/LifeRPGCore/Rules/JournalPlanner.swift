@@ -61,7 +61,7 @@ public enum JournalPlanner {
                      .map { Candidate(promptID: $0.id) }
              }),
         Rule(kind: .good,
-             score: { signals in signals.bestRated.map { 2 + 0.5 * Double(($0.rating ?? 1) - 1) } },
+             score: { signals in signals.bestRated?.rating.map { 2 + 0.5 * Double($0 - 1) } },
              candidates: { signals in
                  guard let item = signals.bestRated else { return [] }
                  return JournalPool.prompts(of: .good).map {
@@ -123,14 +123,13 @@ public enum JournalPlanner {
         else { return nil }
         // Pool order breaks a tie here, not the day's hash: with no history the stand row stays the
         // default, and the rows then take turns in the order they are written.
-        let examples = drawOrder(JournalPool.prompts(of: .followUp), recency: recency, rotate: false)
+        let examples = drawOrder(JournalPool.prompts(of: .followUp), recency: recency, dayKey: nil)
             .compactMap { row in
                 JournalPool.render(id: row.id, language: language, fills: [.phrase: phrase])
                     .map { JournalExample(id: row.id, text: $0) }
             }
-        guard let first = examples.first,
-              let fallback = JournalFollowUp.template(answer: last.answer, language: language, promptID: first.id)
-        else { return nil }
+        guard let first = examples.first else { return nil }
+        let fallback = JournalQuestion(promptID: first.id, kind: .followUp, text: first.text)
         let subject = last.subjectKind.flatMap { kind in
             last.subjectID.map { JournalSubject(kind: kind, id: $0, text: last.subjectText) }
         }
@@ -146,15 +145,16 @@ public enum JournalPlanner {
                                          asked: Set<JournalPromptKind>, language: JournalLanguage) -> JournalStep? {
         let ranked = rules
             .filter { !asked.contains($0.kind) }
-            .compactMap { rule -> (rule: Rule, rank: Double)? in
-                guard let score = rule.score(signals), !rule.candidates(signals).isEmpty else { return nil }
-                return (rule, score * habits.weight(for: rule.kind))
+            .compactMap { rule -> (rule: Rule, candidates: [Candidate], rank: Double)? in
+                guard let score = rule.score(signals) else { return nil }
+                let candidates = rule.candidates(signals)
+                guard !candidates.isEmpty else { return nil }
+                return (rule, candidates, score * habits.weight(for: rule.kind))
             }
             .enumerated()
             .sorted { ($0.element.rank, -$0.offset) > ($1.element.rank, -$1.offset) }
-            .map(\.element.rule)
-        for rule in ranked {
-            let candidates = rule.candidates(signals)
+            .map(\.element)
+        for (rule, candidates, _) in ranked {
             let rows = candidates.compactMap { JournalPool.prompt(id: $0.promptID) }
             for row in drawOrder(rows, recency: recency, dayKey: signals.dayKey) {
                 guard let pick = candidates.first(where: { $0.promptID == row.id }),
@@ -214,16 +214,15 @@ public enum JournalPlanner {
     }
 
     /// `rows` from the one to draw first to the one to draw last: the least recently used first, a
-    /// row never used counting as the oldest, and rows that tie starting at a place the day's hash
-    /// picks and wrapping round (or at the first in pool order). With no history that makes the
-    /// first row `rows[hash % count]`. A row used most recently is last unless every row ties, so
-    /// the row asked yesterday is never asked again while another is available.
-    private static func drawOrder(_ rows: [JournalPrompt], recency: Recency, dayKey: String = "",
-                                  rotate: Bool = true) -> [JournalPrompt] {
+    /// row never used counting as the oldest, and rows that tie starting at a place the hash of
+    /// `dayKey` picks and wrapping round (or, with no `dayKey`, at the first in pool order). With no
+    /// history that makes the first row `rows[hash % count]`. A row used most recently is last unless
+    /// every row ties, so the row asked yesterday is never asked again while another is available.
+    private static func drawOrder(_ rows: [JournalPrompt], recency: Recency, dayKey: String?) -> [JournalPrompt] {
         let groups = Dictionary(grouping: rows) { recency.lastUsed[$0.id] ?? "" }
         return groups.keys.sorted().flatMap { key -> [JournalPrompt] in
             let group = groups[key] ?? []
-            let start = rotate ? Int(stableHash(dayKey) % UInt64(group.count)) : 0
+            let start = dayKey.map { Int(stableHash($0) % UInt64(group.count)) } ?? 0
             return Array(group[start...] + group[..<start])
         }
     }

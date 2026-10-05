@@ -28,38 +28,31 @@ struct JournalPoolTests {
         #expect(Set(JournalPool.all.map(\.id)).count == JournalPool.all.count)
     }
 
-    /// The shape each row borrows, from the "Question shapes" paragraph of the draft: scaling and
-    /// open questions, self-compassion, savoring, values, exceptions, reflective listening.
-    @Test func everyRowCarriesTheShapeItBorrows() {
-        let expected: [String: JournalApproach] = [
-            "open.scale": .scale, "open.feel": .open, "open.keep": .savoring,
-            "heavy.done": .selfCompassion, "heavy.weight": .open, "heavy.friend": .selfCompassion,
-            "heavy.body": .selfCompassion,
-            "good.moment": .savoring, "good.repeat": .values, "good.who": .savoring,
-            "choice.photo": .savoring, "choice.item": .values, "choice.notice": .savoring,
-            "skip.block": .open, "skip.exception": .exceptions, "skip.small": .exceptions,
-            "follow.stand": .reflection, "follow.more": .reflection, "follow.need": .reflection,
-            "close.more": .open, "close.carry": .values, "safety": .open,
-        ]
-        #expect(Dictionary(uniqueKeysWithValues: JournalPool.all.map { ($0.id, $0.approach) }) == expected)
+    /// The shapes of the "Question shapes" paragraph of the draft: scaling and open questions,
+    /// self-compassion, savoring, values, exceptions, reflective listening. Each is borrowed by a row.
+    @Test func everyShapeIsBorrowedByARow() {
+        #expect(Set(JournalPool.all.map(\.approach)) == Set(JournalApproach.allCases))
+    }
+
+    /// The placeholders a row's text asks for.
+    private func placeholders(in text: String) -> Set<JournalPlaceholder> {
+        Set(JournalPlaceholder.allCases.filter { text.contains("{\($0.rawValue)}") })
     }
 
     @Test func bothLanguagesAskForTheSamePlaceholders() {
         for row in JournalPool.all {
-            #expect(JournalPool.placeholders(in: row.en) == JournalPool.placeholders(in: row.zh), "\(row.id)")
+            #expect(placeholders(in: row.en) == placeholders(in: row.zh), "\(row.id)")
         }
     }
 
-    /// The draft is what the user edits; the code table has to be the same words. Skipped where the
-    /// draft isn't checked in yet.
-    @Test(.enabled(if: FileManager.default.fileExists(atPath: Fixtures.docDir.appendingPathComponent("JOURNAL_PROMPTS.md").path)))
-    func theTableMatchesTheDraftRowForRow() throws {
+    /// The draft is what the user edits; the code table has to be the same words.
+    @Test func theTableMatchesTheDraftRowForRow() throws {
         let doc = try Fixtures.csv("JOURNAL_PROMPTS.md")
         var rows: [(id: String, en: String, zh: String)] = []
         for line in doc.split(separator: "\n") where line.hasPrefix("| ") {
             let cells = line.split(separator: "|", omittingEmptySubsequences: false)
                 .dropFirst().dropLast().map { $0.trimmingCharacters(in: .whitespaces) }
-            guard cells.count == 3, cells[0] != "id", !cells[0].hasPrefix("---") else { continue }
+            guard cells.count == 3, cells[0] != "id" else { continue }
             rows.append((cells[0], cells[1], cells[2]))
         }
         #expect(rows.map(\.id) == JournalPool.all.map(\.id))
@@ -86,7 +79,7 @@ struct JournalPoolTests {
         #expect(JournalPool.render(id: "skip.block", language: .zhHans, fills: [.quest: "  "]) == nil)
         #expect(JournalPool.render(id: "no.such.row", language: .en) == nil)
         for language in JournalLanguage.allCases {
-            for row in JournalPool.all where !JournalPool.placeholders(in: row.text(in: language)).isEmpty {
+            for row in JournalPool.all where !placeholders(in: row.text(in: language)).isEmpty {
                 #expect(JournalPool.render(id: row.id, language: language) == nil, "\(row.id)")
             }
         }

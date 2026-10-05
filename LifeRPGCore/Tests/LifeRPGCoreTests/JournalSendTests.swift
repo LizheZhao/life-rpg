@@ -109,9 +109,11 @@ struct JournalSendTests {
         #expect(JournalSend.fingerprint(of: "foobar") == "85944171f73967e8")
     }
 
+    /// "今天" is six UTF-8 bytes (two UTF-16 units), and the hash of "aa" begins with a zero digit,
+    /// which the padding has to keep.
     @Test func theFingerprintIsOverUTF8AndAlwaysSixteenDigits() {
-        #expect(JournalSend.fingerprint(of: "今天").count == 16)
-        #expect(JournalSend.fingerprint(of: "今天") == JournalSend.fingerprint(of: "今天"))
+        #expect(JournalSend.fingerprint(of: "今天") == "82337897690990da")
+        #expect(JournalSend.fingerprint(of: "aa") == "089c4307b54596b7")
         #expect(JournalSend.fingerprint(of: "今天") != JournalSend.fingerprint(of: "今日"))
     }
 }

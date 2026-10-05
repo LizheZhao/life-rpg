@@ -18,7 +18,7 @@ struct JournalTonightCard: View {
     @Query private var turns: [JournalTurn]
     @State private var lastNight: JournalToday.LastNight?
 
-    private let language = JournalLanguage.resolve(preferred: Locale.preferredLanguages)
+    private let language = JournalLanguage.system
 
     init(today: String, reloadToken: Int, write: @escaping () -> Void, read: @escaping (String) -> Void) {
         self.today = today
@@ -109,7 +109,7 @@ struct JournalBookButton: View {
 
     @Query private var turns: [JournalTurn]
 
-    private let language = JournalLanguage.resolve(preferred: Locale.preferredLanguages)
+    private let language = JournalLanguage.system
 
     init(today: String, action: @escaping () -> Void) {
         self.today = today

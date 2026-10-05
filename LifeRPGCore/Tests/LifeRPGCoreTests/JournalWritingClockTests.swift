@@ -26,7 +26,6 @@ struct JournalWritingClockTests {
     }
 
     @Test func theCapIsInclusiveAtThirtyAndAnythingOverIsCappedToIt() {
-        #expect(JournalWritingClock.maxGapSeconds == 30)
         #expect(JournalWritingClock.adding(activityAt: at(30), to: 0, lastActivity: at(0)).total == 30)
         #expect(JournalWritingClock.adding(activityAt: at(31), to: 0, lastActivity: at(0)).total == 30)
     }

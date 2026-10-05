@@ -20,8 +20,7 @@ public enum JournalSend {
     public static func textToSend(turns: [JournalTurn], language: JournalLanguage,
                                   lastSentFingerprint: String?) -> String {
         let text = JournalComposer.text(turns: turns, language: language)
-        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-              fingerprint(of: text) != lastSentFingerprint else { return "" }
+        guard fingerprint(of: text) != lastSentFingerprint else { return "" }
         return text
     }
 

@@ -51,7 +51,8 @@ public enum JournalPlaceholder: String, CaseIterable, Sendable {
 /// fallback rotates too. Each row's `approach` is the question shape it borrows.
 ///
 /// A table rather than code, so a wording change is one edited row. Every row also has to pass
-/// `JournalTextCheck`, so the anchors follow the same voice rules the model is held to.
+/// `JournalTextCheck`, except the one-question rule on three deliberate two-part rows, so the
+/// anchors follow the same voice rules the model is held to.
 public enum JournalPool {
     public static let all: [JournalPrompt] = [
         .init(id: "open.scale", kind: .opening, approach: .scale,
@@ -135,15 +136,6 @@ public enum JournalPool {
 
     public static func prompts(of kind: JournalPromptKind) -> [JournalPrompt] {
         all.filter { $0.kind == kind }
-    }
-
-    /// The placeholders a row's text asks for, in either language. Rows carry the same set in both.
-    public static func placeholders(in text: String) -> Set<JournalPlaceholder> {
-        var found = Set<JournalPlaceholder>()
-        for placeholder in JournalPlaceholder.allCases where text.contains("{\(placeholder.rawValue)}") {
-            found.insert(placeholder)
-        }
-        return found
     }
 
     /// The row with its placeholders filled, or nil when a fill is missing or blank, so a raw
