@@ -1,6 +1,7 @@
 import Foundation
 
-/// What a day looked like, reduced to what the planner and the follow-up prompt read.
+/// What a day looked like, reduced to what the editor's "Ask me something" request reads
+/// (`JournalAsk`).
 ///
 /// Built from history rows only, like `DayRecord`, and ignoring `replaced` rows the way every
 /// other reader of them does. Ratings are matched to an item through `questID`, the link
@@ -16,7 +17,12 @@ public struct JournalSignals: Equatable, Sendable {
         public let rating: Int?
         public let completedAt: Date?
         public let isChoice: Bool
-        public let isPhoto: Bool
+        /// A routine done on its light version (`RoutineOccurrence.usedDegraded`); the subject's text
+        /// is then the light version's.
+        public let isLight: Bool
+        /// What the completion paid: `DailyQuest.points`, `RoutineOccurrence.awardedPoints`, 0 when
+        /// none was recorded.
+        public let coins: Int
     }
 
     public let dayKey: String
@@ -26,14 +32,15 @@ public struct JournalSignals: Equatable, Sendable {
     /// Routines to ask about without blame, most recently due first: still open in round day 2 or
     /// 3, or closed by the settlement that opened this day. Never one that is still open today.
     public let skipped: [JournalSubject]
+    /// Quests asked and routines due on this day that are still not done, skipped or swapped away.
+    /// Quests first. The hidden quest is a bonus, not something left undone. Routines already
+    /// overdue are `skipped`, never here.
+    public let leftOpen: [JournalSubject]
 
     public var completedCount: Int { completed.count }
 
-    /// Mean of the rated items, nil when none was rated.
-    public var averageRating: Double? {
-        let rated = completed.compactMap(\.rating)
-        return rated.isEmpty ? nil : Double(rated.reduce(0, +)) / Double(rated.count)
-    }
+    /// The coins the day's completions paid, summed from the items.
+    public var coinsEarned: Int { completed.reduce(0) { $0 + $1.coins } }
 
     /// The item to ask about as a good moment: the highest rating of 1 or more, the latest winning
     /// a tie. A choice item is asked about as a choice instead, so one thing is never asked twice.
@@ -44,24 +51,13 @@ public struct JournalSignals: Equatable, Sendable {
                  < ($1.rating!, $1.completedAt ?? .distantPast, $0.subject.text) }
     }
 
-    /// The latest completed photo or choice item.
-    public var choiceItem: Item? {
-        completed.filter(\.isChoice)
-            .max { ($0.completedAt ?? .distantPast, $1.subject.text) < ($1.completedAt ?? .distantPast, $0.subject.text) }
-    }
-
-    /// What marks a quest as a photo or a choice, matched against its text, case-insensitively.
-    static let photoWords = ["photo", "photograph", "picture"]
-    static let choiceWords = ["pick", "choose", "notice", "look at"]
-
-    public static func isPhoto(_ text: String) -> Bool {
-        let lower = text.lowercased()
-        return photoWords.contains(where: lower.contains)
-    }
+    /// What marks a quest as one of picking, choosing or noticing, matched against its text,
+    /// case-insensitively.
+    static let choiceWords = ["photo", "photograph", "picture", "pick", "choose", "notice", "look at"]
 
     public static func isChoice(_ text: String) -> Bool {
         let lower = text.lowercased()
-        return isPhoto(text) || choiceWords.contains(where: lower.contains)
+        return choiceWords.contains(where: lower.contains)
     }
 
     /// - Parameters:
@@ -87,18 +83,21 @@ public struct JournalSignals: Equatable, Sendable {
             if let seen = newest[id], seen.timestamp >= rating.timestamp { continue }
             newest[id] = rating
         }
-        func item(_ kind: FeedbackTarget, _ id: UUID, _ text: String, variant: String?, at: Date?) -> Item {
+        func item(_ kind: FeedbackTarget, _ id: UUID, _ text: String, variant: String?, at: Date?,
+                  light: Bool, coins: Int?) -> Item {
             Item(subject: JournalSubject(kind: kind, id: id, text: text), variant: variant,
                  rating: newest[id]?.rating, completedAt: at,
-                 isChoice: Self.isChoice(text), isPhoto: Self.isPhoto(text))
+                 isChoice: Self.isChoice(text), isLight: light, coins: coins ?? 0)
         }
 
         var done: [Item] = quests
             .filter { $0.dayKey == dayKey && !$0.replaced && $0.points != nil }
-            .map { item(.quest, $0.id, $0.textSnapshot, variant: $0.variantSnapshot, at: $0.completedAt) }
+            .map { item(.quest, $0.id, $0.textSnapshot, variant: $0.variantSnapshot, at: $0.completedAt,
+                        light: false, coins: $0.points) }
         done += occurrences
             .filter { $0.completedDayKey == dayKey && !$0.isReplaced }
-            .map { item(.routine, $0.id, $0.displayText, variant: nil, at: $0.completedAt) }
+            .map { item(.routine, $0.id, $0.displayText, variant: nil, at: $0.completedAt,
+                        light: $0.usedDegraded && $0.degradedTextSnapshot != nil, coins: $0.awardedPoints) }
         self.completed = done.sorted { ($0.completedAt ?? .distantPast, $0.subject.text)
                                      < ($1.completedAt ?? .distantPast, $1.subject.text) }
 
@@ -115,5 +114,15 @@ public struct JournalSignals: Equatable, Sendable {
         self.skipped = given
             .sorted { $0.dueDayKey == $1.dueDayKey ? $0.textSnapshot < $1.textSnapshot : $0.dueDayKey > $1.dueDayKey }
             .map { JournalSubject(kind: .routine, id: $0.id, text: $0.displayText) }
+
+        let openQuests = quests
+            .filter { $0.dayKey == dayKey && !$0.replaced && !$0.isHiddenSlot && $0.points == nil }
+            .sorted { $0.textSnapshot < $1.textSnapshot }
+            .map { JournalSubject(kind: .quest, id: $0.id, text: $0.textSnapshot) }
+        let openRoutines = occurrences
+            .filter { $0.dueDayKey == dayKey && $0.completedDayKey == nil && !$0.skipped && !$0.isReplaced }
+            .sorted { $0.textSnapshot < $1.textSnapshot }
+            .map { JournalSubject(kind: .routine, id: $0.id, text: $0.displayText) }
+        self.leftOpen = openQuests + openRoutines
     }
 }

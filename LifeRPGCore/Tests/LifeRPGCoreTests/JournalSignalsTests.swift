@@ -12,26 +12,21 @@ struct JournalSignalsTests {
         let plain = ["Drink 2L of water", "Stretch for 10 minutes", "Go for a walk"]
         for text in choice { #expect(JournalSignals.isChoice(text), "\(text)") }
         for text in plain { #expect(!JournalSignals.isChoice(text), "\(text)") }
-        #expect(JournalSignals.isPhoto("Take a photo of the sky"))
-        #expect(!JournalSignals.isPhoto("Pick a book"))
     }
 
-    @Test func completedCountAndAverageComeFromTheDaysRowsOnly() {
+    @Test func completedCountComesFromTheDaysRowsOnly() {
         let a = F.quest("Walk"), b = F.quest("Read"), open = F.quest("Stretch", done: false)
         let elsewhere = F.quest("Yesterday's", on: "2026-09-17")
         let routine = F.routineDone("Take out the trash")
         let signals = F.signals(quests: [a, b, open, elsewhere], occurrences: [routine],
                                 ratings: [F.rating(of: a.id, 2), F.rating(of: b.id, -1), F.rating(of: routine.id, 1)])
         #expect(signals.completedCount == 3)
-        // (2 - 1 + 1) / 3
-        #expect(signals.averageRating == 2.0 / 3.0)
         #expect(signals.tier == .normal)
     }
 
     @Test func aRatingWithNoCompletionBehindItSaysNothingAboutTheDay() {
         let a = F.quest("Walk")
         let signals = F.signals(quests: [a], ratings: [F.rating(of: UUID(), -2)])
-        #expect(signals.averageRating == nil)
         #expect(signals.completed.first?.rating == nil)
     }
 
@@ -49,9 +44,8 @@ struct JournalSignalsTests {
         let signals = F.signals(quests: [swapped, photo], occurrences: [routine],
                                 ratings: [F.rating(of: swapped.id, 2), F.rating(of: photo.id, 2)])
         #expect(signals.completedCount == 0)
-        #expect(signals.averageRating == nil)
         #expect(signals.bestRated == nil)
-        #expect(signals.choiceItem == nil)
+        #expect(signals.leftOpen.isEmpty)
     }
 
     @Test func theBestRatedIsTheHighestAndTheLatestWinsATie() {
@@ -67,13 +61,12 @@ struct JournalSignalsTests {
         #expect(none.bestRated == nil)
     }
 
-    /// A photo quest is asked about as a choice, so it can't also be the "good moment".
+    /// A choice quest has its own pool rows, which the editor's button does not use, so it can't be
+    /// the "good moment" either.
     @Test func aChoiceItemIsNeverTheBestRatedOne() {
         let photo = F.quest("Take a photo of the sky")
         let signals = F.signals(quests: [photo], ratings: [F.rating(of: photo.id, 2)])
         #expect(signals.bestRated == nil)
-        #expect(signals.choiceItem?.subject.text == "Take a photo of the sky")
-        #expect(signals.choiceItem?.rating == 2)
     }
 
     @Test func aRoutineOnItsLightVersionIsNamedByTheVersionDone() {
@@ -83,6 +76,58 @@ struct JournalSignalsTests {
         let signals = F.signals(occurrences: [o])
         #expect(signals.completed.map(\.subject.text) == ["A 30 minute walk"])
         #expect(signals.completed.first?.subject.kind == .routine)
+    }
+
+    // MARK: coins and the light version
+
+    @Test func eachCompletionCarriesTheCoinsItPaid() {
+        let quest = F.quest("Walk")
+        quest.points = 25
+        let routine = F.routineDone("Take out the trash")
+        routine.awardedPoints = 8
+        let unpaid = F.routineDone("No payout recorded")
+        let signals = F.signals(quests: [quest], occurrences: [routine, unpaid])
+        #expect(Dictionary(uniqueKeysWithValues: signals.completed.map { ($0.subject.text, $0.coins) })
+                == ["Walk": 25, "Take out the trash": 8, "No payout recorded": 0])
+        #expect(signals.coinsEarned == 33)
+    }
+
+    @Test func aRoutineDoneOnItsLightVersionIsMarkedLightAndTheOriginalIsNot() {
+        let light = F.routineDone("Strength session")
+        light.usedDegraded = true
+        light.degradedTextSnapshot = "A 30 minute walk"
+        let original = F.routineDone("Stretch")
+        original.degradedTextSnapshot = "Touch your toes"
+        let signals = F.signals(quests: [F.quest("Read")], occurrences: [light, original])
+        #expect(Dictionary(uniqueKeysWithValues: signals.completed.map { ($0.subject.text, $0.isLight) })
+                == ["A 30 minute walk": true, "Stretch": false, "Read": false])
+    }
+
+    // MARK: what is still open today
+
+    @Test func questsAndRoutinesStillOpenTodayAreLeftOpenButNothingDoneSkippedOrSwapped() {
+        let open = F.quest("Stretch", done: false)
+        let done = F.quest("Walk")
+        let swapped = F.quest("Swapped away", done: false, replaced: true)
+        let elsewhere = F.quest("Yesterday's", on: "2026-09-17", done: false)
+        let hidden = F.quest("Hidden bonus", done: false)
+        hidden.isHiddenSlot = true
+        let dueToday = F.occurrence("Water the plants", due: "2026-09-18")
+        let finished = F.routineDone("Take out the trash")
+        let cancelled = F.occurrence("Paid to cancel", due: "2026-09-18", skipped: true)
+        let replaced = F.occurrence("Swapped", due: "2026-09-18")
+        replaced.replacedByID = UUID()
+        let signals = F.signals(quests: [open, done, swapped, elsewhere, hidden],
+                                occurrences: [dueToday, finished, cancelled, replaced])
+        #expect(signals.leftOpen.map(\.text) == ["Stretch", "Water the plants"])
+        #expect(signals.leftOpen.map(\.kind) == [.quest, .routine])
+    }
+
+    @Test func anOverdueRoutineIsSkippedNotLeftOpen() {
+        let overdue = F.occurrence("Round two", due: "2026-09-17")
+        let signals = F.signals(occurrences: [overdue])
+        #expect(signals.skipped.map(\.text) == ["Round two"])
+        #expect(signals.leftOpen.isEmpty)
     }
 
     // MARK: routines to ask about without blame
