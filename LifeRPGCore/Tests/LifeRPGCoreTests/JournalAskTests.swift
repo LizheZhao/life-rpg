@@ -597,4 +597,57 @@ struct JournalAskTests {
     @Test func aCursorInABlockThatIsGoneInsertsNothing() {
         #expect(insert(.question(walkQuestion), into: E.doc(E.text(1, "hello")), block: 99, offset: 0) == nil)
     }
+
+    // MARK: before the tap
+
+    @Test func thePillIsCappedAtFiveModelPromptsAndNotBeforeAndFixedPromptsDoNotCount() {
+        #expect(!JournalAsk.isCapped(JournalDocument()))
+        #expect(!JournalAsk.isCapped(JournalDocument(blocks: llmPrompts(4))))
+        #expect(JournalAsk.isCapped(JournalDocument(blocks: llmPrompts(5))))
+        #expect(JournalAsk.isCapped(JournalDocument(blocks: llmPrompts(6))))
+        let fixed = JournalFixedKey.allCases.enumerated().map { E.prompt(40 + $0.offset, "fixed \($0.offset)?", source: .fixed, key: $0.element) }
+        #expect(!JournalAsk.isCapped(JournalDocument(blocks: llmPrompts(4) + fixed)))
+    }
+
+    // MARK: what the editor shows after the insertion
+
+    private func notice(_ result: JournalAskResult, inserted: Bool, document: JournalDocument = E.doc(E.text(1, "hello")),
+                        language: JournalLanguage = .en) -> JournalAskNotice? {
+        JournalAsk.notice(for: result, inserted: inserted, document: document, language: language)
+    }
+
+    @Test func anInsertedQuestionSaysNothing() {
+        #expect(notice(.question(walkQuestion), inserted: true) == nil)
+    }
+
+    @Test func aFallbackThatWasInsertedShowsTheOneLineToast() {
+        #expect(notice(.fallback(.tomorrow, toast: toast), inserted: true) == .toast(toast))
+    }
+
+    @Test func exhaustedShowsItsToastAndCappedShowsNoneBecauseThePillAlreadySaysSo() {
+        #expect(notice(.exhausted, inserted: false)
+                == .toast("Couldn't reach the guide, and every standard question is already in your entry"))
+        #expect(notice(.capped, inserted: false) == nil)
+    }
+
+    @Test func theSafetyLineIsShownAsItsOwnNoticeAndNotAsAToast() {
+        #expect(notice(.safety("line"), inserted: false) == .safety("line"))
+    }
+
+    @Test func aQuestionWhoseSpotIsGoneSaysSoInBothLanguages() {
+        #expect(notice(.question(walkQuestion), inserted: false)
+                == .toast("The place you asked from is gone, so no question was added"))
+        #expect(notice(.question(walkQuestion), inserted: false, language: .zhHans)
+                == .toast("你提问的位置已经不在了，所以没有加入问题"))
+    }
+
+    @Test func aFallbackThatCouldNotBeInsertedBlamesTheSpotUnlessEveryStandardQuestionIsInNow() {
+        #expect(notice(.fallback(.tomorrow, toast: toast), inserted: false)
+                == .toast("The place you asked from is gone, so no question was added"))
+        let all = JournalDocument(blocks: JournalFixedKey.allCases.enumerated().map {
+            E.prompt($0.offset + 1, "q", source: .fixed, key: $0.element)
+        })
+        #expect(notice(.fallback(.tomorrow, toast: toast), inserted: false, document: all)
+                == .toast("Couldn't reach the guide, and every standard question is already in your entry"))
+    }
 }

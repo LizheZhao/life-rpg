@@ -27,6 +27,13 @@ public enum JournalAskResult: Equatable, Sendable {
     case safety(String)
 }
 
+/// What the editor shows besides the inserted prompt: a one-line toast that fades, or the safety
+/// line, which stays until the reader dismisses it.
+public enum JournalAskNotice: Equatable, Sendable {
+    case toast(String)
+    case safety(String)
+}
+
 /// The rules of the editor's "Ask me something" button: the request, what is accepted of the
 /// model's text, and the choice between the model's question and a fixed one. The app supplies the
 /// model (`JournalWording`) and the cursor; nothing here reads a store.
@@ -44,6 +51,12 @@ public enum JournalAsk {
 
     /// How many earlier entries the request holds its question against.
     static let previousEntryCount = 3
+
+    /// The pill is dimmed and does nothing: five model prompts are in the entry. `resolve` answers
+    /// `capped` by this same rule.
+    public static func isCapped(_ document: JournalDocument) -> Bool {
+        document.llmPromptCount >= maxLLMPrompts
+    }
 
     // MARK: the request
 
@@ -160,7 +173,7 @@ public enum JournalAsk {
                                previousQuestions: [String], includeWriting: Bool,
                                wording: (any JournalWording)?,
                                timeout: Duration = JournalAsk.timeout) async -> JournalAskResult {
-        if document.llmPromptCount >= maxLLMPrompts { return .capped }
+        if isCapped(document) { return .capped }
         let written = document.blocks.map(\.writtenText).joined(separator: "\n")
         if JournalSafety.needsSafetyLine(answer: written) {
             return .safety(JournalSafety.line(language: language))
@@ -202,6 +215,30 @@ public enum JournalAsk {
     }
 
     // MARK: what the editor says
+
+    /// What to show once `result` has met the entry. `inserted` is whether `insert` made an edit.
+    /// A result that could not be inserted blames the cursor's block being gone, unless a fallback
+    /// found every fixed prompt in the entry by now, which is `exhausted` by another road.
+    public static func notice(for result: JournalAskResult, inserted: Bool, document: JournalDocument,
+                              language: JournalLanguage) -> JournalAskNotice? {
+        switch result {
+        case .capped: return nil
+        case .exhausted: return .toast(exhaustedToast(language: language))
+        case .safety(let line): return .safety(line)
+        case .question:
+            return inserted ? nil : .toast(spotGoneToast(language: language))
+        case .fallback(_, let toast):
+            if inserted { return .toast(toast) }
+            return .toast(JournalFixedKey.nextFallback(missingFrom: document) == nil
+                          ? exhaustedToast(language: language) : spotGoneToast(language: language))
+        }
+    }
+
+    /// The block the cursor was in was removed while the model was thinking.
+    public static func spotGoneToast(language: JournalLanguage) -> String {
+        language == .zhHans ? "你提问的位置已经不在了，所以没有加入问题"
+                            : "The place you asked from is gone, so no question was added"
+    }
 
     public static func fallbackToast(language: JournalLanguage) -> String {
         language == .zhHans ? "没能联系上向导，换一个常用的问题" : "Couldn't reach the guide, here's a standard one"
