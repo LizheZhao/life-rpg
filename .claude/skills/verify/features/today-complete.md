@@ -1,6 +1,6 @@
 # Today: complete a quest
 
-The Today tab is a scroll of cards: header (avatar, a round book button, `+`), greeting, a dark `tonight` journal card (evening only), the level card, an `Epic` section with a routine-style card (tap the body to expand), Routines (full-width rows, overdue ones pinned first), Today's quests (full-width tinted rows), a `Hidden` section, then Completed and Ahead this week (each a stack). There is no Backlog section: missed routines show on their due day's sheet on the Calendar. The round complete button on a quest or routine row asks for confirmation, writes a ledger entry, plays the payout reveal (quests only; a routine's fixed payout goes straight to `+N` and `paid`) and offers a rating, all in one centered card. The coin count on the level card must equal the ledger.
+The Today tab is a scroll of cards: header (avatar, a round book button, `+`), greeting, a dark journal card (`tonight` from 20:00, `today` when shown by day because the day is cleared), the level card, an `Epic` section with a routine-style card (tap the body to expand), Routines (full-width rows, overdue ones pinned first), Today's quests (full-width tinted rows), a `Hidden` section, then Completed and Ahead this week (each a stack). There is no Backlog section: missed routines show on their due day's sheet on the Calendar. The round complete button on a quest or routine row asks for confirmation, writes a ledger entry, plays the payout reveal (quests only; a routine's fixed payout goes straight to `+N` and `paid`) and offers a rating, all in one centered card. The coin count on the level card must equal the ledger.
 
 ## Sub-features
 
@@ -11,7 +11,7 @@ The Today tab is a scroll of cards: header (avatar, a round book button, `+`), g
 - `today-menu` the `⋯` on a row or the epic card (or a long-press) opens a popover. Quest: `Reroll`, `Cancel`, `Replace`, `Rate / note`, `Turn off`, then `Open link` when the quest has one. Routine: `Cancel`, `Replace`, `Rate / note`, `Turn off`, and `Remove` on extras only. Epic: `Reroll`, `Extend`, `Replace`, `Rate / note`, `Turn off`, `Open link`. Only `Reroll`, `Cancel` and `Extend` carry a price pill (`10 coins`, `free`); a blocked one is greyed and keeps it. Rows in the Completed stack carry only `Rate / note`.
 - `today-ahead` the `Ahead this week` header (`6 open`, clay `−13 Sun night`) over a stack of rows; tap the stack or the header to fan out, `Collapse` to fold; `Do now` on a candidate raises the same centered card (header, `+N` pill, `Complete`, `Not yet`) and a `routine` ledger row follows. Weekdays start collapsed, Saturday and Sunday open.
 - `today-add` the `+` sheet (`Add for today`) adds extra work on top of the day: `From library` (a routine) or `Custom`. Driven for the library path.
-- `today-journal` the book button and the `tonight` card open the journal editor (see [journal-editor](./journal-editor.md)).
+- `today-journal` the book button and the dark journal card open the journal editor (see [journal-editor](./journal-editor.md)).
 - `today-levels` the level card (or the avatar) opens the Levels sheet (`Levels`, a perk list, a full-width `Done` pill at the bottom, about 220, 890 pt).
 - `today-completed` a done card leaves its section at once for the `Completed` stack after Today's quests / Hidden: header `<n> done · +<sum>` equals the done ledger rows, tap the stack or the header to fan out, `Collapse` or the header to fold, collapsed again after `V relaunch`. The section it left reads `<n> / <m> done`, or `cleared` when nothing is open.
 
@@ -21,7 +21,7 @@ The Today tab is a scroll of cards: header (avatar, a round book button, `+`), g
 - Tap the round button on a quest or routine row.
 - Tap `⋯` on a row or the epic card (or long-press it); tap `+` (Add for today) top-right (about 396, 92 pt).
 - Tap the level card or the avatar (about 44, 92 pt) to open the level track sheet.
-- Tap the book button (about 342, 92 pt, accessibility label `Journal`) or the `tonight` card for the journal.
+- Tap the book button (about 342, 92 pt, accessibility label `Journal`) or the dark journal card for the journal.
 
 ## Driving it with the simulator
 
@@ -29,7 +29,7 @@ Preconditions:
 
 - `V up --fresh`; `V doctor` shows `offset: 0` and note `app day`.
 - The level card reads `100 coins`, `60 to Lv 2`, `normal day`, and `<n> random slots` (`1 random slot` when it is one); the hand line has no streak part. The slot count follows the day's routine load: 3 on a quiet weekday, 1 on a Saturday (6 routines), 2 on a Sunday (4).
-- From 20:00 until 05:00 (or once the day is cleared) a dark `tonight` card (`Write about today`, `Start writing`) sits between the greeting and the level card and pushes everything down by about 230 pt. Debug → `Journal card` (`Real / Evening / Daytime / Cleared`) forces either state, so positions below hold for `Daytime`.
+- From 20:00 until 05:00 (or once the day is cleared) a dark journal card (script label `tonight`, `Write about today`, `Start writing`, or `Keep going · N words` / `Written · N words` once there is text; a purple dot on the book button marks a draft) sits between the greeting and the level card and pushes everything down by about 230 pt. Debug → `Journal time` (`Real / Evening / Daytime / Cleared`; its accessibility label is still `Journal card`) forces either state, so positions below hold for `Daytime` (verified at 08:08 on the real clock: no card, the level card directly under the greeting). The greeting (`Good morning, let's level up`) follows the real clock, not this setting.
 
 - **Open the card.** Scroll until a quest row is visible (rows are tinted, pill shows a range such as `5–15`). Scroll with a swipe that starts around y=760 pt and ends at 200–300 pt. Tap the quest's round button (the first tap after a card closes or the app launches is often swallowed; screenshot and repeat). A centered card appears on a dimmed page with the quest's disc and title, a `?` box, `Complete` and `Not yet` (the tab bar fades out). A tap on the dim, like `Not yet`, closes it and leaves the ledger alone.
 - **Complete.** Tap `Complete` (about x=220 pt, y=545 pt for a one-line title). The card turns in place: range pill and blurred numbers scrolling (about 1.5 s), then `+<points>` with `paid` (a tap on the dim skips the roll), then after 0.9 s `how did that feel?` with five round buttons and `Done`. Capture `V shot today-complete-reveal`.

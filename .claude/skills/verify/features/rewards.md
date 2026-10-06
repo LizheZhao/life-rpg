@@ -30,7 +30,7 @@ Preconditions: `V up --fresh`. A reward must cost at most the balance: the coin 
 
 - A fresh store has only 100 coins; look at the previewed coin price before saving.
 - Reward and goal pricing are Core rules (`RewardPricing`, `SavingsGoal`); prove numbers with `swift test`.
-- **Switches do not respond to the control tool's tap** (here and on Library's `On`): the tap lands on the right pixel and nothing flips, while buttons, steppers and pills work. Treat a `Toggle` as unreachable, say so, and use the other path to the same state.
+- **`Toggle` switches do not respond to the control tool's tap** (here and on Library's `On`): the tap lands on the right pixel and nothing flips, while buttons, steppers, pills and segmented controls (Debug's `Journal time`) work. Treat a `Toggle` as unreachable, say so, and use the other path to the same state.
 - The control tool's own screenshot lags the screen by several seconds; after a tap read the state with `V shot` (a stale frame made two earlier taps look like failures).
 - The first tap into the `New reward` sheet's Name field is swallowed while the sheet animates; tap it again and wait for the cursor before typing.
 - The editor has a nav title `New reward` / `Edit reward`, a `Cancel` button, section titles `Reward` and `Estimated cost` and helper captions; with no hardware keyboard the number pad does not show and `Save` sits at the bottom (about 220, 888 pt).

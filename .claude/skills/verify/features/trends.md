@@ -4,7 +4,7 @@ The Trends tab turns the journal and the day's results into patterns. It is lock
 
 ## Sub-features
 
-- `tr-lock` the locked page: subtitle `unlocks after 7 nights`, a dark card `N of 7 nights written` with seven `M T W T F S S` tiles, `Write tonight's entry`, a `WHAT YOU'LL SEE HERE` list of four previews (`Words that defined the month`, `Favorite quests`, `Low energy days vs. what got done`, `Writing streak and usual hour`), a `Ratings` row, and an `All journal entries` row once any entry exists. A written day is an entry with non-whitespace text in a text block or an answer.
+- `tr-lock` the locked page: subtitle `unlocks after 7 nights`, a dark card `N of 7 nights written` with seven `M T W T F S S` tiles, `Write tonight's entry` (from 20:00; `Write today's entry` by day, same clock as the editor), a `WHAT YOU'LL SEE HERE` list of four previews (`Words that defined the month`, `Favorite quests`, `Low energy days vs. what got done`, `Writing streak and usual hour`), a `Ratings` row, and an `All journal entries` row once any entry exists. A written day is an entry with non-whitespace text in a text block or an answer.
 - `tr-head` once unlocked: the picker (`Weeks` / `Months` / `Year`, default Months), the title, a script subtitle `October · 3 entries`, and previous / next chevrons.
 - `tr-tiles` `words`, `day streak` (all-time, ending today or yesterday), `usual hour` (the modal local hour of an entry's creation time; `—` with fewer than 5 entries in the period).
 - `tr-words` `Words per day`: bars per day, `avg N`, the darkest bars at or above the nearest-rank 90th percentile of written days, axis dates first / middle / last.
