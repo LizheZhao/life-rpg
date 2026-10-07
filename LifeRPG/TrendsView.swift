@@ -147,7 +147,8 @@ struct TrendsView: View {
                 HStack(spacing: 8) {
                     ForEach(0..<locked.progress.of, id: \.self) { index in
                         let filled = index < locked.progress.written
-                        Text(String("MTWTFSS".map { $0 }[index])).lr(.pill)
+                        // Nights written, in any order: the tiles count to the unlock, they are not weekdays.
+                        Text("\(index + 1)").lr(.pill)
                             .foregroundStyle(filled ? LR.Color.onTintDark : LR.Color.onNightSecondary.opacity(0.7))
                             .frame(maxWidth: .infinity, minHeight: 42)
                             .background(RoundedRectangle(cornerRadius: LR.Radius.pill, style: .continuous)
