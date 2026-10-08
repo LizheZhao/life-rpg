@@ -176,7 +176,7 @@ struct DebugView: View {
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                section("Ask evaluation (simulator only)", footer: "Runs the real on-device model over \(JournalAskEvaluation.samplesPerVariant) samples of 13 made-up days, each with the prompt that lists the last entries' questions and without it, one attempt per sample and no retry. Nothing is stored in the app. It writes ask-eval-<time>.json and .md (the full prompts, the model's text, Core's verdict and a table of counts) to the app's Documents directory, and writes nothing when the model is unavailable.") {
+                section("Ask evaluation (simulator only)", footer: "Runs the real on-device model over \(JournalAskEvaluation.samplesPerScenario) samples of 15 made-up days, one attempt per sample and no retry. Nothing is stored in the app. It writes ask-eval-<time>.json and .md (the full prompts, the model's text, Core's verdict and a table of counts) to the app's Documents directory, and writes nothing when the model is unavailable.") {
                     Button {
                         askEvalRunning = true
                         Task {

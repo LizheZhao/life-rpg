@@ -18,25 +18,28 @@ public enum JournalPromptBuilder {
              zh: "用第二人称，直接对“你”说。"),
         Rule(en: "Pick one specific thing from the facts below: something done, something not done or skipped, or something finished ahead of time. A specific thing beats a general question about the day.",
              zh: "从下面的情况里挑一件具体的事来问：做完的、没做或跳过的、或者提前完成的。具体的事比笼统地问这一天更好。"),
-        Rule(en: "When something hard or the epic was finished early, you may ask what finishing it felt like.",
-             zh: "如果提前完成了困难的任务或 Epic，可以问完成时是什么感觉。"),
+        Rule(en: "Only say something was finished early or ahead of time when a fact above says so. When a fact says that of something hard or the epic, you may ask what finishing it felt like.",
+             zh: "只有上面的情况明确写了提前完成，才可以说“提前”或“早”。如果情况里写了困难的任务或 Epic 是提前完成的，可以问完成时是什么感觉。"),
         Rule(en: "When something was not done or skipped, ask what got in the way, without blame.",
              zh: "如果有事没做或跳过了，问是什么挡住了，不带责备。"),
         Rule(en: "Give no advice.", zh: "不给建议。"),
         Rule(en: "Make no diagnosis.", zh: "不做诊断。"),
         Rule(en: "No praise or guilt. The app already tracks coins, so do not add to it.",
              zh: "不夸奖，也不让人内疚。金币的事应用已经记着，不要再多说。"),
+        Rule(en: "Do not mention coins, points or numbers from the facts.",
+             zh: "不要提金币、分数或情况里的数字。"),
         Rule(en: "Never ask a question that is already listed, or one close to it.",
              zh: "已经列出的问题不要再问，相近的也不要。"),
         Rule(en: "Never start with why; ask what got in the way, or what it was like.",
              zh: "不要以“为什么”开头；问是什么挡了一下，或者当时是什么样的。"),
+        Rule(en: "Do not ask a question that can be answered yes or no.",
+             zh: "不要问可以用“是”或“不是”回答的问题。"),
+        Rule(en: "Do not restate the facts; just ask.", zh: "不要复述情况，直接提问。"),
         Rule(en: "No contrast staging such as \"not X, but Y\".",
              zh: "不要用“不是……而是……”这类对比句式。"),
         Rule(en: "No closing one-liner that repeats the point.", zh: "不要用一句话收尾来重复要点。"),
         Rule(en: "No triads for rhythm; no long dashes; no markdown.",
              zh: "不要为了节奏凑三项并列；不要用破折号；不要用 markdown。"),
-        Rule(en: "Examples show tone only; never reuse their wording or sentence structure.",
-             zh: "示例只是语气的参照；不要沿用它们的措辞和句式。"),
     ]
 
     /// How much of the entry goes in: its last characters. The on-device model has a small context
@@ -54,12 +57,13 @@ public enum JournalPromptBuilder {
         }
     }
 
-    /// The prompt: the day's facts, then each section that has something in it. `writing` is nil to
-    /// leave out everything the user wrote (the privacy switch), and `recent` is passed empty then
-    /// too; the caller decides, so this function can not leak what it is not given. `JournalAsk`
-    /// passes `recent` empty unless an experiment asks for it.
+    /// The prompt: the day's facts, then what the user has written, then the entry's own questions,
+    /// each section only when it has something in it. `writing` is nil to leave out everything the
+    /// user wrote (the privacy switch); the caller decides, so this function can not leak what it
+    /// is not given. Neither the last entries' questions nor the pool's tone anchors go in: a small
+    /// model copies what it is shown, and `JournalAsk` holds both against its answer instead.
     public static func prompt(language: JournalLanguage, signals: JournalSignals, writing: String?,
-                              existing: [String], recent: [String], anchors: [String]) -> String {
+                              existing: [String]) -> String {
         let words = Words(language)
         var sections = [words.opening + "\n\n" + words.factsHeading + "\n"
                         + facts(signals, words).map { "- " + $0 }.joined(separator: "\n")]
@@ -68,9 +72,8 @@ public enum JournalPromptBuilder {
                 ? "\u{2026}" + String(writing.suffix(maxWritingCharacters)) : writing
             sections.append(words.writingHeading + "\n" + kept)
         }
-        for (heading, lines) in [(words.existingHeading, existing), (words.recentHeading, recent),
-                                 (words.anchorsHeading, anchors)] where !lines.isEmpty {
-            sections.append(heading + "\n" + lines.map { "- " + $0 }.joined(separator: "\n"))
+        if !existing.isEmpty {
+            sections.append(words.existingHeading + "\n" + existing.map { "- " + $0 }.joined(separator: "\n"))
         }
         return sections.joined(separator: "\n\n")
     }
@@ -102,7 +105,7 @@ public enum JournalPromptBuilder {
     }
 
     private static func facts(_ signals: JournalSignals, _ words: Words) -> [String] {
-        var lines = [words.dayType(signals.tier), words.coins(signals.coinsEarned)]
+        var lines = [words.dayType(signals.tier)]
         lines.append(words.list(words.done, signals.completed.map(words.done(_:)), none: words.nothing))
         if let epic = signals.epic { lines.append(words.epic(epic)) }
         if !signals.skipped.isEmpty {
@@ -124,16 +127,12 @@ public enum JournalPromptBuilder {
 
         var opening: String { zh ? "为用户的日记写一个关于今天的问题。" : "Write one question for the user's journal, about today." }
         var factsHeading: String { zh ? "今天的情况：" : "Facts about today:" }
-        var writingHeading: String { zh ? "用户到目前为止写的：" : "What the user has written so far:" }
+        var writingHeading: String {
+            zh ? "用户到目前为止写的。请只针对其中一件具体的事提问，不要笼统地问这一天："
+               : "What the user has written so far. Ask about one specific thing in it, not about the day in general:"
+        }
         var existingHeading: String {
             zh ? "这篇日记里已经有的问题，不要再问：" : "Questions already in this entry. Do not ask these again:"
-        }
-        var recentHeading: String {
-            zh ? "最近几篇日记里的问题，不要问得相似：" : "Questions from recent entries. Do not ask anything like these:"
-        }
-        var anchorsHeading: String {
-            zh ? "示例，只用来参考语气，不要沿用它们的措辞和句式："
-               : "Examples. They show the tone only; do not reuse their wording or sentence structure:"
         }
         var done: String { zh ? "做完的" : "Done" }
         var skipped: String { zh ? "跳过的" : "Skipped" }
@@ -159,16 +158,14 @@ public enum JournalPromptBuilder {
             return "Day type: \(word)."
         }
 
-        func coins(_ count: Int) -> String { zh ? "赚到的金币：\(count)。" : "Coins earned: \(count)." }
-
-        /// "Walk (+12 coins)", "A 30 minute walk (light version, +20 coins)"; a completion that paid
-        /// nothing and is not light, hard or ahead is just its text.
+        /// "Walk", "A 30 minute walk (light version)", "Laundry (done before its day)". Only a fact
+        /// that is true is worded, so a plain completion is just its text: no coins, and nothing
+        /// that could be read as early.
         func done(_ item: JournalSignals.Item) -> String {
             var notes: [String] = []
             if item.isLight { notes.append(zh ? "轻量版" : "light version") }
             if item.difficulty == .hard { notes.append(zh ? "困难" : "hard") }
             if item.isAhead { notes.append(zh ? "提前做的" : "done before its day") }
-            if item.coins != 0 { notes.append(zh ? "+\(item.coins) 金币" : "+\(item.coins) coins") }
             guard !notes.isEmpty else { return item.subject.text }
             return zh ? item.subject.text + "（" + notes.joined(separator: "，") + "）"
                       : item.subject.text + " (" + notes.joined(separator: ", ") + ")"

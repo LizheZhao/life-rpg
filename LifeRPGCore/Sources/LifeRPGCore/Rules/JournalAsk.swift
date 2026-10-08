@@ -6,10 +6,10 @@ public struct JournalAskRequest: Equatable, Sendable {
     public let language: JournalLanguage
     public let instructions: String
     public let prompt: String
-    /// The entry's own questions, then those of the last three entries, then the tone anchors the
-    /// prompt showed, then the four chip questions, so the model can not hand back a chip in other
-    /// words. Held against the model's answer even when the prompt left some of them out (it does
-    /// not list the last entries' questions unless asked to).
+    /// The entry's own questions, then those of the last three entries, then the tone anchors, then
+    /// the four chip questions, so the model can not hand back a chip in other words. Held against
+    /// the model's answer though the prompt lists only the entry's own questions: a small model
+    /// copies what it is shown.
     public let avoiding: [String]
 }
 
@@ -127,18 +127,14 @@ public enum JournalAsk {
     ///     the prompt carries the day's quests and the entry's own questions and nothing else:
     ///     no text, no answers, and not the older entries' questions either. Those are still held
     ///     against the answer, locally.
-    ///   - listsRecentQuestions: whether the prompt lists `previousQuestions`, which only goes in with
-    ///     the writing. Off by default, since a small model copies from a list it is told to avoid;
-    ///     they are held against the answer either way. Exists to compare the two prompts.
     public static func request(language: JournalLanguage, signals: JournalSignals, document: JournalDocument,
-                               previousQuestions: [String], includeWriting: Bool,
-                               listsRecentQuestions: Bool = false) -> JournalAskRequest {
+                               previousQuestions: [String], includeWriting: Bool) -> JournalAskRequest {
         let existing = document.questions
         let anchors = anchors(signals: signals, questionsInEntry: existing.count, language: language)
         let prompt = JournalPromptBuilder.prompt(
             language: language, signals: signals,
             writing: includeWriting ? JournalPromptBuilder.writing(of: document) : nil,
-            existing: existing, recent: includeWriting && listsRecentQuestions ? previousQuestions : [], anchors: anchors)
+            existing: existing)
         return JournalAskRequest(language: language,
                                  instructions: JournalPromptBuilder.instructions(language: language),
                                  prompt: prompt,
@@ -259,7 +255,6 @@ public enum JournalAsk {
     /// it was the model's turn, which is every result but `capped` and `safety`.
     public static func resolve(language: JournalLanguage, signals: JournalSignals, document: JournalDocument,
                                previousQuestions: [String], includeWriting: Bool,
-                               listsRecentQuestions: Bool = false,
                                wording: (any JournalWording)?,
                                timeout: Duration = JournalAsk.timeout,
                                retryTimeout: Duration = JournalAsk.retryTimeout,
@@ -271,8 +266,7 @@ public enum JournalAsk {
         }
         if let wording {
             let asked = request(language: language, signals: signals, document: document,
-                                previousQuestions: previousQuestions, includeWriting: includeWriting,
-                                listsRecentQuestions: listsRecentQuestions)
+                                previousQuestions: previousQuestions, includeWriting: includeWriting)
             var attempt = await ask(wording, asked, prompt: asked.prompt, timeout: timeout)
             var retried = false
             if case .failed(.rejected(let text, .notFresh, _)) = attempt {

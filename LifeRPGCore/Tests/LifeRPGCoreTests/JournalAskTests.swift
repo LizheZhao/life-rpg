@@ -24,10 +24,9 @@ struct JournalAskTests {
 
     private func request(_ signals: JournalSignals? = nil, document: JournalDocument? = nil,
                          previous: [String] = [], includeWriting: Bool = true,
-                         language: JournalLanguage = .en, listsRecent: Bool = false) -> JournalAskRequest {
+                         language: JournalLanguage = .en) -> JournalAskRequest {
         JournalAsk.request(language: language, signals: signals ?? F.signals(), document: document ?? entry(),
-                           previousQuestions: previous, includeWriting: includeWriting,
-                           listsRecentQuestions: listsRecent)
+                           previousQuestions: previous, includeWriting: includeWriting)
     }
 
     /// Replies as scripted, counts its calls, or waits until `release()` and ignores cancellation.
@@ -88,12 +87,12 @@ struct JournalAskTests {
 
     private func resolve(_ wording: (any JournalWording)?, document: JournalDocument? = nil,
                          signals: JournalSignals? = nil, previous: [String] = [], includeWriting: Bool = true,
-                         language: JournalLanguage = .en, listsRecent: Bool = false,
+                         language: JournalLanguage = .en,
                          timeout: Duration = .seconds(60),
                          retryTimeout: Duration = .seconds(60)) async -> JournalAskResult {
         await JournalAsk.resolve(language: language, signals: signals ?? F.signals(), document: document ?? entry(),
                                  previousQuestions: previous, includeWriting: includeWriting,
-                                 listsRecentQuestions: listsRecent, wording: wording,
+                                 wording: wording,
                                  timeout: timeout, retryTimeout: retryTimeout)
     }
 
@@ -112,12 +111,7 @@ struct JournalAskTests {
         #expect(r.prompt == JournalPromptBuilder.prompt(
             language: .en, signals: signals,
             writing: "\(secretText)\n\nQ: \(grateful)\nA: \(secretAnswer)",
-            existing: [grateful], recent: [],
-            anchors: [
-                "Where did the day weigh on you most, in your body or in your mood?",
-                "If a friend had a day like this, what would you say to them?",
-                "Your body had less to give today. What did it ask for?",
-            ]))
+            existing: [grateful]))
         // The entry's questions first, then the older entries', then the anchors.
         #expect(r.avoiding == [
             grateful,
@@ -155,23 +149,24 @@ struct JournalAskTests {
         #expect(JournalAsk.check("what did you think of the new album?", request: r) == .failure(.notFresh))
     }
 
-    @Test func theExperimentSwitchRestoresTheRecentSectionExactly() {
+    /// The model copied the tone anchors it was shown, so it is not shown them. They stay in `avoiding`.
+    @Test func theToneAnchorsAreNotInThePromptButAreStillHeldAgainstTheAnswer() {
+        let anchorRows = [
+            "You got a lot done today, and it doesn't sound like it felt good. What was it like?",
+            "Where did the day weigh on you most, in your body or in your mood?",
+            "If a friend had a day like this, what would you say to them?",
+        ]
         let signals = F.signals(tier: .low)
-        let recent = [album, "What did you notice yesterday?"]
-        let r = request(signals, previous: recent, listsRecent: true)
-        #expect(r.prompt.contains(
-            "Questions from recent entries. Do not ask anything like these:\n- \(album)\n- What did you notice yesterday?"))
-        let off = request(signals, previous: recent)
-        #expect(r.avoiding == off.avoiding)
-        #expect(r.prompt == JournalPromptBuilder.prompt(
-            language: .en, signals: signals,
-            writing: "\(secretText)\n\nQ: \(grateful)\nA: \(secretAnswer)",
-            existing: [grateful], recent: recent, anchors: JournalAsk.anchors(signals: signals, questionsInEntry: 1, language: .en)))
-    }
-
-    @Test func theExperimentSwitchStillSendsNothingWhenTheWritingSwitchIsOff() {
-        let r = request(previous: [album], includeWriting: false, listsRecent: true)
-        #expect(!r.prompt.contains(album))
+        #expect(JournalAsk.anchors(signals: signals, questionsInEntry: 0, language: .en) == anchorRows)
+        let r = request(signals, document: JournalDocument())
+        for row in anchorRows {
+            #expect(!r.prompt.contains(row))
+            #expect(!r.instructions.contains(row))
+            #expect(r.avoiding.contains(row))
+        }
+        #expect(JournalAsk.check(anchorRows[2], request: r) == .failure(.notFresh))
+        #expect(!r.prompt.contains("Examples"))
+        #expect(!r.instructions.contains("Examples"))
     }
 
     // MARK: anchors by the day's facts
@@ -261,7 +256,7 @@ struct JournalAskTests {
         #expect(!r.prompt.contains("A: "))
         #expect(!r.prompt.contains("written so far"))
         // What the switch leaves: the day's quests and the questions already listed.
-        #expect(r.prompt.contains("- Done: Walk (+10 coins)."))
+        #expect(r.prompt.contains("- Done: Walk."))
         #expect(r.prompt.contains("Questions already in this entry. Do not ask these again:\n- \(grateful)"))
     }
 

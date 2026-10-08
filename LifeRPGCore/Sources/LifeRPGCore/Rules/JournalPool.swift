@@ -18,9 +18,10 @@ public enum JournalPlaceholder: String, CaseIterable, Sendable {
     case quest
 }
 
-/// The question pool: tone anchors for the model's "Ask me something" question, chosen by the day's
-/// facts (`JournalAsk.anchors`), which it must not copy (`JournalNovelty`), and the `fact` rows the
-/// button falls back on when the model could not be used (`JournalAsk.dayQuestion`).
+/// The question pool: rows the model's "Ask me something" answer is held against, chosen by the
+/// day's facts (`JournalAsk.anchors`; the model is not shown them, and must not copy them,
+/// `JournalNovelty`), and the `fact` rows the button falls back on when the model could not be used
+/// (`JournalAsk.dayQuestion`).
 ///
 /// A table rather than code, so a wording change is one edited row, and `doc/JOURNAL_PROMPTS.md`
 /// is the draft it is checked against. Every row also has to pass `JournalTextCheck`, except the

@@ -15,17 +15,19 @@ struct JournalPromptBuilderTests {
             - Ask exactly one question, under 15 words.
             - Write it in the second person, speaking to "you".
             - Pick one specific thing from the facts below: something done, something not done or skipped, or something finished ahead of time. A specific thing beats a general question about the day.
-            - When something hard or the epic was finished early, you may ask what finishing it felt like.
+            - Only say something was finished early or ahead of time when a fact above says so. When a fact says that of something hard or the epic, you may ask what finishing it felt like.
             - When something was not done or skipped, ask what got in the way, without blame.
             - Give no advice.
             - Make no diagnosis.
             - No praise or guilt. The app already tracks coins, so do not add to it.
+            - Do not mention coins, points or numbers from the facts.
             - Never ask a question that is already listed, or one close to it.
             - Never start with why; ask what got in the way, or what it was like.
+            - Do not ask a question that can be answered yes or no.
+            - Do not restate the facts; just ask.
             - No contrast staging such as "not X, but Y".
             - No closing one-liner that repeats the point.
             - No triads for rhythm; no long dashes; no markdown.
-            - Examples show tone only; never reuse their wording or sentence structure.
             """)
     }
 
@@ -35,17 +37,19 @@ struct JournalPromptBuilderTests {
             - 只问一个问题，少于 25 个字。
             - 用第二人称，直接对“你”说。
             - 从下面的情况里挑一件具体的事来问：做完的、没做或跳过的、或者提前完成的。具体的事比笼统地问这一天更好。
-            - 如果提前完成了困难的任务或 Epic，可以问完成时是什么感觉。
+            - 只有上面的情况明确写了提前完成，才可以说“提前”或“早”。如果情况里写了困难的任务或 Epic 是提前完成的，可以问完成时是什么感觉。
             - 如果有事没做或跳过了，问是什么挡住了，不带责备。
             - 不给建议。
             - 不做诊断。
             - 不夸奖，也不让人内疚。金币的事应用已经记着，不要再多说。
+            - 不要提金币、分数或情况里的数字。
             - 已经列出的问题不要再问，相近的也不要。
             - 不要以“为什么”开头；问是什么挡了一下，或者当时是什么样的。
+            - 不要问可以用“是”或“不是”回答的问题。
+            - 不要复述情况，直接提问。
             - 不要用“不是……而是……”这类对比句式。
             - 不要用一句话收尾来重复要点。
             - 不要为了节奏凑三项并列；不要用破折号；不要用 markdown。
-            - 示例只是语气的参照；不要沿用它们的措辞和句式。
             """)
     }
 
@@ -76,23 +80,20 @@ struct JournalPromptBuilderTests {
         "Q: What are you grateful for today?\nA: My sister.",
     ]
 
-    @Test func theEnglishPromptCarriesTheFactsTheEntryAndTheLists() {
+    @Test func theEnglishPromptCarriesTheFactsTheEntryAndTheEntrysQuestions() {
         let prompt = JournalPromptBuilder.prompt(
             language: .en, signals: day(), writing: entry.joined(separator: "\n\n"),
-            existing: ["What are you grateful for today?"],
-            recent: ["What did you notice yesterday?"],
-            anchors: ["If a friend had a day like this, what would you say to them?"])
+            existing: ["What are you grateful for today?"])
         #expect(prompt == """
             Write one question for the user's journal, about today.
 
             Facts about today:
             - Day type: low.
-            - Coins earned: 32.
-            - Done: Walk (+12 coins); A 30 minute walk (light version, +20 coins).
+            - Done: Walk; A 30 minute walk (light version).
             - Skipped: Round two.
             - Not done yet: Stretch; Water the plants.
 
-            What the user has written so far:
+            What the user has written so far. Ask about one specific thing in it, not about the day in general:
             Long day.
 
             Q: What are you grateful for today?
@@ -100,55 +101,63 @@ struct JournalPromptBuilderTests {
 
             Questions already in this entry. Do not ask these again:
             - What are you grateful for today?
-
-            Questions from recent entries. Do not ask anything like these:
-            - What did you notice yesterday?
-
-            Examples. They show the tone only; do not reuse their wording or sentence structure:
-            - If a friend had a day like this, what would you say to them?
             """)
     }
 
     @Test func theChinesePromptCarriesTheSameThingsInChinese() {
         let prompt = JournalPromptBuilder.prompt(
             language: .zhHans, signals: day(), writing: "今天很累。",
-            existing: ["今天你感恩什么？"], recent: ["昨天你注意到了什么？"],
-            anchors: ["如果朋友过了这样的一天，你会对他说什么？"])
+            existing: ["今天你感恩什么？"])
         #expect(prompt == """
             为用户的日记写一个关于今天的问题。
 
             今天的情况：
             - 今天的精力：偏低。
-            - 赚到的金币：32。
-            - 做完的：Walk（+12 金币）；A 30 minute walk（轻量版，+20 金币）。
+            - 做完的：Walk；A 30 minute walk（轻量版）。
             - 跳过的：Round two。
             - 还没做的：Stretch；Water the plants。
 
-            用户到目前为止写的：
+            用户到目前为止写的。请只针对其中一件具体的事提问，不要笼统地问这一天：
             今天很累。
 
             这篇日记里已经有的问题，不要再问：
             - 今天你感恩什么？
-
-            最近几篇日记里的问题，不要问得相似：
-            - 昨天你注意到了什么？
-
-            示例，只用来参考语气，不要沿用它们的措辞和句式：
-            - 如果朋友过了这样的一天，你会对他说什么？
             """)
     }
 
     @Test func aDayWithNothingInItSaysSoAndOmitsEveryEmptySection() {
-        let prompt = JournalPromptBuilder.prompt(language: .en, signals: F.signals(), writing: nil,
-                                                 existing: [], recent: [], anchors: [])
+        let prompt = JournalPromptBuilder.prompt(language: .en, signals: F.signals(), writing: nil, existing: [])
         #expect(prompt == """
             Write one question for the user's journal, about today.
 
             Facts about today:
             - Day type: normal.
-            - Coins earned: 0.
             - Done: nothing.
             """)
+    }
+
+    @Test func noCoinsAppearInThePromptInEitherLanguage() {
+        let signals = day()
+        #expect(signals.coinsEarned == 32)
+        for language in [JournalLanguage.en, .zhHans] {
+            let prompt = JournalPromptBuilder.prompt(language: language, signals: signals, writing: nil, existing: [])
+            #expect(!prompt.lowercased().contains("coin"), "\(language)")
+            #expect(!prompt.contains("金币"), "\(language)")
+            #expect(!prompt.contains("32"), "\(language)")
+        }
+    }
+
+    /// The model invented "finished early" for a hard quest that was not early, so only a fact may say it.
+    @Test func aHardQuestDoneOnItsOwnDayIsNotWordedAsEarlyOrAhead() {
+        let hard = F.quest("Run 5 km")
+        hard.slot = .hard
+        hard.points = 40
+        let prompt = JournalPromptBuilder.prompt(language: .en, signals: F.signals(quests: [hard]),
+                                                 writing: nil, existing: [])
+        #expect(prompt.hasSuffix("- Done: Run 5 km (hard)."))
+        for word in ["early", "ahead", "before", "spare"] {
+            #expect(!prompt.contains(word), "\(word)")
+        }
     }
 
     /// A hard quest, a routine done before its day, and the week's epic finished two days early.
@@ -167,16 +176,15 @@ struct JournalPromptBuilderTests {
                                      context: F.context(tier: .normal), ratings: [],
                                      epic: epic, timeZone: Fixtures.tokyo)
         let english = JournalPromptBuilder.prompt(language: .en, signals: signals, writing: nil,
-                                                  existing: [], recent: [], anchors: [])
+                                                  existing: [])
         #expect(english.hasSuffix("""
-            - Coins earned: 155.
-            - Done: Deep clean the kitchen (hard, +40 coins); Laundry (done before its day, +15 coins).
+            - Done: Deep clean the kitchen (hard); Laundry (done before its day).
             - This week's epic: Write up a technical topic. Finished today, 2 days before it was due.
             """))
         let chinese = JournalPromptBuilder.prompt(language: .zhHans, signals: signals, writing: nil,
-                                                  existing: [], recent: [], anchors: [])
+                                                  existing: [])
         #expect(chinese.hasSuffix("""
-            - 做完的：Deep clean the kitchen（困难，+40 金币）；Laundry（提前做的，+15 金币）。
+            - 做完的：Deep clean the kitchen（困难）；Laundry（提前做的）。
             - 本周的 Epic：Write up a technical topic。今天完成了，比截止早 2 天。
             """))
     }
@@ -186,7 +194,7 @@ struct JournalPromptBuilderTests {
         epic.slot = .epic
         #expect(F.signals(quests: [epic], on: "2026-09-14").leftOpen.isEmpty)
         let prompt = JournalPromptBuilder.prompt(language: .en, signals: F.signals(quests: [epic], on: "2026-09-14"),
-                                                 writing: nil, existing: [], recent: [], anchors: [])
+                                                 writing: nil, existing: [])
         #expect(prompt.hasSuffix("- This week's epic: Write up a technical topic. Not done yet, 6 days left."))
     }
 
@@ -196,9 +204,9 @@ struct JournalPromptBuilderTests {
         for (tier, en, zh) in expected {
             let signals = F.signals(tier: tier)
             let english = JournalPromptBuilder.prompt(language: .en, signals: signals, writing: nil,
-                                                      existing: [], recent: [], anchors: [])
+                                                      existing: [])
             let chinese = JournalPromptBuilder.prompt(language: .zhHans, signals: signals, writing: nil,
-                                                      existing: [], recent: [], anchors: [])
+                                                      existing: [])
             #expect(english.contains("- Day type: \(en).\n"), "\(tier)")
             #expect(chinese.contains("- 今天的精力：\(zh)。\n"), "\(tier)")
         }
@@ -207,17 +215,17 @@ struct JournalPromptBuilderTests {
     @Test func aLongEntryIsCutToItsLastCharactersWithAnEllipsis() {
         let long = String(repeating: "A", count: 2_000) + String(repeating: "B", count: JournalPromptBuilder.maxWritingCharacters)
         let prompt = JournalPromptBuilder.prompt(language: .en, signals: F.signals(), writing: long,
-                                                 existing: [], recent: [], anchors: [])
+                                                 existing: [])
         #expect(JournalPromptBuilder.maxWritingCharacters == 1_500)
-        #expect(prompt.hasSuffix("What the user has written so far:\n\u{2026}" + String(repeating: "B", count: 1_500)))
+        #expect(prompt.hasSuffix("not about the day in general:\n\u{2026}" + String(repeating: "B", count: 1_500)))
         #expect(!prompt.contains("AAAA"))
     }
 
     @Test func anEntryThatFitsIsNotCut() {
         let exact = String(repeating: "B", count: 1_500)
         let prompt = JournalPromptBuilder.prompt(language: .en, signals: F.signals(), writing: exact,
-                                                 existing: [], recent: [], anchors: [])
-        #expect(prompt.hasSuffix("written so far:\n" + exact))
+                                                 existing: [])
+        #expect(prompt.hasSuffix("in general:\n" + exact))
         #expect(!prompt.contains("\u{2026}"))
     }
 

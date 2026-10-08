@@ -5,10 +5,9 @@ import LifeRPGCore
 /// Runs "Ask me something" against the real on-device model over a fixed set of made-up days and
 /// writes what came back, for a person to read. Each sample is one model attempt on the path the
 /// editor uses (`JournalAsk.request`, the model, `JournalAsk.check`), without the retry, so the
-/// report shows first-attempt behaviour. Each scenario runs with the prompt listing the last
-/// entries' questions and without it. Nothing is stored and nothing is judged here.
+/// report shows first-attempt behaviour. Nothing is stored and nothing is judged here.
 enum JournalAskEvaluation {
-    static let samplesPerVariant = 4
+    static let samplesPerScenario = 4
 
     private static let dayKey = "2026-09-18"
 
@@ -32,7 +31,6 @@ enum JournalAskEvaluation {
     private struct Sample: Codable {
         var scenario: String
         var language: String
-        var variant: String
         var index: Int
         var facts: [String]
         var prompt: String
@@ -62,27 +60,23 @@ enum JournalAskEvaluation {
             return "Nothing run: the model is unavailable (\(JournalWordingProvider.status(language: .en)))."
         }
         let scenarios = makeScenarios()
-        let variants = [("notListed", false), ("listed", true)]
-        let total = scenarios.count * variants.count * samplesPerVariant
+        let total = scenarios.count * samplesPerScenario
         var samples: [Sample] = []
         var warmed: Set<JournalLanguage> = []
         for scenario in scenarios {
             let wording = JournalWordingProvider.current(language: scenario.language)
             if let wording, warmed.insert(scenario.language).inserted { wording.prewarm() }
             let shown = facts(of: scenario)
-            for index in 1...samplesPerVariant {
-                for (variant, listsRecent) in variants {
-                    let asked = JournalAsk.request(
-                        language: scenario.language, signals: scenario.signals, document: scenario.document,
-                        previousQuestions: scenario.previousQuestions, includeWriting: true,
-                        listsRecentQuestions: listsRecent)
-                    var sample = Sample(scenario: scenario.id, language: scenario.language.rawValue,
-                                        variant: variant, index: index, facts: shown, prompt: asked.prompt,
-                                        outcome: "noModel", latencyMs: 0, check: "-")
-                    if let wording { await ask(wording, asked, into: &sample) }
-                    samples.append(sample)
-                    progress("\(samples.count) of \(total): \(scenario.id) \(variant) #\(index)")
-                }
+            for index in 1...samplesPerScenario {
+                let asked = JournalAsk.request(
+                    language: scenario.language, signals: scenario.signals, document: scenario.document,
+                    previousQuestions: scenario.previousQuestions, includeWriting: true)
+                var sample = Sample(scenario: scenario.id, language: scenario.language.rawValue,
+                                    index: index, facts: shown, prompt: asked.prompt,
+                                    outcome: "noModel", latencyMs: 0, check: "-")
+                if let wording { await ask(wording, asked, into: &sample) }
+                samples.append(sample)
+                progress("\(samples.count) of \(total): \(scenario.id) #\(index)")
             }
         }
         return (try? write(samples, total: total)) ?? "The run finished but the report could not be written."
@@ -204,6 +198,15 @@ enum JournalAskEvaluation {
                     answer: "Lunch with Mei. It was the first slow meal this week.",
                     source: .fixed, fixedKey: .gratefulFor),
         ])
+        let argued = JournalDocument(blocks: [
+            .text(id: UUID(), text: "Argued with my sister on the phone this afternoon, then went for a long walk to cool off."),
+        ])
+        let writtenZh = JournalDocument(blocks: [
+            .text(id: UUID(), text: "今天心很乱，开了太多标签页，也没怎么休息。"),
+            .prompt(id: UUID(), question: "今天你感恩什么？",
+                    answer: "和小梅吃了午饭，这周第一顿不赶时间的饭。",
+                    source: .fixed, fixedKey: .gratefulFor),
+        ])
         let copies = ["What was the best moment of your day?", "What did you think of the new album?",
                       "What was it like when you made a cup of tea?"]
         let copiesZh = ["今天最美好的一刻是什么？", "你觉得新专辑怎么样？", "泡一杯茶的时候是什么感觉？"]
@@ -227,9 +230,11 @@ enum JournalAskEvaluation {
                      signals: signals(tier: .veryLow,
                                       occurrences: [routineSkipped("Piano practice"),
                                                     routineSkipped("Water the plants", daysAgo: 2)])),
+            Scenario("11-entry-argument", signals: signals(), document: argued),
             Scenario("01-quiet-day-zh", .zhHans, signals: quietDay(.zhHans)),
             Scenario("03-low-energy-skipped-routine-zh", .zhHans, signals: lowDay(.zhHans)),
             Scenario("09-previous-questions-zh", .zhHans, signals: quietDay(.zhHans), previous: copiesZh),
+            Scenario("12-entry-already-written-zh", .zhHans, signals: quietDay(.zhHans), document: writtenZh),
         ]
     }
 
@@ -279,16 +284,16 @@ enum JournalAskEvaluation {
 
     private static func markdown(_ samples: [Sample], title: String) -> String {
         var out = ["# \(title)", "",
-                   "\(samplesPerVariant) samples per scenario and variant. One model attempt per sample, no retry, "
-                   + "the entry's writing sent. `notListed` is the prompt without the last entries' questions, "
-                   + "`listed` the old prompt with them. Scenarios with no previous entries get the same prompt in both.", ""]
+                   "\(samplesPerScenario) samples per scenario. One model attempt per sample, no retry, "
+                   + "the entry's writing sent. The prompt lists neither the last entries' questions nor the tone anchors; "
+                   + "Core still rejects an answer that copies one.", ""]
         var seen: [String] = []
         for sample in samples {
             if !seen.contains(sample.scenario) {
                 seen.append(sample.scenario)
                 out += ["## \(sample.scenario) (\(sample.language))", ""] + sample.facts.map { "- " + $0 } + [""]
             }
-            out.append("### \(sample.variant) #\(sample.index): \(sample.category), \(sample.latencyMs) ms")
+            out.append("### #\(sample.index): \(sample.category), \(sample.latencyMs) ms")
             out += ["", "Prompt:", "```", sample.prompt, "```", ""]
             out.append("Output: " + (sample.output.map { "`" + $0.replacingOccurrences(of: "\n", with: "\\n") + "`" }
                                        ?? sample.error ?? "none"))
@@ -299,13 +304,10 @@ enum JournalAskEvaluation {
         }
         let columns = ["accepted"] + JournalAskRejection.allCases.map(\.rawValue)
             + ["noAnswer", "error", "timedOut", "noModel"]
-        out += ["## Totals", "", "| variant | " + columns.joined(separator: " | ") + " |",
-                "|---|" + columns.map { _ in "---|" }.joined()]
-        for variant in ["notListed", "listed"] {
-            let mine = samples.filter { $0.variant == variant }
-            out.append("| \(variant) | " + columns.map { column in "\(mine.filter { $0.category == column }.count)" }
-                .joined(separator: " | ") + " |")
-        }
+        out += ["## Totals", "", "| " + columns.joined(separator: " | ") + " |",
+                "|" + columns.map { _ in "---|" }.joined(),
+                "| " + columns.map { column in "\(samples.filter { $0.category == column }.count)" }
+                    .joined(separator: " | ") + " |"]
         return out.joined(separator: "\n") + "\n"
     }
 }
