@@ -49,6 +49,15 @@ Language follows the system language (`zh-Hans` → Chinese, anything else → E
 | skip.exception | Was there a recent time this went more easily? What was different then? | 最近有没有哪次做这件事比较顺？那次有什么不一样？ |
 | skip.small | What would make it 10% easier tomorrow? | 怎样能让它明天容易一成？ |
 
+## From the day — asked when the model could not be used, filled with one thing from today
+
+| id | en | zh-Hans |
+|---|---|---|
+| fact.early | {quest} got done ahead of time. What did finishing it feel like? | 「{quest}」提前完成了。完成那一刻是什么感觉？ |
+| fact.hard | {quest} was a hard one. What was the toughest moment? | 「{quest}」不轻松。最难的是哪一刻？ |
+| fact.open | {quest} is still open. What got in the way today? | 「{quest}」还没做。今天是什么挡了一下？ |
+| fact.done | You finished {quest} today. What was it like? | 你今天完成了「{quest}」。当时是什么样的？ |
+
 ## Safety line (shown instead of any follow-up when the answer hits a self-harm or hopelessness keyword)
 
 | id | en | zh-Hans |

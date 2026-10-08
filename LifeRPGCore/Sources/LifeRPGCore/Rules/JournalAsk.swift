@@ -7,7 +7,8 @@ public struct JournalAskRequest: Equatable, Sendable {
     public let instructions: String
     public let prompt: String
     /// The entry's own questions, then those of the last three entries, then the tone anchors the
-    /// prompt showed. Held against the model's answer even when the prompt left some of them out.
+    /// prompt showed, then the four chip questions, so the model can not hand back a chip in other
+    /// words. Held against the model's answer even when the prompt left some of them out.
     public let avoiding: [String]
 }
 
@@ -15,7 +16,11 @@ public struct JournalAskRequest: Equatable, Sendable {
 public enum JournalAskResult: Equatable, Sendable {
     /// The model's question, to insert as an `llm` prompt.
     case question(String)
-    /// The model could not be used; insert this fixed prompt and show `toast`.
+    /// The model could not be used; insert this question about one thing from the day
+    /// (`JournalAsk.dayQuestion`) as a fixed prompt with no chip key, and show `toast`.
+    case fromDay(String, toast: String)
+    /// The model could not be used and the day had nothing fresh to ask about; insert this fixed
+    /// prompt and show `toast`.
     case fallback(JournalFixedKey, toast: String)
     /// The model could not be used and every fixed prompt is already in the entry: insert nothing
     /// and show `JournalAsk.exhaustedToast`.
@@ -107,7 +112,9 @@ public enum JournalAsk {
             existing: existing, recent: includeWriting ? previousQuestions : [], anchors: anchors)
         return JournalAskRequest(language: language,
                                  instructions: JournalPromptBuilder.instructions(language: language),
-                                 prompt: prompt, avoiding: existing + previousQuestions + anchors)
+                                 prompt: prompt,
+                                 avoiding: existing + previousQuestions + anchors
+                                     + JournalFixedKey.allCases.map { $0.question(language: language) })
     }
 
     /// Up to three pool rows as tone anchors, chosen by the day: a low day gets the heavy-day rows,
@@ -201,9 +208,10 @@ public enum JournalAsk {
     /// The one decision behind a tap, in this order. Five model prompts already in the entry is
     /// `capped`, before anything else. Writing that holds a safety word gets the safety line and
     /// the model is not called, whether or not the writing would have been sent. Otherwise the
-    /// model is asked once: a question it wrote that `accept` takes is the result, and anything
-    /// else (no model, a timeout, an error, nothing, a rejected text) is the first fixed prompt in
-    /// `JournalFixedKey.fallbackOrder` the entry lacks, or `exhausted` when it has them all.
+    /// model is asked once: a question it wrote that `accept` takes is the result. Anything else
+    /// (no model, a timeout, an error, nothing, a rejected text) is a question about one thing from
+    /// the day (`dayQuestion`), else the first fixed prompt in `JournalFixedKey.fallbackOrder` the
+    /// entry lacks, or `exhausted` when it has them all.
     /// Nothing is retried. `diagnose` hears what became of the model whenever it was the model's
     /// turn, which is every result but `capped` and `safety`.
     public static func resolve(language: JournalLanguage, signals: JournalSignals, document: JournalDocument,
@@ -241,8 +249,40 @@ public enum JournalAsk {
         } else {
             diagnose?(.noModel)
         }
+        if let question = dayQuestion(signals: signals, document: document,
+                                      previousQuestions: previousQuestions, language: language) {
+            return .fromDay(question, toast: dayFallbackToast(language: language))
+        }
         guard let key = JournalFixedKey.nextFallback(missingFrom: document) else { return .exhausted }
         return .fallback(key, toast: fallbackToast(language: language))
+    }
+
+    /// A `fact` row filled with one concrete thing from the day, for when the model could not be
+    /// used. Tried in this order, and the first that is not close to a question in the entry or the
+    /// last three entries wins: the epic finished early, a routine done ahead of its day, a hard
+    /// quest done, a routine given up on, something still open today, the best-rated thing done,
+    /// then anything done, latest first. Nil when the day has nothing fresh to ask about.
+    public static func dayQuestion(signals: JournalSignals, document: JournalDocument,
+                                   previousQuestions: [String], language: JournalLanguage) -> String? {
+        var candidates: [(id: String, quest: String)] = []
+        if let epic = signals.epic, case .doneToday(let spare) = epic.progress, spare > 0 {
+            candidates.append(("fact.early", epic.text))
+        }
+        candidates += signals.completed.filter(\.isAhead).map { ("fact.early", $0.subject.text) }
+        candidates += signals.completed.filter { $0.difficulty == .hard }.map { ("fact.hard", $0.subject.text) }
+        candidates += signals.skipped.map { ("skip.block", $0.text) }
+        candidates += signals.leftOpen.map { ("fact.open", $0.text) }
+        if let best = signals.bestRated { candidates.append(("good.moment", best.subject.text)) }
+        candidates += signals.completed.reversed().map { ("fact.done", $0.subject.text) }
+
+        let avoiding = document.questions + previousQuestions
+        for candidate in candidates {
+            guard let text = JournalPool.render(id: candidate.id, language: language, fills: [.quest: candidate.quest]),
+                  JournalNovelty.isFresh(text, avoiding: avoiding, language: language)
+            else { continue }
+            return text
+        }
+        return nil
     }
 
     private struct Answer: Sendable {
@@ -263,6 +303,8 @@ public enum JournalAsk {
         switch result {
         case .question(let text):
             seed = JournalPromptSeed(question: text, source: .llm)
+        case .fromDay(let text, _):
+            seed = JournalPromptSeed(question: text, source: .fixed)
         case .fallback(let key, _):
             guard let free = document.containsFixedKey(key) ? JournalFixedKey.nextFallback(missingFrom: document) : key
             else { return nil }
@@ -286,6 +328,8 @@ public enum JournalAsk {
         case .safety(let line): return .safety(line)
         case .question:
             return inserted ? nil : .toast(spotGoneToast(language: language))
+        case .fromDay(_, let toast):
+            return .toast(inserted ? toast : spotGoneToast(language: language))
         case .fallback(_, let toast):
             if inserted { return .toast(toast) }
             return .toast(JournalFixedKey.nextFallback(missingFrom: document) == nil
@@ -297,6 +341,10 @@ public enum JournalAsk {
     public static func spotGoneToast(language: JournalLanguage) -> String {
         language == .zhHans ? "你提问的位置已经不在了，所以没有加入问题"
                             : "The place you asked from is gone, so no question was added"
+    }
+
+    public static func dayFallbackToast(language: JournalLanguage) -> String {
+        language == .zhHans ? "没能联系上向导，换一个关于今天的问题" : "Couldn't reach the guide, here's one about your day"
     }
 
     public static func fallbackToast(language: JournalLanguage) -> String {

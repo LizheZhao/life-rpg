@@ -19,12 +19,13 @@ public enum JournalPlaceholder: String, CaseIterable, Sendable {
 }
 
 /// The question pool: tone anchors for the model's "Ask me something" question, chosen by the day's
-/// facts (`JournalAsk.anchors`), which it must not copy (`JournalNovelty`).
+/// facts (`JournalAsk.anchors`), which it must not copy (`JournalNovelty`), and the `fact` rows the
+/// button falls back on when the model could not be used (`JournalAsk.dayQuestion`).
 ///
 /// A table rather than code, so a wording change is one edited row, and `doc/JOURNAL_PROMPTS.md`
 /// is the draft it is checked against. Every row also has to pass `JournalTextCheck`, except the
 /// one-question rule on two deliberate two-part rows, so the anchors follow the same voice rules
-/// the model is held to. Only the kinds `JournalAsk.anchors` picks have rows, and the safety line.
+/// the model is held to. Only the kinds `JournalAsk.anchors` picks have rows, the `fact` rows, and the safety line.
 public enum JournalPool {
     public static let all: [JournalPrompt] = [
         .init(id: "open.scale", kind: .opening,
@@ -72,6 +73,19 @@ public enum JournalPool {
               zh: "怎样能让它明天容易一成？"),
 
 
+
+        .init(id: "fact.early", kind: .fact,
+              en: "{quest} got done ahead of time. What did finishing it feel like?",
+              zh: "「{quest}」提前完成了。完成那一刻是什么感觉？"),
+        .init(id: "fact.hard", kind: .fact,
+              en: "{quest} was a hard one. What was the toughest moment?",
+              zh: "「{quest}」不轻松。最难的是哪一刻？"),
+        .init(id: "fact.open", kind: .fact,
+              en: "{quest} is still open. What got in the way today?",
+              zh: "「{quest}」还没做。今天是什么挡了一下？"),
+        .init(id: "fact.done", kind: .fact,
+              en: "You finished {quest} today. What was it like?",
+              zh: "你今天完成了「{quest}」。当时是什么样的？"),
 
         .init(id: "safety", kind: .safety,
               en: "That sounds heavy. This is only a journaling tool and can't help the way a person can. If you might hurt yourself, please reach out to someone you trust or a local crisis line.",

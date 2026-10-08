@@ -114,6 +114,10 @@ struct JournalAskTests {
             "Where did the day weigh on you most, in your body or in your mood?",
             "If a friend had a day like this, what would you say to them?",
             "Your body had less to give today. What did it ask for?",
+            "What was your favorite moment today?",
+            "What are you grateful for today?",
+            "What did the low energy feel like today?",
+            "What do you want to carry into tomorrow?",
         ])
     }
 
@@ -347,7 +351,13 @@ struct JournalAskTests {
         #expect(accept(walkQuestion, document: doc) == nil)
         #expect(accept("what got in the way of the walk", document: doc) == nil)
         #expect(accept("What got in the way of the walk??", document: doc) == nil)
-        #expect(accept("What got in the way of the run?", document: doc) == nil)
+    }
+
+    /// The same frame asked about another thing is another question: the walk and the run were two
+    /// things that day (`JournalNovelty` compares what a question is about, not how it is built).
+    @Test func theSameFrameAboutAnotherThingIsNotACopy() {
+        let doc = E.doc(E.prompt(1, walkQuestion))
+        #expect(accept("What got in the way of the run?", document: doc) != nil)
     }
 
     @Test func aCopyOfAnOlderEntrysQuestionOrAnAnchorIsRejected() {

@@ -5,6 +5,9 @@ import SwiftData
 /// by it.
 public enum JournalPromptKind: String, Codable, CaseIterable, Sendable {
     case opening, heavy, good, choice, skip, followUp, closing
+    /// A question about one concrete thing from the day, asked when the model could not be used
+    /// (`JournalAsk.dayQuestion`). Never an anchor.
+    case fact
     /// The safety line. Recorded on a turn when it was shown.
     case safety
 }

@@ -23,7 +23,7 @@ struct JournalPoolTests {
 
     @Test func thePoolHasTheRowsOfTheDraft() {
         let counts = Dictionary(grouping: JournalPool.all, by: \.kind).mapValues(\.count)
-        #expect(counts == [.opening: 3, .heavy: 4, .good: 3, .skip: 3, .safety: 1])
+        #expect(counts == [.opening: 3, .heavy: 4, .good: 3, .skip: 3, .fact: 4, .safety: 1])
         #expect(Set(JournalPool.all.map(\.id)).count == JournalPool.all.count)
     }
 

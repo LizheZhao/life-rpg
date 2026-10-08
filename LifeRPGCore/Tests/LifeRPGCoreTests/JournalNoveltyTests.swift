@@ -9,13 +9,44 @@ struct JournalNoveltyTests {
 
     // MARK: similarity
 
-    @Test func englishIsJaccardOverLowercasedWordsWithoutPunctuation() {
+    @Test func englishIsJaccardOverLowercasedContentWordsWithoutPunctuation() {
         #expect(similarity("What did you notice?", "what did you NOTICE") == 1)
-        // 9 shared of 11 distinct words.
+        // part, morning, walk and felt are shared; easiest and hardest are not: 4 of 6.
         #expect(similarity("What part of the morning walk felt easiest to you?",
-                           "What part of the morning walk felt hardest to you?") == 9.0 / 11.0)
+                           "What part of the morning walk felt hardest to you?") == 4.0 / 6.0)
         #expect(similarity("red green blue", "yellow purple") == 0)
-        #expect(similarity("How was the walk?", "How was the run?") == 3.0 / 5.0)
+        // The frame (how, was, the) is not what the question is about.
+        #expect(similarity("How was the walk?", "How was the run?") == 0)
+    }
+
+    /// The frames a question is built from say nothing about what it asks, so they can not make two
+    /// different questions alike. These are the pairs that scored 0.64, 0.60 and 0.60 over all words.
+    @Test func theSameFrameAboutAnotherThingIsAnotherQuestion() {
+        #expect(similarity("You finished Walk today. What was it like?",
+                           "You finished Cook a meal today. What was it like?") == 2.0 / 5.0)
+        #expect(similarity("Run 5 km was a hard one. What was the toughest moment?",
+                           "Read 20 pages was a hard one. What was the toughest moment?") == 4.0 / 10.0)
+        #expect(JournalNovelty.isFresh("You finished Walk today. What was it like?",
+                                       avoiding: ["You finished Cook a meal today. What was it like?"], language: .en))
+        // A one-word subject in each is the closest it gets: finished, like, and the subject differs.
+        #expect(JournalNovelty.isFresh("You finished Walk today. What was it like?",
+                                       avoiding: ["You finished Run today. What was it like?"], language: .en))
+    }
+
+    /// The question that came back as a copy of one in the last entries, with its verb reworded.
+    @Test func aRewordedCopyOfAnEarlierQuestionIsStillAlike() {
+        #expect(similarity("What did you think of the new album?", "What do you think about the new album?") == 1)
+        #expect(!JournalNovelty.isFresh("What do you think about the new album?",
+                                        avoiding: ["What did you think of the new album?"], language: .en))
+        #expect(!JournalNovelty.isFresh("What was the best moment of today?",
+                                        avoiding: ["What was the best moment of your day?"], language: .en))
+    }
+
+    /// A question made only of frame words has nothing else to compare, so it is compared whole:
+    /// the same one is still the same.
+    @Test func aQuestionOfNothingButFrameWordsIsComparedWhole() {
+        #expect(similarity("What was it like?", "What was it like?") == 1)
+        #expect(similarity("What was it?", "How was it?") == 2.0 / 4.0)
     }
 
     @Test func wordOrderAndRepeatsDoNotMatter() {
@@ -39,8 +70,9 @@ struct JournalNoveltyTests {
     @Test func theClosestOfNoneIsZeroAndFreshMeansStrictlyBelowTheThreshold() {
         #expect(JournalNovelty.threshold == 0.6)
         #expect(JournalNovelty.closest("anything", to: [], language: .en) == 0)
-        // Exactly 0.6 is rejected, 5/9 is not.
-        #expect(!JournalNovelty.isFresh("How was the walk?", avoiding: ["How was the run?"], language: .en))
+        // Exactly 0.6 (calm, morning, walk shared of five) is rejected, 2/4 is not.
+        #expect(!JournalNovelty.isFresh("How did the calm morning walk feel?",
+                                        avoiding: ["How did the calm morning walk go?"], language: .en))
         #expect(JournalNovelty.isFresh("What did the quiet walk give you?",
                                        avoiding: ["What did the quiet walk teach us?"], language: .en))
     }
