@@ -410,7 +410,7 @@ struct JournalAskTests {
     }
 
     @Test func theSameThemeInDifferentWordsIsAccepted() {
-        #expect(accept("Was there something small you almost missed this afternoon?",
+        #expect(accept("Which small thing did you almost miss this afternoon?",
                        avoiding: ["What did you notice today that you would normally walk past?"]) != nil)
     }
 
@@ -437,13 +437,6 @@ struct JournalAskTests {
         let r = request(previous: ["What did you notice yesterday?"])
         #expect(wording.instructions == [r.instructions])
         #expect(wording.prompts == [r.prompt])
-    }
-
-    @Test func theChineseQuestionIsAcceptedAndAsked() async {
-        let wording = FakeWording("今晚有哪一刻你想多留一会儿？")
-        let result = await resolve(wording, language: .zhHans)
-        #expect(result == .question("今晚有哪一刻你想多留一会儿？"))
-        #expect(wording.instructions == [JournalPromptBuilder.instructions(language: .zhHans)])
     }
 
     @Test func withTheSwitchOffTheModelNeverSeesTheWriting() async {
@@ -560,7 +553,7 @@ struct JournalAskTests {
         #expect(wording.callCount == 2)
         let first = request(document: JournalDocument(), previous: [album])
         #expect(wording.prompts[0] == first.prompt)
-        #expect(wording.prompts[1] == JournalPromptBuilder.retryPrompt(first.prompt, rejected: album, language: .en))
+        #expect(wording.prompts[1] == JournalPromptBuilder.retryPrompt(first.prompt, rejected: album, reason: .notFresh, language: .en))
         #expect(wording.prompts[1].contains(album))
         #expect(wording.instructions == [first.instructions, first.instructions])
     }
@@ -569,7 +562,7 @@ struct JournalAskTests {
         // Quoted, with a second line: the retry prompt names the question as it would have been shown.
         let wording = FakeWording(script: ["\"\(album)\"\nand a second line", walkQuestion])
         _ = await resolve(wording, document: JournalDocument(), previous: [album])
-        #expect(wording.prompts[1].hasSuffix(JournalPromptBuilder.retryPrompt("", rejected: album, language: .en)))
+        #expect(wording.prompts[1].hasSuffix(JournalPromptBuilder.retryPrompt("", rejected: album, reason: .notFresh, language: .en)))
         #expect(!wording.prompts[1].contains("second line"))
     }
 
@@ -702,6 +695,318 @@ struct JournalAskTests {
         #expect(JournalAsk.check(String(repeating: "word ", count: 20) + "?", request: r) == .failure(.tooLong))
         #expect(JournalAsk.check("What about {quest}?", request: r) == .failure(.placeholder))
         #expect(JournalAsk.check("Why did the walk feel slow?", request: r) == .failure(.voice))
+    }
+
+    // MARK: closed questions
+
+    private func verdict(_ raw: String, language: JournalLanguage = .en,
+                         signals: JournalSignals? = nil) -> Result<String, JournalAskRejection> {
+        JournalAsk.check(raw, request: request(signals, document: JournalDocument(), language: language))
+    }
+
+    /// The first two are what the on-device model wrote in the evaluation.
+    @Test func aQuestionThatOpensWithAnAuxiliaryVerbIsClosed() {
+        let closed = [
+            "Did you enjoy cleaning the kitchen?",
+            "Did you find the stretch enjoyable, or did you find it difficult to complete?",
+            "did you enjoy it?", "\"Did you enjoy it?\"",
+            "Do you want to try again tomorrow?", "Does the walk feel easier now?",
+            "Is the desk tidy now?", "Are you glad you went?", "Was the run hard?", "Were you tired?",
+            "Am I wrong about the walk?", "Have you eaten yet?", "Has the week been heavy?",
+            "Had you planned the walk?", "Can you describe the run?", "Could you stay longer?",
+            "Will you walk tomorrow?", "Would you do it again?", "Should you rest?",
+            "Shall we call the run easy?", "May I ask about the run?", "Might you walk tomorrow?",
+            "Didn't the walk help?", "Isn't it nice out?", "Couldn\u{2019}t you stay longer?",
+        ]
+        for text in closed {
+            #expect(verdict(text) == .failure(.closedQuestion), "\(text)")
+        }
+    }
+
+    @Test func aQuestionThatEndsInATagIsClosed() {
+        let closed = [
+            "You liked the walk, didn't you?", "That was a hard run, wasn't it?", "You enjoyed it, right?",
+            "You did the laundry, did you?", "It went fine, didn\u{2019}t it?", "You can say it, can't you?",
+            "The kitchen is done, is it?", "You will go tomorrow, won't you?", "That was hard, okay?",
+        ]
+        for text in closed {
+            #expect(verdict(text) == .failure(.closedQuestion), "\(text)")
+        }
+    }
+
+    @Test func anOpenEnglishQuestionIsNotClosed() {
+        let open = [
+            "What was it like to finish the run?", "How did the walk feel?", "What got in the way of the walk?",
+            "Which part of the stretch felt hardest?", "Where did you feel it most?", "Who made lunch better?",
+            "When did the kitchen start to feel done?", "Dinner with Mei: what stood out?",
+            "Island air, tight legs: what stayed with you?", "Having a hard run, what helped?",
+            "What did you do, right after the run?", "What made it feel right?",
+            "What did you say to the person who did the dishes?",
+        ]
+        for text in open {
+            #expect(verdict(text) == .success(text), "\(text)")
+        }
+    }
+
+    @Test func aChineseQuestionThatEndsInMaOrHoldsAnAOrNotAFormIsClosed() {
+        let closed = [
+            "你喜欢今天的散步吗？", "今天过得还好吗？", "你累吗?", "有没有哪一刻特别难？", "你是不是有点累？",
+            "能不能说说那次跑步？", "会不会太累了？", "要不要明天再试一次？", "好不好玩？", "对不对？",
+        ]
+        for text in closed {
+            #expect(verdict(text, language: .zhHans) == .failure(.closedQuestion), "\(text)")
+        }
+    }
+
+    @Test func anOpenChineseQuestionIsNotClosed() {
+        let open = [
+            "你觉得怎么样？", "是什么挡了一下？", "那次跑步，哪一刻最难？", "今天哪件事你想留下来？",
+            "你是怎么做到的？", "今晚有哪一刻你想多留一会儿？",
+        ]
+        for text in open {
+            #expect(verdict(text, language: .zhHans) == .success(text), "\(text)")
+        }
+    }
+
+    @Test func theEnglishWordsAreNotReadInAChineseQuestionNorTheChineseFormsInAnEnglishOne() {
+        #expect(verdict("Did 你觉得怎么样？", language: .zhHans) == .success("Did 你觉得怎么样？"))
+        #expect(verdict("What was 吗 like?") == .success("What was 吗 like?"))
+    }
+
+    // MARK: early and ahead
+
+    @Test func earlyOrAheadWithNoFactSayingSoIsRejected() {
+        let early = [
+            "What was it like to finish the run early?", "How did finishing ahead of time feel?",
+            "Early on, what felt hardest?", "What was it like to do the laundry in advance?",
+            "What did the dishes feel like before its day?", "AHEAD of the deadline, what changed?",
+            "What was the early part like?",
+        ]
+        for text in early {
+            #expect(verdict(text) == .failure(.unsupportedEarly), "\(text)")
+        }
+        let chinese = ["提前完成是什么感觉？", "提早做完那件事后，你做了什么？", "你早早做完了，然后呢？"]
+        for text in chinese {
+            #expect(verdict(text, language: .zhHans) == .failure(.unsupportedEarly), "\(text)")
+        }
+    }
+
+    @Test func wordsThatOnlyContainEarlyOrAheadAreNotRejected() {
+        let fine = [
+            "What did you do after the earlier walk?", "What went through your head during the run?",
+            "Where did you head after lunch?", "What did the earliest hour of the day feel like?", "How did the yearly review feel?",
+        ]
+        for text in fine {
+            #expect(verdict(text) == .success(text), "\(text)")
+        }
+        let chinese = ["早上的散步是什么感觉？", "你最早想到的是什么？", "前一天晚上你做了什么？"]
+        for text in chinese {
+            #expect(verdict(text, language: .zhHans) == .success(text), "\(text)")
+        }
+    }
+
+    /// A hard quest done on its own day is the case the model got wrong.
+    @Test func aPlainHardQuestDoneOnItsOwnDayDoesNotAllowEarly() {
+        let hard = F.quest("Run 5 km")
+        hard.slot = .hard
+        let signals = F.signals(quests: [hard])
+        #expect(request(signals).allowsEarly == false)
+        #expect(verdict("What was it like to finish the run early?", signals: signals) == .failure(.unsupportedEarly))
+    }
+
+    private func epicDay(finished doneDay: String, on dayKey: String) -> JournalSignals {
+        let epic = F.quest("Write up a technical topic", on: "2026-09-14", hour: 9)
+        epic.slot = .epic
+        epic.points = 100
+        epic.completedAt = Fixtures.date(doneDay, hour: 20)
+        return JournalSignals(dayKey: dayKey, quests: [], occurrences: [], context: F.context(tier: .normal),
+                              ratings: [], epic: epic, timeZone: Fixtures.tokyo)
+    }
+
+    @Test func anEpicFinishedTodayWithDaysToSpareAllowsEarly() {
+        let signals = epicDay(finished: "2026-09-18", on: "2026-09-18")
+        #expect(request(signals).allowsEarly)
+        let text = "What was it like to finish the report early?"
+        #expect(verdict(text, signals: signals) == .success(text))
+        let chinese = "提前完成报告是什么感觉？"
+        #expect(verdict(chinese, language: .zhHans, signals: signals) == .success(chinese))
+    }
+
+    @Test func anEpicFinishedOnItsLastDayOrEarlierInTheWeekOrNotYetDoesNotAllowEarly() {
+        #expect(request(epicDay(finished: "2026-09-20", on: "2026-09-20")).allowsEarly == false)
+        #expect(request(epicDay(finished: "2026-09-16", on: "2026-09-18")).allowsEarly == false)
+        let open = F.quest("Write up a technical topic", on: "2026-09-14", done: false)
+        open.slot = .epic
+        #expect(request(F.signals(quests: [open], on: "2026-09-14")).allowsEarly == false)
+    }
+
+    @Test func aRoutineDoneBeforeItsDayAllowsEarly() {
+        let ahead = F.routineDone("Laundry")
+        ahead.dueDayKey = "2026-09-19"
+        let signals = F.signals(occurrences: [ahead])
+        #expect(request(signals).allowsEarly)
+        let text = "How did the laundry feel, done a day ahead?"
+        #expect(verdict(text, signals: signals) == .success(text))
+    }
+
+    @Test func aRoutineDoneOnItsDayOrLateDoesNotAllowEarly() {
+        let late = F.routineDone("Laundry")
+        late.dueDayKey = "2026-09-16"
+        #expect(request(F.signals(occurrences: [F.routineDone("Dishes"), late])).allowsEarly == false)
+    }
+
+    @Test func theChecksRunInOrderAndNotFreshIsLast() {
+        let r = request(F.signals(), document: JournalDocument(), previous: ["Did you finish the run early?"])
+        // Closed and early and a copy: the first rule it breaks.
+        #expect(JournalAsk.check("Did you finish the run early?", request: r) == .failure(.closedQuestion))
+        #expect(JournalAsk.check("What was it like to finish the run early?", request: r) == .failure(.unsupportedEarly))
+        // Voice before closed; placeholder before closed; length before both.
+        #expect(JournalAsk.check("Why did you finish early?", request: r) == .failure(.voice))
+        #expect(JournalAsk.check("Did you enjoy {quest}?", request: r) == .failure(.placeholder))
+        #expect(JournalAsk.check("Did you finish the long run early and then rest for most of the evening at home?",
+                                 request: r) == .failure(.tooLong))
+        // A copy that is neither closed nor early is still notFresh.
+        let copy = request(F.signals(), document: JournalDocument(), previous: [album])
+        #expect(JournalAsk.check(album, request: copy) == .failure(.notFresh))
+    }
+
+    // MARK: the wider retry
+
+    @Test func aClosedFirstAnswerIsAskedAgainWithItsOwnSentence() async {
+        let closed = "Did you enjoy cleaning the kitchen?"
+        let wording = FakeWording(script: [closed, walkQuestion])
+        let result = await resolve(wording, document: JournalDocument())
+        #expect(result == .question(walkQuestion))
+        #expect(wording.callCount == 2)
+        let first = request(document: JournalDocument())
+        #expect(wording.prompts[1] == first.prompt + "\n\nThe question you just wrote, \"Did you enjoy cleaning the kitchen?\", "
+                + "can be answered yes or no. Ask an open question instead.")
+        #expect(wording.instructions == [first.instructions, first.instructions])
+    }
+
+    @Test func anEarlyFirstAnswerWithNoFactIsAskedAgainWithItsOwnSentence() async {
+        let early = "What was it like to finish the run early?"
+        let wording = FakeWording(script: [early, walkQuestion])
+        let result = await resolve(wording, document: JournalDocument())
+        #expect(result == .question(walkQuestion))
+        #expect(wording.callCount == 2)
+        let first = request(document: JournalDocument())
+        #expect(wording.prompts[1] == first.prompt + "\n\nThe question you just wrote, \"What was it like to finish the run early?\", "
+                + "says something was early, but nothing in the facts was. Ask again without saying early or ahead.")
+    }
+
+    @Test func anEarlyAnswerIsNotAskedAgainWhenAFactSaysEarly() async {
+        let ahead = F.routineDone("Laundry")
+        ahead.dueDayKey = "2026-09-19"
+        let early = "How did the laundry feel, done early?"
+        let wording = FakeWording(script: [early, walkQuestion])
+        let result = await resolve(wording, document: JournalDocument(), signals: F.signals(occurrences: [ahead]))
+        #expect(result == .question(early))
+        #expect(wording.callCount == 1)
+    }
+
+    @Test func theRetryIsOnceWhicheverRuleSentItThere() async {
+        let closed = "Did you enjoy cleaning the kitchen?"
+        let early = "What was it like to finish the run early?"
+        let cases: [[String?]] = [[closed, closed], [closed, early], [early, closed], [early, early],
+                                  [album, closed], [closed, album], [closed, nil], [early, nil]]
+        for script in cases {
+            let wording = FakeWording(script: script + [walkQuestion])
+            let result = await resolve(wording, document: JournalDocument(), previous: [album])
+            #expect(result == .fallback(.favoriteMoment, toast: toast), "\(script)")
+            #expect(wording.callCount == 2, "\(script)")
+        }
+    }
+
+    @Test func aRetryNamesTheQuestionAsItWouldHaveBeenShown() async {
+        let wording = FakeWording(script: ["\"Did you enjoy it?\"\nand a second line", walkQuestion])
+        _ = await resolve(wording, document: JournalDocument())
+        #expect(wording.prompts[1].hasSuffix("The question you just wrote, \"Did you enjoy it?\", can be answered yes or no. Ask an open question instead."))
+    }
+
+    @Test(.timeLimit(.minutes(1)))
+    func aRetryAfterAClosedAnswerIsCutOffByTheRetryTimeout() async {
+        let wording = FakeWording(.script([.reply("Did you enjoy it?"), .hang]))
+        let result = await resolve(wording, document: JournalDocument(),
+                                   timeout: .seconds(60), retryTimeout: .milliseconds(50))
+        #expect(result == .fallback(.favoriteMoment, toast: toast))
+        #expect(wording.callCount == 2)
+        wording.release()
+    }
+
+    @Test func theDiagnosisNamesTheRuleAndSaysWhenTheSecondAskHappened() async {
+        let closed = "Did you enjoy cleaning the kitchen?"
+        let early = "What was it like to finish the run early?"
+        #expect(await diagnosis(FakeWording(script: [closed, closed]))
+                == [JournalAskDiagnosis(.rejected(text: closed, reason: .closedQuestion, nearest: nil), retried: true)])
+        #expect(await diagnosis(FakeWording(script: [early, early]))
+                == [JournalAskDiagnosis(.rejected(text: early, reason: .unsupportedEarly, nearest: nil), retried: true)])
+        #expect(await diagnosis(FakeWording(script: [closed, walkQuestion]))
+                == [JournalAskDiagnosis(.answered, retried: true)])
+        #expect(JournalAskDiagnosis(.rejected(text: closed, reason: .closedQuestion, nearest: nil), retried: true).summary
+                == "rejected (closedQuestion): Did you enjoy cleaning the kitchen?, on the second ask")
+        #expect(JournalAskDiagnosis(.rejected(text: early, reason: .unsupportedEarly, nearest: nil)).summary
+                == "rejected (unsupportedEarly): What was it like to finish the run early?")
+    }
+
+    @Test func notFreshIsTheLastRuleInTheList() {
+        #expect(JournalAskRejection.allCases.map(\.rawValue)
+                == ["empty", "tooLong", "noQuestionMark", "placeholder", "voice", "closedQuestion",
+                    "unsupportedEarly", "notFresh"])
+    }
+
+    // MARK: the languages the model is used for
+
+    @Test func onlyEnglishUsesTheModelForNow() {
+        #expect(JournalAsk.modelLanguages == [.en])
+        #expect(JournalAsk.usesModel(for: .en))
+        #expect(!JournalAsk.usesModel(for: .zhHans))
+    }
+
+    @Test func aChineseTapNeverCallsTheModelAndGetsTheDayQuestion() async {
+        let wording = FakeWording("今晚有哪一刻你想多留一会儿？")
+        let signals = F.signals(quests: [F.quest("散步")])
+        let result = await resolve(wording, document: JournalDocument(), signals: signals, language: .zhHans)
+        #expect(result == .fromDay("你今天完成了「散步」。当时是什么样的？", toast: "没能联系上向导，换一个关于今天的问题"))
+        #expect(wording.callCount == 0)
+    }
+
+    @Test func aChineseTapWithNothingToAskAboutGetsTheFirstChipWithoutTheModel() async {
+        let wording = FakeWording("今晚有哪一刻你想多留一会儿？")
+        let result = await resolve(wording, document: JournalDocument(), language: .zhHans)
+        #expect(result == .fallback(.favoriteMoment, toast: "没能联系上向导，换一个常用的问题"))
+        #expect(wording.callCount == 0)
+    }
+
+    @Test func theSameDayInEnglishStillAsksTheModel() async {
+        let wording = FakeWording(walkQuestion)
+        let result = await resolve(wording, document: JournalDocument(), signals: F.signals(quests: [F.quest("Walk")]))
+        #expect(result == .question(walkQuestion))
+        #expect(wording.callCount == 1)
+    }
+
+    @Test func aChineseTapIsDiagnosedAsLanguageOffOnce() async {
+        let heard = Heard()
+        _ = await JournalAsk.resolve(language: .zhHans, signals: F.signals(), document: JournalDocument(),
+                                     previousQuestions: [], includeWriting: true, wording: FakeWording(walkQuestion),
+                                     diagnose: { heard.add($0) })
+        #expect(heard.all == [JournalAskDiagnosis(.languageOff)])
+        #expect(JournalAskDiagnosis(.languageOff).summary == "the model is not used for this language yet")
+    }
+
+    @Test func theCapAndTheSafetyLineStillComeBeforeTheLanguageRule() async {
+        let wording = FakeWording(walkQuestion)
+        let capped = await resolve(wording, document: JournalDocument(blocks: llmPrompts(5)), language: .zhHans)
+        #expect(capped == .capped)
+        let safety = await resolve(wording, document: JournalDocument(blocks: [E.text(1, "I want to die")]),
+                                   language: .zhHans)
+        #expect(safety == .safety(JournalSafety.line(language: .zhHans)))
+        let heard = Heard()
+        _ = await JournalAsk.resolve(language: .zhHans, signals: F.signals(), document: JournalDocument(blocks: llmPrompts(5)),
+                                     previousQuestions: [], includeWriting: true, wording: wording,
+                                     diagnose: { heard.add($0) })
+        #expect(heard.all.isEmpty)
+        #expect(wording.callCount == 0)
     }
 
     // MARK: the order of the checks

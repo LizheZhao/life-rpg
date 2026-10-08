@@ -123,8 +123,9 @@ final class JournalEditorModel {
     }
 
     /// Loads the on-device model while the page is open, so the first tap does not spend its
-    /// timeout on that.
+    /// timeout on that. A language the model is not used for (`JournalAsk.modelLanguages`) loads nothing.
     func prewarm() {
+        guard JournalAsk.usesModel(for: language) else { return }
         wording(language)?.prewarm()
     }
 

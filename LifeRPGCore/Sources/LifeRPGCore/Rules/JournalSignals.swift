@@ -77,6 +77,14 @@ public struct JournalSignals: Equatable, Sendable {
                  < ($1.rating!, $1.completedAt ?? .distantPast, $0.subject.text) }
     }
 
+    /// A fact in the day says something was done early: the week's epic finished today with days to
+    /// spare, or a routine done before its day. Only then may a question say "early" or "ahead"
+    /// (`JournalAsk.check`).
+    public var hasEarlyFact: Bool {
+        if case .doneToday(let spare)? = epic?.progress, spare > 0 { return true }
+        return completed.contains(where: \.isAhead)
+    }
+
     /// What marks a quest as one of picking, choosing or noticing, matched against its text,
     /// case-insensitively.
     static let choiceWords = ["photo", "photograph", "picture", "pick", "choose", "notice", "look at"]

@@ -11,6 +11,9 @@ public struct JournalAskRequest: Equatable, Sendable {
     /// the model's answer though the prompt lists only the entry's own questions: a small model
     /// copies what it is shown.
     public let avoiding: [String]
+    /// A fact in the prompt says something was done early (`JournalSignals.hasEarlyFact`), so the
+    /// question may say "early" or "ahead". Otherwise `JournalAsk.check` rejects those words.
+    public let allowsEarly: Bool
 }
 
 /// What the editor does after a tap.
@@ -33,9 +36,26 @@ public enum JournalAskResult: Equatable, Sendable {
     case safety(String)
 }
 
-/// Why `JournalAsk.check` turned the model's text away, in the order the checks run.
+/// Why `JournalAsk.check` turned the model's text away, in the order the checks run. `notFresh` is
+/// last: it is the slowest check and the only one that depends on other entries.
 public enum JournalAskRejection: String, Error, Equatable, CaseIterable, Sendable {
-    case empty, tooLong, noQuestionMark, placeholder, voice, notFresh
+    case empty, tooLong, noQuestionMark, placeholder, voice
+    /// The question can be answered yes or no by its form (`JournalTextCheck.isClosedQuestion`).
+    case closedQuestion
+    /// The question says early or ahead when no fact does (`JournalTextCheck.saysEarly`).
+    case unsupportedEarly
+    case notFresh
+
+    /// The reason `JournalAsk.resolve` gives the model for asking again, for the three rejections it
+    /// asks again about; nil for the rest.
+    public var retryReason: JournalPromptBuilder.RetryReason? {
+        switch self {
+        case .notFresh: .notFresh
+        case .closedQuestion: .closedQuestion
+        case .unsupportedEarly: .unsupportedEarly
+        case .empty, .tooLong, .noQuestionMark, .placeholder, .voice: nil
+        }
+    }
 }
 
 /// What became of the model on one tap. The editor shows the same fallback toast for every case
@@ -44,6 +64,8 @@ public struct JournalAskDiagnosis: Equatable, Sendable {
     public enum Outcome: Equatable, Sendable {
         /// No model on the device (`JournalWordingProvider` answered nil).
         case noModel
+        /// `JournalAsk.modelLanguages` does not hold the language, so the model was not asked.
+        case languageOff
         /// The model did not answer within `JournalAsk.timeout` (`retryTimeout` on the second ask).
         case timedOut
         /// The model answered nil: it threw (guardrails, an unsupported language) or said nothing.
@@ -56,8 +78,8 @@ public struct JournalAskDiagnosis: Equatable, Sendable {
 
     /// What became of the last call to the model.
     public let outcome: Outcome
-    /// The first answer was `notFresh`, so the model was asked a second time and `outcome` is what
-    /// became of that second call.
+    /// The first answer was rejected for a reason `JournalAskRejection.retryReason` names, so the
+    /// model was asked a second time and `outcome` is what became of that second call.
     public let retried: Bool
 
     public init(_ outcome: Outcome, retried: Bool = false) {
@@ -70,6 +92,7 @@ public struct JournalAskDiagnosis: Equatable, Sendable {
         let text: String
         switch outcome {
         case .noModel: text = "no model on this device"
+        case .languageOff: text = "the model is not used for this language yet"
         case .timedOut: text = "timed out after \(timeout.components.seconds) s"
         case .noAnswer: text = "the model threw or answered nothing"
         case .rejected(let written, let reason, let nearest):
@@ -106,7 +129,17 @@ public enum JournalAsk {
     /// after launch loads the model, which is why this is not shorter; the editor prewarms it.
     public static let timeout: Duration = .seconds(10)
 
-    /// The second ask, after a `notFresh` first answer, is to a model that is already warm.
+    /// The languages the model is asked in. Chinese is off until the on-device model's Chinese
+    /// questions have been checked on a phone: in the simulator evaluation they were yes/no
+    /// questions, invented facts and restated facts. A language not here gets the day question or a
+    /// chip and no model call, and the editor does not prewarm the model for it.
+    public static let modelLanguages: Set<JournalLanguage> = [.en]
+
+    public static func usesModel(for language: JournalLanguage) -> Bool {
+        modelLanguages.contains(language)
+    }
+
+    /// The second ask, after a retryable rejection, is to a model that is already warm.
     public static let retryTimeout: Duration = .seconds(5)
 
     /// How many earlier entries the request holds its question against.
@@ -139,7 +172,8 @@ public enum JournalAsk {
                                  instructions: JournalPromptBuilder.instructions(language: language),
                                  prompt: prompt,
                                  avoiding: existing + previousQuestions + anchors
-                                     + JournalFixedKey.allCases.map { $0.question(language: language) })
+                                     + JournalFixedKey.allCases.map { $0.question(language: language) },
+                                 allowsEarly: signals.hasEarlyFact)
     }
 
     /// Up to three pool rows as tone anchors, chosen by the day: a low day gets the heavy-day rows,
@@ -181,7 +215,8 @@ public enum JournalAsk {
 
     /// The question the model wrote, cleaned, or nil when it may not be shown: surrounding quotes
     /// stripped and only the first line kept, then under the length limit, exactly one question
-    /// mark, no placeholder left unfilled, no tell of `JournalTextCheck`, and not close
+    /// mark, no placeholder left unfilled, no tell of `JournalTextCheck`, not a question that can be
+    /// answered yes or no, no "early" or "ahead" unless `request.allowsEarly`, and not close
     /// (`JournalNovelty`) to anything in `request.avoiding`.
     public static func accept(_ raw: String, request: JournalAskRequest) -> String? {
         try? check(raw, request: request).get()
@@ -197,6 +232,12 @@ public enum JournalAsk {
         guard text.contains(where: JournalTextCheck.isQuestionMark) else { return .failure(.noQuestionMark) }
         guard text.range(of: #"\{[^{}]*\}"#, options: .regularExpression) == nil else { return .failure(.placeholder) }
         guard JournalTextCheck.violations(of: text, language: language).isEmpty else { return .failure(.voice) }
+        guard !JournalTextCheck.isClosedQuestion(text, language: language) else {
+            return .failure(.closedQuestion)
+        }
+        guard request.allowsEarly || !JournalTextCheck.saysEarly(text, language: language) else {
+            return .failure(.unsupportedEarly)
+        }
         guard JournalNovelty.isFresh(text, avoiding: request.avoiding, language: language) else {
             return .failure(.notFresh)
         }
@@ -243,9 +284,10 @@ public enum JournalAsk {
 
     /// The one decision behind a tap, in this order. Five model prompts already in the entry is
     /// `capped`, before anything else. Writing that holds a safety word gets the safety line and
-    /// the model is not called, whether or not the writing would have been sent. Otherwise the
-    /// model is asked: a question it wrote that `accept` takes is the result. An answer that is
-    /// `notFresh` (a copy of a question already asked) is asked for once more, with
+    /// the model is not called, whether or not the writing would have been sent. A language outside
+    /// `modelLanguages` skips the model. Otherwise the model is asked: a question it wrote that
+    /// `accept` takes is the result. An answer that is `notFresh` (a copy of a question already
+    /// asked), a `closedQuestion` or an `unsupportedEarly` is asked for once more, with
     /// `JournalPromptBuilder.retryPrompt` and `retryTimeout`; a second answer that `accept` takes is
     /// the result. Anything else (no model, a timeout, an error, nothing, a text rejected for
     /// another reason, a second answer that fails) is a question about one thing from the day
@@ -264,14 +306,17 @@ public enum JournalAsk {
         if JournalSafety.needsSafetyLine(answer: written) {
             return .safety(JournalSafety.line(language: language))
         }
-        if let wording {
+        if !usesModel(for: language) {
+            diagnose?(JournalAskDiagnosis(.languageOff))
+        } else if let wording {
             let asked = request(language: language, signals: signals, document: document,
                                 previousQuestions: previousQuestions, includeWriting: includeWriting)
             var attempt = await ask(wording, asked, prompt: asked.prompt, timeout: timeout)
             var retried = false
-            if case .failed(.rejected(let text, .notFresh, _)) = attempt {
+            if case .failed(.rejected(let text, let reason, _)) = attempt, let retryReason = reason.retryReason {
                 retried = true
-                let again = JournalPromptBuilder.retryPrompt(asked.prompt, rejected: cleaned(text), language: language)
+                let again = JournalPromptBuilder.retryPrompt(asked.prompt, rejected: cleaned(text),
+                                                             reason: retryReason, language: language)
                 attempt = await ask(wording, asked, prompt: again, timeout: retryTimeout)
             }
             switch attempt {

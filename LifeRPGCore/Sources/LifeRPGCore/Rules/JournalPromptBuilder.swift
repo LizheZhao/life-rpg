@@ -2,7 +2,8 @@ import Foundation
 
 /// The text handed to the on-device model for "Ask me something", written here so the rules it is
 /// held to exist in one place. `JournalAsk.accept` afterwards enforces the ones a pattern can
-/// catch. `JournalPromptBuilderTests` pins both texts whole, because a softened rule is the failure
+/// catch; a rule about "early" or yes/no questions is not in the instructions at all, because
+/// naming it primed the model (it said a plain hard quest was finished early), and `check` holds it. `JournalPromptBuilderTests` pins both texts whole, because a softened rule is the failure
 /// nobody notices until the voice drifts.
 public enum JournalPromptBuilder {
     /// One hand-written rule, in both languages.
@@ -18,8 +19,6 @@ public enum JournalPromptBuilder {
              zh: "用第二人称，直接对“你”说。"),
         Rule(en: "Pick one specific thing to ask about. When the user has written something, take it from what they wrote; otherwise take it from the facts: something done, or something not done or skipped. A specific thing beats a general question about the day.",
              zh: "挑一件具体的事来问。用户已经写了内容时，从用户写的内容里挑；否则从下面的情况里挑：做完的，或者没做、跳过的。具体的事比笼统地问这一天更好。"),
-        Rule(en: "Only say something was finished early or ahead of time when a fact above says so. When a fact says that of something hard or the epic, you may ask what finishing it felt like.",
-             zh: "只有上面的情况明确写了提前完成，才可以说“提前”或“早”。如果情况里写了困难的任务或 Epic 是提前完成的，可以问完成时是什么感觉。"),
         Rule(en: "When something was not done or skipped, ask what got in the way, without blame.",
              zh: "如果有事没做或跳过了，问是什么挡住了，不带责备。"),
         Rule(en: "Give no advice.", zh: "不给建议。"),
@@ -78,15 +77,31 @@ public enum JournalPromptBuilder {
         return sections.joined(separator: "\n\n")
     }
 
-    /// The prompt again after `rejected` came back too close to a question already asked: the same
-    /// prompt, then one sentence naming the rejected question and asking for another subject.
-    public static func retryPrompt(_ prompt: String, rejected: String, language: JournalLanguage) -> String {
-        switch language {
-        case .en:
-            return prompt + "\n\nThe question you just wrote, \"\(rejected)\", is too close to one that was already asked. Ask about something else from the facts."
-        case .zhHans:
-            return prompt + "\n\n你刚写的问题“\(rejected)”和已经问过的太接近了。请从上面的情况里换一件事来问。"
+    /// Why a text is asked for again.
+    public enum RetryReason: Equatable, Sendable {
+        case notFresh, closedQuestion, unsupportedEarly
+    }
+
+    /// The prompt again after `rejected` was turned away for `reason`: the same prompt, then one
+    /// hand-written sentence naming the rejected question and what to do instead.
+    public static func retryPrompt(_ prompt: String, rejected: String, reason: RetryReason,
+                                   language: JournalLanguage) -> String {
+        let sentence: String
+        switch (language, reason) {
+        case (.en, .notFresh):
+            sentence = "The question you just wrote, \"\(rejected)\", is too close to one that was already asked. Ask about something else from the facts."
+        case (.en, .closedQuestion):
+            sentence = "The question you just wrote, \"\(rejected)\", can be answered yes or no. Ask an open question instead."
+        case (.en, .unsupportedEarly):
+            sentence = "The question you just wrote, \"\(rejected)\", says something was early, but nothing in the facts was. Ask again without saying early or ahead."
+        case (.zhHans, .notFresh):
+            sentence = "你刚写的问题“\(rejected)”和已经问过的太接近了。请从上面的情况里换一件事来问。"
+        case (.zhHans, .closedQuestion):
+            sentence = "你刚写的问题“\(rejected)”可以用“是”或“不是”回答。请换一个开放式的问题。"
+        case (.zhHans, .unsupportedEarly):
+            sentence = "你刚写的问题“\(rejected)”说某件事是提前的，但上面的情况里没有提前完成的事。请重新问，不要提“提前”或“提早”。"
         }
+        return prompt + "\n\n" + sentence
     }
 
     /// The entry as plain text for the prompt: a text as it is, a prompt as `Q: ...` over `A: ...`,

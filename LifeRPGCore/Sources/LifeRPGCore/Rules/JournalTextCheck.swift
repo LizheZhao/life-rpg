@@ -4,8 +4,9 @@ import Foundation
 /// wrote: the staged rhythms that make generated text recognisable (contrast, dramatic openers and
 /// closers, em dashes), more than one question, a question that opens with "why", a markdown
 /// marker. `JournalAsk.accept` adds the length, one-question, placeholder and novelty rules on top;
-/// a failure there means the caller falls back to a fixed prompt. Only a copy of a question
-/// already asked (`notFresh`) is asked for again, once (`JournalAsk.resolve`).
+/// a failure there means the caller falls back to a fixed prompt, except that a copy of a
+/// question already asked, a closed question and an unsupported "early" are asked for again, once
+/// (`JournalAsk.resolve`).
 ///
 /// The pool itself passes every rule except the one-question rule on two deliberate two-part
 /// rows, which `JournalTextCheckTests` asserts, so the check can't drift into rejecting the app's
@@ -65,6 +66,45 @@ public enum JournalTextCheck {
         }
         if text.filter(isQuestionMark).count > 1 { found.insert(.manyQuestions) }
         return Violation.allCases.filter(found.contains)
+    }
+
+    // MARK: what a pattern can say about a question's form
+
+    /// Words that open a yes/no question in English: the auxiliary verbs, and any negative
+    /// contraction of one ("didn't", "isn't", "can't").
+    static let openingAuxiliaries: Set<String> = [
+        "did", "do", "does", "is", "are", "was", "were", "am", "have", "has", "had",
+        "can", "could", "will", "would", "should", "shall", "may", "might",
+    ]
+
+    /// A tag that turns a statement into a yes/no question: ", did you?", ", didn't you?", ", right?".
+    private static let englishTag = #"(?i),\s*(?:(?:[a-z]+n['’]t|did|do|does|is|are|was|were|am|have|has|had|can|could|will|would|should|shall|may|might)\s+(?:you|it|they|we|he|she|i|there)|right|okay|ok)\s*[?？]\s*$"#
+
+    /// A-not-A forms: the Chinese yes/no question without 吗.
+    static let chineseAnyOrNot = ["有没有", "是不是", "能不能", "会不会", "要不要", "好不好", "对不对"]
+
+    /// Whether `text` (one cleaned question) can be answered yes or no by its form: it opens with
+    /// an auxiliary verb or ends in a tag (English), or ends in 吗 or holds an A-not-A form (Chinese).
+    public static func isClosedQuestion(_ text: String, language: JournalLanguage) -> Bool {
+        switch language {
+        case .en:
+            if let first = words(text).first, openingAuxiliaries.contains(first) || first.hasSuffix("n't") {
+                return true
+            }
+            return text.range(of: englishTag, options: .regularExpression) != nil
+        case .zhHans:
+            return text.range(of: #"吗\s*[?？]\s*$"#, options: .regularExpression) != nil
+                || chineseAnyOrNot.contains(where: text.contains)
+        }
+    }
+
+    /// Whether `text` says something was early or ahead: the whole words "early" and "ahead", "in
+    /// advance" and "before its day" (English), 提前, 提早 and 早早 (Chinese).
+    public static func saysEarly(_ text: String, language: JournalLanguage) -> Bool {
+        let pattern = language == .zhHans
+            ? "提前|提早|早早"
+            : #"(?i)\b(?:early|ahead)\b|\bin\s+advance\b|\bbefore\s+its\s+day\b"#
+        return text.range(of: pattern, options: .regularExpression) != nil
     }
 
     static func isQuestionMark(_ character: Character) -> Bool {

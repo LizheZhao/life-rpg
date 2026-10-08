@@ -2,10 +2,12 @@
 import Foundation
 import LifeRPGCore
 
-/// Runs "Ask me something" against the real on-device model over a fixed set of made-up days and
-/// writes what came back, for a person to read. Each sample is one model attempt on the path the
-/// editor uses (`JournalAsk.request`, the model, `JournalAsk.check`), without the retry, so the
-/// report shows first-attempt behaviour. Nothing is stored and nothing is judged here.
+/// Runs "Ask me something" over a fixed set of made-up days on the path the editor takes
+/// (`JournalAsk.resolve` with the real on-device model, `JournalAsk.timeout` and `retryTimeout`)
+/// and writes what came back, for a person to read. The real model is wrapped in a recorder, so
+/// the report shows every call resolve made (one, or two when it asked again), Core's verdict on
+/// each, and what the editor would have done with the tap. Nothing is stored and nothing is
+/// judged here.
 enum JournalAskEvaluation {
     static let samplesPerScenario = 4
 
@@ -28,28 +30,78 @@ enum JournalAskEvaluation {
         }
     }
 
+    /// One call resolve made to the model.
+    private struct Attempt: Codable {
+        var prompt: String
+        var output: String?
+        var error: String?
+        /// Nil when the call had not answered by the time resolve returned: it timed out.
+        var latencyMs: Int?
+        /// accepted, a `JournalAskRejection` name, or noAnswer, error, timedOut.
+        var verdict: String
+        var closestAvoided: String?
+        var similarity: Double?
+    }
+
     private struct Sample: Codable {
         var scenario: String
         var language: String
         var index: Int
         var facts: [String]
-        var prompt: String
-        /// answered, noAnswer, error, timedOut or noModel.
-        var outcome: String
-        var output: String?
-        var error: String?
-        var latencyMs: Int
-        /// For an answer: accepted, or the rejection's name. "-" when there was no answer.
-        var check: String
-        var closestAvoided: String?
-        var similarity: Double?
+        var attempts: [Attempt]
+        /// modelFirstTry, modelRetry, dayQuestion, chip, exhausted, safety or capped.
+        var resultKind: String
+        var resultText: String?
+        var diagnosis: String
 
-        /// The column of the summary table this sample counts in.
-        var category: String { outcome == "answered" ? check : outcome }
+        var firstVerdict: String { attempts.first?.verdict ?? "noAttempt" }
     }
 
-    private struct Reply: Sendable {
-        let text: String?
+    /// The real model, remembering every call it is asked for.
+    private nonisolated final class RecordingWording: JournalWording, @unchecked Sendable {
+        struct Call {
+            let prompt: String
+            var output: String?
+            var error: String?
+            var latencyMs: Int?
+        }
+
+        private let inner: any JournalWording
+        private let lock = NSLock()
+        private var recorded: [Call] = []
+
+        init(_ inner: any JournalWording) { self.inner = inner }
+
+        var calls: [Call] { lock.withLock { recorded } }
+
+        func prewarm() { inner.prewarm() }
+
+        func word(instructions: String, prompt: String) async -> String? {
+            _ = JournalAskDebug.takeError()
+            let started = ContinuousClock.now
+            let slot = lock.withLock { () -> Int in
+                recorded.append(Call(prompt: prompt))
+                return recorded.count - 1
+            }
+            let output = await inner.word(instructions: instructions, prompt: prompt)
+            let elapsed = ContinuousClock.now - started
+            let error = JournalAskDebug.takeError()
+            lock.withLock {
+                recorded[slot].output = output
+                recorded[slot].error = error
+                recorded[slot].latencyMs = Int(elapsed.components.seconds) * 1000
+                    + Int(elapsed.components.attoseconds / 1_000_000_000_000_000)
+            }
+            return output
+        }
+    }
+
+    /// The diagnosis `resolve` reports, once.
+    private nonisolated final class Heard: @unchecked Sendable {
+        private let lock = NSLock()
+        private var value: JournalAskDiagnosis?
+        func set(_ diagnosis: JournalAskDiagnosis) { lock.withLock { value = diagnosis } }
+        var diagnosis: JournalAskDiagnosis? { lock.withLock { value } }
     }
 
     // MARK: running
@@ -64,58 +116,78 @@ enum JournalAskEvaluation {
         var samples: [Sample] = []
         var warmed: Set<JournalLanguage> = []
         for scenario in scenarios {
-            let wording = JournalWordingProvider.current(language: scenario.language)
-            if let wording, warmed.insert(scenario.language).inserted { wording.prewarm() }
+            let real = JournalWordingProvider.current(language: scenario.language)
+            if let real, JournalAsk.usesModel(for: scenario.language), warmed.insert(scenario.language).inserted {
+                real.prewarm()
+            }
             let shown = facts(of: scenario)
             for index in 1...samplesPerScenario {
-                let asked = JournalAsk.request(
+                let recorder = real.map(RecordingWording.init)
+                let heard = Heard()
+                let result = await JournalAsk.resolve(
                     language: scenario.language, signals: scenario.signals, document: scenario.document,
-                    previousQuestions: scenario.previousQuestions, includeWriting: true)
-                var sample = Sample(scenario: scenario.id, language: scenario.language.rawValue,
-                                    index: index, facts: shown, prompt: asked.prompt,
-                                    outcome: "noModel", latencyMs: 0, check: "-")
-                if let wording { await ask(wording, asked, into: &sample) }
-                samples.append(sample)
+                    previousQuestions: scenario.previousQuestions, includeWriting: true,
+                    wording: recorder, timeout: JournalAsk.timeout, retryTimeout: JournalAsk.retryTimeout,
+                    diagnose: { heard.set($0) })
+                samples.append(sample(scenario, index: index, facts: shown, calls: recorder?.calls ?? [],
+                                      result: result, diagnosis: heard.diagnosis))
                 progress("\(samples.count) of \(total): \(scenario.id) #\(index)")
             }
         }
         return (try? write(samples, total: total)) ?? "The run finished but the report could not be written."
     }
 
-    private static func ask(_ wording: any JournalWording, _ asked: JournalAskRequest, into sample: inout Sample) async {
-        _ = JournalAskDebug.takeError()
-        let started = ContinuousClock.now
-        let reply = await JournalConversation.raced(JournalAsk.timeout) {
-            Reply(text: await wording.word(instructions: asked.instructions, prompt: asked.prompt))
-        }
-        let elapsed = ContinuousClock.now - started
-        sample.latencyMs = Int(elapsed.components.seconds) * 1000
-            + Int(elapsed.components.attoseconds / 1_000_000_000_000_000)
-        guard let reply else {
-            sample.outcome = "timedOut"
-            return
-        }
-        if let error = JournalAskDebug.takeError() {
-            sample.outcome = "error"
-            sample.error = error
-            return
-        }
-        guard let raw = reply.text else {
-            sample.outcome = "noAnswer"
-            return
-        }
-        sample.outcome = "answered"
-        sample.output = raw
-        switch JournalAsk.check(raw, request: asked) {
-        case .success:
-            sample.check = "accepted"
-        case .failure(let reason):
-            sample.check = reason.rawValue
-            if reason == .notFresh, let nearest = JournalAsk.nearestAvoided(raw, request: asked) {
-                sample.closestAvoided = nearest.question
-                sample.similarity = nearest.similarity
+    /// What one tap came to. The request is rebuilt exactly as `resolve` builds it, so `check` judges
+    /// each raw answer against the same `avoiding` list and the same early fact.
+    private static func sample(_ scenario: Scenario, index: Int, facts: [String], calls: [RecordingWording.Call],
+                               result: JournalAskResult, diagnosis: JournalAskDiagnosis?) -> Sample {
+        let asked = JournalAsk.request(
+            language: scenario.language, signals: scenario.signals, document: scenario.document,
+            previousQuestions: scenario.previousQuestions, includeWriting: true)
+        let attempts = calls.map { call -> Attempt in
+            var attempt = Attempt(prompt: call.prompt, output: call.output, error: call.error,
+                                  latencyMs: call.latencyMs, verdict: "")
+            guard let raw = call.output else {
+                attempt.verdict = call.error != nil ? "error" : call.latencyMs == nil ? "timedOut" : "noAnswer"
+                return attempt
             }
+            switch JournalAsk.check(raw, request: asked) {
+            case .success:
+                attempt.verdict = "accepted"
+            case .failure(let reason):
+                attempt.verdict = reason.rawValue
+                if reason == .notFresh, let nearest = JournalAsk.nearestAvoided(raw, request: asked) {
+                    attempt.closestAvoided = nearest.question
+                    attempt.similarity = nearest.similarity
+                }
+            }
+            return attempt
         }
+        let kind: String
+        let text: String?
+        switch result {
+        case .question(let question):
+            kind = attempts.count > 1 ? "modelRetry" : "modelFirstTry"
+            text = question
+        case .fromDay(let question, _):
+            kind = "dayQuestion"
+            text = question
+        case .fallback(let key, _):
+            kind = "chip"
+            text = key.question(language: scenario.language)
+        case .exhausted:
+            kind = "exhausted"
+            text = nil
+        case .safety(let line):
+            kind = "safety"
+            text = line
+        case .capped:
+            kind = "capped"
+            text = nil
+        }
+        return Sample(scenario: scenario.id, language: scenario.language.rawValue, index: index, facts: facts,
+                      attempts: attempts, resultKind: kind, resultText: text,
+                      diagnosis: diagnosis?.summary ?? "the model was not asked")
     }
 
     // MARK: the days
@@ -282,33 +354,54 @@ enum JournalAskEvaluation {
         return "Wrote \(total) samples to \(name).json and \(name).md in the app's Documents directory."
     }
 
+    private static let resultKinds = ["modelFirstTry", "modelRetry", "dayQuestion", "chip", "exhausted", "safety", "capped"]
+
     private static func markdown(_ samples: [Sample], title: String) -> String {
         var out = ["# \(title)", "",
-                   "\(samplesPerScenario) samples per scenario. One model attempt per sample, no retry, "
-                   + "the entry's writing sent. The prompt lists neither the last entries' questions nor the tone anchors; "
-                   + "Core still rejects an answer that copies one.", ""]
+                   "\(samplesPerScenario) samples per scenario. Each sample is one `JournalAsk.resolve` call as the editor makes it: "
+                   + "the entry's writing sent, `JournalAsk.timeout` and `retryTimeout`, the real model recorded. "
+                   + "The prompt lists neither the last entries' questions nor the tone anchors; "
+                   + "Core still rejects an answer that copies one. A Chinese scenario shows no attempts when the model is off "
+                   + "for the language (`JournalAsk.modelLanguages`).", ""]
         var seen: [String] = []
         for sample in samples {
             if !seen.contains(sample.scenario) {
                 seen.append(sample.scenario)
                 out += ["## \(sample.scenario) (\(sample.language))", ""] + sample.facts.map { "- " + $0 } + [""]
             }
-            out.append("### #\(sample.index): \(sample.category), \(sample.latencyMs) ms")
-            out += ["", "Prompt:", "```", sample.prompt, "```", ""]
-            out.append("Output: " + (sample.output.map { "`" + $0.replacingOccurrences(of: "\n", with: "\\n") + "`" }
-                                       ?? sample.error ?? "none"))
-            if let closest = sample.closestAvoided, let similarity = sample.similarity {
-                out.append("Closest avoided question: \"\(closest)\" at \(String(format: "%.2f", similarity))")
+            out.append("### #\(sample.index): \(sample.resultKind), \(sample.attempts.count) attempt(s)")
+            out += ["", "Result: " + (sample.resultText.map { "`" + $0.replacingOccurrences(of: "\n", with: "\\n") + "`" } ?? "none"),
+                    "Diagnosis: " + sample.diagnosis, ""]
+            for (number, attempt) in sample.attempts.enumerated() {
+                out.append("Attempt \(number + 1): \(attempt.verdict), "
+                           + (attempt.latencyMs.map { "\($0) ms" } ?? "no answer in time"))
+                out += ["", "Prompt:", "```", attempt.prompt, "```", ""]
+                out.append("Output: " + (attempt.output.map { "`" + $0.replacingOccurrences(of: "\n", with: "\\n") + "`" }
+                                           ?? attempt.error ?? "none"))
+                if let closest = attempt.closestAvoided, let similarity = attempt.similarity {
+                    out.append("Closest avoided question: \"\(closest)\" at \(String(format: "%.2f", similarity))")
+                }
+                out.append("")
             }
-            out.append("")
         }
-        let columns = ["accepted"] + JournalAskRejection.allCases.map(\.rawValue)
-            + ["noAnswer", "error", "timedOut", "noModel"]
-        out += ["## Totals", "", "| " + columns.joined(separator: " | ") + " |",
-                "|" + columns.map { _ in "---|" }.joined(),
-                "| " + columns.map { column in "\(samples.filter { $0.category == column }.count)" }
-                    .joined(separator: " | ") + " |"]
+        let verdicts = ["accepted"] + JournalAskRejection.allCases.map(\.rawValue)
+            + ["noAnswer", "error", "timedOut", "noAttempt"]
+        out += ["## Totals", "", "First-attempt verdict (noAttempt: the model was not called)", ""]
+            + table(verdicts, samples) { $0.firstVerdict }
+        out += ["", "Final result", ""] + table(resultKinds, samples) { $0.resultKind }
         return out.joined(separator: "\n") + "\n"
+    }
+
+    /// A table of counts with a row for English and one for Chinese.
+    private static func table(_ columns: [String], _ samples: [Sample], by value: (Sample) -> String) -> [String] {
+        let rows: [(label: String, language: JournalLanguage)] = [("en", .en), ("zh", .zhHans)]
+        return ["| language | " + columns.joined(separator: " | ") + " |",
+                "|---|" + columns.map { _ in "---|" }.joined()]
+            + rows.map { row in
+                let mine = samples.filter { $0.language == row.language.rawValue }
+                return "| \(row.label) | " + columns.map { column in "\(mine.filter { value($0) == column }.count)" }
+                    .joined(separator: " | ") + " |"
+            }
     }
 }
 #endif

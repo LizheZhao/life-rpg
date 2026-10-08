@@ -15,7 +15,6 @@ struct JournalPromptBuilderTests {
             - Ask exactly one question, under 15 words.
             - Write it in the second person, speaking to "you".
             - Pick one specific thing to ask about. When the user has written something, take it from what they wrote; otherwise take it from the facts: something done, or something not done or skipped. A specific thing beats a general question about the day.
-            - Only say something was finished early or ahead of time when a fact above says so. When a fact says that of something hard or the epic, you may ask what finishing it felt like.
             - When something was not done or skipped, ask what got in the way, without blame.
             - Give no advice.
             - Make no diagnosis.
@@ -37,7 +36,6 @@ struct JournalPromptBuilderTests {
             - 只问一个问题，少于 25 个字。
             - 用第二人称，直接对“你”说。
             - 挑一件具体的事来问。用户已经写了内容时，从用户写的内容里挑；否则从下面的情况里挑：做完的，或者没做、跳过的。具体的事比笼统地问这一天更好。
-            - 只有上面的情况明确写了提前完成，才可以说“提前”或“早”。如果情况里写了困难的任务或 Epic 是提前完成的，可以问完成时是什么感觉。
             - 如果有事没做或跳过了，问是什么挡住了，不带责备。
             - 不给建议。
             - 不做诊断。
@@ -231,20 +229,57 @@ struct JournalPromptBuilderTests {
 
     // MARK: the retry
 
-    @Test func theEnglishRetryPromptIsThePromptPlusOneSentencePinnedWhole() {
-        #expect(JournalPromptBuilder.retryPrompt("THE PROMPT", rejected: "What did you think of the new album?", language: .en) == """
+    @Test func theEnglishRetryPromptsArePromptPlusOneSentencePinnedWhole() {
+        let album = "What did you think of the new album?"
+        #expect(JournalPromptBuilder.retryPrompt("THE PROMPT", rejected: album, reason: .notFresh, language: .en) == """
             THE PROMPT
 
             The question you just wrote, "What did you think of the new album?", is too close to one that was already asked. Ask about something else from the facts.
             """)
+        #expect(JournalPromptBuilder.retryPrompt("THE PROMPT", rejected: "Did you enjoy cleaning the kitchen?",
+                                                 reason: .closedQuestion, language: .en) == """
+            THE PROMPT
+
+            The question you just wrote, "Did you enjoy cleaning the kitchen?", can be answered yes or no. Ask an open question instead.
+            """)
+        #expect(JournalPromptBuilder.retryPrompt("THE PROMPT", rejected: "What was it like to finish the run early?",
+                                                 reason: .unsupportedEarly, language: .en) == """
+            THE PROMPT
+
+            The question you just wrote, "What was it like to finish the run early?", says something was early, but nothing in the facts was. Ask again without saying early or ahead.
+            """)
     }
 
-    @Test func theChineseRetryPromptIsThePromptPlusOneSentencePinnedWhole() {
-        #expect(JournalPromptBuilder.retryPrompt("提示", rejected: "你觉得新专辑怎么样？", language: .zhHans) == """
+    @Test func theChineseRetryPromptsArePromptPlusOneSentencePinnedWhole() {
+        #expect(JournalPromptBuilder.retryPrompt("提示", rejected: "你觉得新专辑怎么样？", reason: .notFresh, language: .zhHans) == """
             提示
 
             你刚写的问题“你觉得新专辑怎么样？”和已经问过的太接近了。请从上面的情况里换一件事来问。
             """)
+        #expect(JournalPromptBuilder.retryPrompt("提示", rejected: "你喜欢今天的散步吗？",
+                                                 reason: .closedQuestion, language: .zhHans) == """
+            提示
+
+            你刚写的问题“你喜欢今天的散步吗？”可以用“是”或“不是”回答。请换一个开放式的问题。
+            """)
+        #expect(JournalPromptBuilder.retryPrompt("提示", rejected: "提前完成是什么感觉？",
+                                                 reason: .unsupportedEarly, language: .zhHans) == """
+            提示
+
+            你刚写的问题“提前完成是什么感觉？”说某件事是提前的，但上面的情况里没有提前完成的事。请重新问，不要提“提前”或“提早”。
+            """)
+    }
+
+    /// The model said a plain hard quest was finished early after the rule that mentioned "early"
+    /// primed it; `JournalAsk.check` enforces it now, so the instructions must not say the word.
+    @Test func theInstructionsDoNotMentionEarlyOrAheadInEitherLanguage() {
+        let english = JournalPromptBuilder.instructions(language: .en).lowercased()
+        #expect(!english.contains("early"))
+        #expect(!english.contains("ahead"))
+        let chinese = JournalPromptBuilder.instructions(language: .zhHans)
+        for word in ["提前", "提早", "早"] {
+            #expect(!chinese.contains(word), "\(word)")
+        }
     }
 
     // MARK: the entry as text
