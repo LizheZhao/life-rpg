@@ -16,8 +16,12 @@ public enum JournalPromptBuilder {
              zh: "只问一个问题，少于 \(JournalAsk.characterLimit) 个字。"),
         Rule(en: "Write it in the second person, speaking to \"you\".",
              zh: "用第二人称，直接对“你”说。"),
-        Rule(en: "Ask about something that happened today or was skipped today, from the facts below.",
-             zh: "问今天发生的事，或今天没做的事，依据下面的情况。"),
+        Rule(en: "Pick one specific thing from the facts below: something done, something not done or skipped, or something finished ahead of time. A specific thing beats a general question about the day.",
+             zh: "从下面的情况里挑一件具体的事来问：做完的、没做或跳过的、或者提前完成的。具体的事比笼统地问这一天更好。"),
+        Rule(en: "When something hard or the epic was finished early, you may ask what finishing it felt like.",
+             zh: "如果提前完成了困难的任务或 Epic，可以问完成时是什么感觉。"),
+        Rule(en: "When something was not done or skipped, ask what got in the way, without blame.",
+             zh: "如果有事没做或跳过了，问是什么挡住了，不带责备。"),
         Rule(en: "Give no advice.", zh: "不给建议。"),
         Rule(en: "Make no diagnosis.", zh: "不做诊断。"),
         Rule(en: "No praise or guilt. The app already tracks coins, so do not add to it.",
@@ -88,6 +92,7 @@ public enum JournalPromptBuilder {
     private static func facts(_ signals: JournalSignals, _ words: Words) -> [String] {
         var lines = [words.dayType(signals.tier), words.coins(signals.coinsEarned)]
         lines.append(words.list(words.done, signals.completed.map(words.done(_:)), none: words.nothing))
+        if let epic = signals.epic { lines.append(words.epic(epic)) }
         if !signals.skipped.isEmpty {
             lines.append(words.list(words.skipped, signals.skipped.map(\.text)))
         }
@@ -145,15 +150,37 @@ public enum JournalPromptBuilder {
         func coins(_ count: Int) -> String { zh ? "赚到的金币：\(count)。" : "Coins earned: \(count)." }
 
         /// "Walk (+12 coins)", "A 30 minute walk (light version, +20 coins)"; a completion that paid
-        /// nothing and is not light is just its text.
+        /// nothing and is not light, hard or ahead is just its text.
         func done(_ item: JournalSignals.Item) -> String {
             var notes: [String] = []
             if item.isLight { notes.append(zh ? "轻量版" : "light version") }
+            if item.difficulty == .hard { notes.append(zh ? "困难" : "hard") }
+            if item.isAhead { notes.append(zh ? "提前做的" : "done before its day") }
             if item.coins != 0 { notes.append(zh ? "+\(item.coins) 金币" : "+\(item.coins) coins") }
             guard !notes.isEmpty else { return item.subject.text }
             return zh ? item.subject.text + "（" + notes.joined(separator: "，") + "）"
                       : item.subject.text + " (" + notes.joined(separator: ", ") + ")"
         }
+
+        /// The week's epic and where it stands.
+        func epic(_ epic: JournalSignals.EpicStatus) -> String {
+            let state: String
+            switch epic.progress {
+            case .doneToday(let spare) where spare > 0:
+                state = zh ? "今天完成了，比截止早 \(spare) 天" : "Finished today, \(spare) \(days(spare)) before it was due"
+            case .doneToday:
+                state = zh ? "今天完成了，正好是最后一天" : "Finished today, on its last day"
+            case .doneEarlier:
+                state = zh ? "这周早些时候已经完成了" : "Already finished earlier this week"
+            case .open(let left) where left > 0:
+                state = zh ? "还没完成，还剩 \(left) 天" : "Not done yet, \(left) \(days(left)) left"
+            case .open:
+                state = zh ? "还没完成，今天是最后一天" : "Not done yet, and today is its last day"
+            }
+            return zh ? "本周的 Epic：\(epic.text)。\(state)。" : "This week's epic: \(epic.text). \(state)."
+        }
+
+        private func days(_ n: Int) -> String { n == 1 ? "day" : "days" }
 
         func list(_ label: String, _ items: [String], none: String? = nil) -> String {
             let colon = zh ? "：" : ": "

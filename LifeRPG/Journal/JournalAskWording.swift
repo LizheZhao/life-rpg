@@ -13,6 +13,30 @@ enum JournalAskWording {
     }
 }
 
+/// What became of the model on the last tap of "Ask me something", for the Debug page: the editor
+/// shows the same fallback toast whether there was no model, it timed out, it threw, or Core
+/// rejected what it wrote.
+enum JournalAskDebug {
+    static let lastKey = "journalAskLastDiagnosis"
+    private static let errorKey = "journalAskLastError"
+
+    /// The model threw; `record` adds this to a `noAnswer` diagnosis.
+    nonisolated static func noteError(_ error: Error) {
+        UserDefaults.standard.set(String(describing: error), forKey: errorKey)
+    }
+
+    nonisolated static func record(_ diagnosis: JournalAskDiagnosis) {
+        let defaults = UserDefaults.standard
+        var line = diagnosis.summary
+        if diagnosis == .noAnswer, let error = defaults.string(forKey: errorKey) {
+            line += ": " + error
+        }
+        defaults.removeObject(forKey: errorKey)
+        let time = Date().formatted(date: .abbreviated, time: .shortened)
+        defaults.set(time + " · " + line, forKey: lastKey)
+    }
+}
+
 #if targetEnvironment(simulator)
 /// What the Debug page forces the model to do. `real` is no override.
 enum JournalAskForce: String, CaseIterable {

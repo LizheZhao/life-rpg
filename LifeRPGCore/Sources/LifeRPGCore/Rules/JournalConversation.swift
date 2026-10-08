@@ -7,6 +7,12 @@ import Foundation
 public protocol JournalWording: Sendable {
     /// A fresh question from `JournalAsk.request`.
     func word(instructions: String, prompt: String) async -> String?
+    /// Loads what the model needs ahead of the first `word`, so that call fits the timeout.
+    func prewarm()
+}
+
+extension JournalWording {
+    public func prewarm() {}
 }
 
 /// Waiting for the model without being held by it.

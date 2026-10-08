@@ -12,6 +12,8 @@ struct DebugView: View {
     var sensorReport: String = ""
     /// Re-runs the root refresh: re-reads evidence and auto-verifies today.
     var refresh: () async -> Void = {}
+    /// What became of the model on the last tap of "Ask me something" (`JournalAskDebug`).
+    @AppStorage(JournalAskDebug.lastKey) private var askLast = ""
     #if targetEnvironment(simulator)
     @AppStorage("debugDayOffset") private var dayOffset = 0
     /// "evening", "daytime" or "cleared" overrides what decides Today's journal card; "" is the real one.
@@ -62,6 +64,10 @@ struct DebugView: View {
                 section("Journal model") {
                     Text(JournalWordingProvider.status()).font(Self.mono).foregroundStyle(LR.Color.ink)
                         .fixedSize(horizontal: false, vertical: true)
+                    Text("Last ask: " + (askLast.isEmpty ? "none yet" : askLast)).font(Self.mono)
+                        .foregroundStyle(LR.Color.inkSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .textSelection(.enabled)
                 }
                 section("Tables") {
                     row("QuestTemplate", questTemplates.count,
@@ -155,7 +161,7 @@ struct DebugView: View {
                     PillSegmentedControl(options: [("Real", ""), ("Evening", "evening"), ("Daytime", "daytime"), ("Cleared", "cleared")],
                                          selection: $journalTiming, accessibilityLabel: "Journal card")
                 }
-                section("Ask me something (simulator only)", footer: "Forces what the model returns to the editor's pill. Real uses the on-device model when there is one and the fixed prompts otherwise. Question is a canned question, Timeout never answers (the pill waits 6 s), Error returns nothing, Garbage returns text Core must reject.") {
+                section("Ask me something (simulator only)", footer: "Forces what the model returns to the editor's pill. Real uses the on-device model when there is one and the fixed prompts otherwise. Question is a canned question, Timeout never answers (the pill waits 10 s), Error returns nothing, Garbage returns text Core must reject.") {
                     FlowRow(spacing: 8) {
                         ForEach(JournalAskForce.options, id: \.1) { label, value in
                             if askForce == value {

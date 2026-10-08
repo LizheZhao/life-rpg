@@ -122,6 +122,12 @@ final class JournalEditorModel {
         apply(document.insertingPrompt(seed, atBlock: cursor?.blockID, offset: cursor?.offset ?? 0))
     }
 
+    /// Loads the on-device model while the page is open, so the first tap does not spend its
+    /// timeout on that.
+    func prewarm() {
+        wording(language)?.prewarm()
+    }
+
     /// "Ask me something". The cursor is captured now; the request runs while the user keeps
     /// typing, and the result goes in at that cursor (`JournalAsk.insert`), so characters typed
     /// meanwhile stay where they were typed, after the new prompt when they were typed at the cursor.
@@ -140,7 +146,7 @@ final class JournalEditorModel {
         Task { [weak self] in
             let result = await JournalAsk.resolve(language: language, signals: signals, document: snapshot,
                                                   previousQuestions: previous, includeWriting: includeWriting,
-                                                  wording: model)
+                                                  wording: model, diagnose: { JournalAskDebug.record($0) })
             self?.finishAsk(result, at: captured)
         }
     }

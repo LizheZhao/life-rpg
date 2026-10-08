@@ -461,8 +461,48 @@ struct JournalAskTests {
         wording.release()
     }
 
-    @Test func theTimeoutIsSixSeconds() {
-        #expect(JournalAsk.timeout == .seconds(6))
+    @Test func theTimeoutIsTenSeconds() {
+        #expect(JournalAsk.timeout == .seconds(10))
+    }
+
+    // MARK: the diagnosis
+
+    private final class Heard: @unchecked Sendable {
+        private let lock = NSLock()
+        private var value: [JournalAskDiagnosis] = []
+        func add(_ d: JournalAskDiagnosis) { lock.withLock { value.append(d) } }
+        var all: [JournalAskDiagnosis] { lock.withLock { value } }
+    }
+
+    private func diagnosis(_ wording: (any JournalWording)?, timeout: Duration = .seconds(60)) async -> [JournalAskDiagnosis] {
+        let heard = Heard()
+        _ = await JournalAsk.resolve(language: .en, signals: F.signals(), document: JournalDocument(),
+                                     previousQuestions: [], includeWriting: true, wording: wording,
+                                     timeout: timeout, diagnose: { heard.add($0) })
+        return heard.all
+    }
+
+    @Test func eachWayTheModelFailsIsToldApart() async {
+        #expect(await diagnosis(nil) == [.noModel])
+        #expect(await diagnosis(FakeWording(nil)) == [.noAnswer])
+        #expect(await diagnosis(FakeWording("Absolutely, here you go!"))
+                == [.rejected(text: "Absolutely, here you go!", reason: .noQuestionMark)])
+        #expect(await diagnosis(FakeWording(walkQuestion)) == [.answered])
+    }
+
+    @Test(.timeLimit(.minutes(1)))
+    func aHangingModelIsDiagnosedAsTimedOut() async {
+        let wording = FakeWording(.hang)
+        #expect(await diagnosis(wording, timeout: .milliseconds(50)) == [.timedOut])
+        wording.release()
+    }
+
+    @Test func checkNamesTheFirstRuleATextBreaks() {
+        let r = request(F.signals())
+        #expect(JournalAsk.check("", request: r) == .failure(.empty))
+        #expect(JournalAsk.check(String(repeating: "word ", count: 20) + "?", request: r) == .failure(.tooLong))
+        #expect(JournalAsk.check("What about {quest}?", request: r) == .failure(.placeholder))
+        #expect(JournalAsk.check("Why did the walk feel slow?", request: r) == .failure(.voice))
     }
 
     // MARK: the order of the checks

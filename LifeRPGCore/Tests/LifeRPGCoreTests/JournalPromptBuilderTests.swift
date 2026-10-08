@@ -14,7 +14,9 @@ struct JournalPromptBuilderTests {
             You help someone write a short end-of-day journal. They tap a button and you give them one question to write about. Reply with the question only, as plain text.
             - Ask exactly one question, under 15 words.
             - Write it in the second person, speaking to "you".
-            - Ask about something that happened today or was skipped today, from the facts below.
+            - Pick one specific thing from the facts below: something done, something not done or skipped, or something finished ahead of time. A specific thing beats a general question about the day.
+            - When something hard or the epic was finished early, you may ask what finishing it felt like.
+            - When something was not done or skipped, ask what got in the way, without blame.
             - Give no advice.
             - Make no diagnosis.
             - No praise or guilt. The app already tracks coins, so do not add to it.
@@ -32,7 +34,9 @@ struct JournalPromptBuilderTests {
             你在帮用户写一篇简短的睡前日记。用户点一下按钮，你给出一个可以写一写的问题。只回复这个问题，用纯文本。
             - 只问一个问题，少于 25 个字。
             - 用第二人称，直接对“你”说。
-            - 问今天发生的事，或今天没做的事，依据下面的情况。
+            - 从下面的情况里挑一件具体的事来问：做完的、没做或跳过的、或者提前完成的。具体的事比笼统地问这一天更好。
+            - 如果提前完成了困难的任务或 Epic，可以问完成时是什么感觉。
+            - 如果有事没做或跳过了，问是什么挡住了，不带责备。
             - 不给建议。
             - 不做诊断。
             - 不夸奖，也不让人内疚。金币的事应用已经记着，不要再多说。
@@ -145,6 +149,45 @@ struct JournalPromptBuilderTests {
             - Coins earned: 0.
             - Done: nothing.
             """)
+    }
+
+    /// A hard quest, a routine done before its day, and the week's epic finished two days early.
+    @Test func hardWorkEarlyRoutinesAndAnEarlyEpicAreInTheFacts() {
+        let hard = F.quest("Deep clean the kitchen")
+        hard.slot = .hard
+        hard.points = 40
+        let ahead = F.routineDone("Laundry")
+        ahead.dueDayKey = "2026-09-19"
+        ahead.awardedPoints = 15
+        let epic = F.quest("Write up a technical topic", on: "2026-09-14", hour: 9)
+        epic.slot = .epic
+        epic.points = 100
+        epic.completedAt = Fixtures.date("2026-09-18", hour: 20)
+        let signals = JournalSignals(dayKey: F.day, quests: [hard], occurrences: [ahead],
+                                     context: F.context(tier: .normal), ratings: [],
+                                     epic: epic, timeZone: Fixtures.tokyo)
+        let english = JournalPromptBuilder.prompt(language: .en, signals: signals, writing: nil,
+                                                  existing: [], recent: [], anchors: [])
+        #expect(english.hasSuffix("""
+            - Coins earned: 155.
+            - Done: Deep clean the kitchen (hard, +40 coins); Laundry (done before its day, +15 coins).
+            - This week's epic: Write up a technical topic. Finished today, 2 days before it was due.
+            """))
+        let chinese = JournalPromptBuilder.prompt(language: .zhHans, signals: signals, writing: nil,
+                                                  existing: [], recent: [], anchors: [])
+        #expect(chinese.hasSuffix("""
+            - 做完的：Deep clean the kitchen（困难，+40 金币）；Laundry（提前做的，+15 金币）。
+            - 本周的 Epic：Write up a technical topic。今天完成了，比截止早 2 天。
+            """))
+    }
+
+    @Test func anOpenEpicIsNotLeftOpenAndSaysHowManyDaysAreLeft() {
+        let epic = F.quest("Write up a technical topic", on: "2026-09-14", done: false)
+        epic.slot = .epic
+        #expect(F.signals(quests: [epic], on: "2026-09-14").leftOpen.isEmpty)
+        let prompt = JournalPromptBuilder.prompt(language: .en, signals: F.signals(quests: [epic], on: "2026-09-14"),
+                                                 writing: nil, existing: [], recent: [], anchors: [])
+        #expect(prompt.hasSuffix("- This week's epic: Write up a technical topic. Not done yet, 6 days left."))
     }
 
     @Test func eachDayTypeHasItsOwnWordInBothLanguages() {

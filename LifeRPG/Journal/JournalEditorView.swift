@@ -64,6 +64,7 @@ private struct JournalEditorPage: View {
             if phase != .active { model.flush() }
         }
         .onDisappear { model.flush() }
+        .task { model.prewarm() }
     }
 
     // MARK: header

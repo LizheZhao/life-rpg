@@ -27,6 +27,35 @@ public enum JournalAskResult: Equatable, Sendable {
     case safety(String)
 }
 
+/// Why `JournalAsk.check` turned the model's text away, in the order the checks run.
+public enum JournalAskRejection: String, Error, Equatable, Sendable {
+    case empty, tooLong, noQuestionMark, placeholder, voice, notFresh
+}
+
+/// What became of the model on one tap. The editor shows the same fallback toast for every case
+/// but `answered`, so the Debug page reads this to tell them apart.
+public enum JournalAskDiagnosis: Equatable, Sendable {
+    /// No model on the device (`JournalWordingProvider` answered nil).
+    case noModel
+    /// The model did not answer within `JournalAsk.timeout`.
+    case timedOut
+    /// The model answered nil: it threw (guardrails, an unsupported language) or said nothing.
+    case noAnswer
+    /// The model wrote this, and `check` turned it away for this reason.
+    case rejected(text: String, reason: JournalAskRejection)
+    case answered
+
+    public var summary: String {
+        switch self {
+        case .noModel: "no model on this device"
+        case .timedOut: "timed out after \(JournalAsk.timeout)"
+        case .noAnswer: "the model threw or answered nothing"
+        case .rejected(let text, let reason): "rejected (\(reason.rawValue)): \(text)"
+        case .answered: "answered"
+        }
+    }
+}
+
 /// What the editor shows besides the inserted prompt: a one-line toast that fades, or the safety
 /// line, which stays until the reader dismisses it.
 public enum JournalAskNotice: Equatable, Sendable {
@@ -46,8 +75,9 @@ public enum JournalAsk {
     /// Past this many model prompts in one entry the button is dimmed.
     public static let maxLLMPrompts = 5
 
-    /// A slower model is treated as unavailable: the user is waiting on a spinner.
-    public static let timeout: Duration = .seconds(6)
+    /// A slower model is treated as unavailable: the user is waiting on a spinner. The first call
+    /// after launch loads the model, which is why this is not shorter; the editor prewarms it.
+    public static let timeout: Duration = .seconds(10)
 
     /// How many earlier entries the request holds its question against.
     static let previousEntryCount = 3
@@ -122,17 +152,23 @@ public enum JournalAsk {
     /// mark, no placeholder left unfilled, no tell of `JournalTextCheck`, and not close
     /// (`JournalNovelty`) to anything in `request.avoiding`.
     public static func accept(_ raw: String, request: JournalAskRequest) -> String? {
+        try? check(raw, request: request).get()
+    }
+
+    /// `accept` with the reason for a refusal: the first check the text fails.
+    public static func check(_ raw: String, request: JournalAskRequest) -> Result<String, JournalAskRejection> {
         let language = request.language
         let text = unquoted(firstLine(of: raw))
-        guard !text.isEmpty,
-              withinLimit(text, language: language),
-              // At most one mark is `JournalTextCheck`'s rule below, so one is there exactly when any is.
-              text.contains(where: JournalTextCheck.isQuestionMark),
-              text.range(of: #"\{[^{}]*\}"#, options: .regularExpression) == nil,
-              JournalTextCheck.violations(of: text, language: language).isEmpty,
-              JournalNovelty.isFresh(text, avoiding: request.avoiding, language: language)
-        else { return nil }
-        return text
+        guard !text.isEmpty else { return .failure(.empty) }
+        guard withinLimit(text, language: language) else { return .failure(.tooLong) }
+        // At most one mark is `JournalTextCheck`'s rule below, so one is there exactly when any is.
+        guard text.contains(where: JournalTextCheck.isQuestionMark) else { return .failure(.noQuestionMark) }
+        guard text.range(of: #"\{[^{}]*\}"#, options: .regularExpression) == nil else { return .failure(.placeholder) }
+        guard JournalTextCheck.violations(of: text, language: language).isEmpty else { return .failure(.voice) }
+        guard JournalNovelty.isFresh(text, avoiding: request.avoiding, language: language) else {
+            return .failure(.notFresh)
+        }
+        return .success(text)
     }
 
     private static func firstLine(of raw: String) -> String {
@@ -168,11 +204,13 @@ public enum JournalAsk {
     /// model is asked once: a question it wrote that `accept` takes is the result, and anything
     /// else (no model, a timeout, an error, nothing, a rejected text) is the first fixed prompt in
     /// `JournalFixedKey.fallbackOrder` the entry lacks, or `exhausted` when it has them all.
-    /// Nothing is retried.
+    /// Nothing is retried. `diagnose` hears what became of the model whenever it was the model's
+    /// turn, which is every result but `capped` and `safety`.
     public static func resolve(language: JournalLanguage, signals: JournalSignals, document: JournalDocument,
                                previousQuestions: [String], includeWriting: Bool,
                                wording: (any JournalWording)?,
-                               timeout: Duration = JournalAsk.timeout) async -> JournalAskResult {
+                               timeout: Duration = JournalAsk.timeout,
+                               diagnose: (@Sendable (JournalAskDiagnosis) -> Void)? = nil) async -> JournalAskResult {
         if isCapped(document) { return .capped }
         let written = document.blocks.map(\.writtenText).joined(separator: "\n")
         if JournalSafety.needsSafetyLine(answer: written) {
@@ -181,13 +219,34 @@ public enum JournalAsk {
         if let wording {
             let asked = request(language: language, signals: signals, document: document,
                                 previousQuestions: previousQuestions, includeWriting: includeWriting)
-            let raw = await JournalConversation.raced(timeout) {
-                await wording.word(instructions: asked.instructions, prompt: asked.prompt)
+            // Wrapped, so a model that answered nothing is told apart from one that ran out of time.
+            let answer = await JournalConversation.raced(timeout) {
+                Answer(text: await wording.word(instructions: asked.instructions, prompt: asked.prompt))
             }
-            if let raw, let question = accept(raw, request: asked) { return .question(question) }
+            if let answer {
+                if let raw = answer.text {
+                    switch check(raw, request: asked) {
+                    case .success(let question):
+                        diagnose?(.answered)
+                        return .question(question)
+                    case .failure(let reason):
+                        diagnose?(.rejected(text: raw, reason: reason))
+                    }
+                } else {
+                    diagnose?(.noAnswer)
+                }
+            } else {
+                diagnose?(.timedOut)
+            }
+        } else {
+            diagnose?(.noModel)
         }
         guard let key = JournalFixedKey.nextFallback(missingFrom: document) else { return .exhausted }
         return .fallback(key, toast: fallbackToast(language: language))
+    }
+
+    private struct Answer: Sendable {
+        let text: String?
     }
 
     // MARK: insertion

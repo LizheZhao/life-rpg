@@ -19,6 +19,7 @@ public enum JournalService {
             ledger: try context.fetch(FetchDescriptor<LedgerEntry>(
                 predicate: #Predicate { $0.kind == skipKind && $0.dayKey == dayKey })),
             flexible: flexible,
+            epic: try Epic.current(on: dayKey, in: context, timeZone: timeZone),
             timeZone: timeZone)
     }
 }

@@ -21,6 +21,28 @@ public struct JournalSignals: Equatable, Sendable {
         /// What the completion paid: `DailyQuest.points`, `RoutineOccurrence.awardedPoints`, 0 when
         /// none was recorded.
         public let coins: Int
+        /// A quest's slot; nil for a routine.
+        public var difficulty: Difficulty? = nil
+        /// A routine done before the day it was due (flexible do-ahead).
+        public var isAhead = false
+    }
+
+    /// The week's epic as it stands on the day. It is kept out of `completed` and `leftOpen`: it
+    /// runs for a week, so "done today" and "not done yet" each need its days to mean anything.
+    public struct EpicStatus: Equatable, Sendable {
+        public enum Progress: Equatable, Sendable {
+            /// Finished on this day, with this many days still to go before its last day.
+            case doneToday(daysToSpare: Int)
+            /// Finished on an earlier day of its run.
+            case doneEarlier
+            /// Not finished; this many days left after this one.
+            case open(daysLeft: Int)
+        }
+
+        public let text: String
+        public let progress: Progress
+        /// What it paid, when it was finished on this day; 0 otherwise.
+        public let coins: Int
     }
 
     public let dayKey: String
@@ -34,11 +56,17 @@ public struct JournalSignals: Equatable, Sendable {
     /// Quests first. The hidden quest is a bonus, not something left undone. Routines already
     /// overdue are `skipped`, never here.
     public let leftOpen: [JournalSubject]
+    /// The epic live on this day, done or not; nil when none covers it.
+    public let epic: EpicStatus?
 
-    public var completedCount: Int { completed.count }
+    /// Everything finished that day, an epic finished that day included.
+    public var completedCount: Int {
+        if case .doneToday = epic?.progress { return completed.count + 1 }
+        return completed.count
+    }
 
-    /// The coins the day's completions paid, summed from the items.
-    public var coinsEarned: Int { completed.reduce(0) { $0 + $1.coins } }
+    /// The coins the day's completions paid, summed from the items and an epic finished that day.
+    public var coinsEarned: Int { completed.reduce(0) { $0 + $1.coins } + (epic?.coins ?? 0) }
 
     /// The item to ask about as a good moment: the highest rating of 1 or more, the latest winning
     /// a tie. A choice item is asked about as a choice instead, so one thing is never asked twice.
@@ -64,6 +92,8 @@ public struct JournalSignals: Equatable, Sendable {
     ///   - ledger: any rows; only this day's `skip` entries are read, which is what marks an
     ///     occurrence as given up on by the settlement that opened the day.
     ///   - flexible: the ids of flexible routines, which have no overdue ladder.
+    ///   - epic: the epic live on the day (`Epic.current`). It was drawn on its own day, so the
+    ///     day's quests only hold it on that day; nil falls back to an epic among `quests`.
     public init(dayKey: String,
                 quests: [DailyQuest],
                 occurrences: [RoutineOccurrence],
@@ -71,6 +101,7 @@ public struct JournalSignals: Equatable, Sendable {
                 ratings: [QuestRating],
                 ledger: [LedgerEntry] = [],
                 flexible: Set<UUID> = [],
+                epic: DailyQuest? = nil,
                 timeZone: TimeZone = .current) {
         self.dayKey = dayKey
         self.tier = context?.tier ?? .normal
@@ -82,20 +113,22 @@ public struct JournalSignals: Equatable, Sendable {
             newest[id] = rating
         }
         func item(_ kind: FeedbackTarget, _ id: UUID, _ text: String, at: Date?,
-                  light: Bool, coins: Int?) -> Item {
+                  light: Bool, coins: Int?, difficulty: Difficulty? = nil, ahead: Bool = false) -> Item {
             Item(subject: JournalSubject(kind: kind, id: id, text: text),
                  rating: newest[id]?.rating, completedAt: at,
-                 isChoice: Self.isChoice(text), isLight: light, coins: coins ?? 0)
+                 isChoice: Self.isChoice(text), isLight: light, coins: coins ?? 0,
+                 difficulty: difficulty, isAhead: ahead)
         }
 
         var done: [Item] = quests
-            .filter { $0.dayKey == dayKey && !$0.replaced && $0.points != nil }
+            .filter { $0.dayKey == dayKey && !$0.replaced && $0.points != nil && $0.slot != .epic }
             .map { item(.quest, $0.id, $0.textSnapshot, at: $0.completedAt,
-                        light: false, coins: $0.points) }
+                        light: false, coins: $0.points, difficulty: $0.slot) }
         done += occurrences
             .filter { $0.completedDayKey == dayKey && !$0.isReplaced }
             .map { item(.routine, $0.id, $0.displayText, at: $0.completedAt,
-                        light: $0.usedDegraded && $0.degradedTextSnapshot != nil, coins: $0.awardedPoints) }
+                        light: $0.usedDegraded && $0.degradedTextSnapshot != nil, coins: $0.awardedPoints,
+                        ahead: $0.dueDayKey > dayKey) }
         self.completed = done.sorted { ($0.completedAt ?? .distantPast, $0.subject.text)
                                      < ($1.completedAt ?? .distantPast, $1.subject.text) }
 
@@ -114,7 +147,7 @@ public struct JournalSignals: Equatable, Sendable {
             .map { JournalSubject(kind: .routine, id: $0.id, text: $0.displayText) }
 
         let openQuests = quests
-            .filter { $0.dayKey == dayKey && !$0.replaced && !$0.isHiddenSlot && $0.points == nil }
+            .filter { $0.dayKey == dayKey && !$0.replaced && !$0.isHiddenSlot && $0.points == nil && $0.slot != .epic }
             .sorted { $0.textSnapshot < $1.textSnapshot }
             .map { JournalSubject(kind: .quest, id: $0.id, text: $0.textSnapshot) }
         let openRoutines = occurrences
@@ -122,5 +155,25 @@ public struct JournalSignals: Equatable, Sendable {
             .sorted { $0.textSnapshot < $1.textSnapshot }
             .map { JournalSubject(kind: .routine, id: $0.id, text: $0.displayText) }
         self.leftOpen = openQuests + openRoutines
+
+        let live = epic ?? quests.first { $0.slot == .epic && !$0.replaced && $0.dayKey == dayKey }
+        self.epic = live.flatMap { Self.epicStatus($0, on: dayKey, in: timeZone) }
+    }
+
+    /// Where `epic` stands on `dayKey`, or nil when it does not cover that day. A completion after
+    /// `dayKey` (a past day's entry) leaves it open on `dayKey`.
+    static func epicStatus(_ epic: DailyQuest, on dayKey: String, in timeZone: TimeZone) -> EpicStatus? {
+        guard epic.slot == .epic, !epic.replaced, epic.dayKey <= dayKey,
+              let last = Epic.lastDayKey(of: epic, in: timeZone), dayKey <= last,
+              let left = DayKey.daysBetween(dayKey, last, in: timeZone) else { return nil }
+        let doneDay = epic.points == nil ? nil : epic.completedAt?.dayKey(in: timeZone)
+        switch doneDay {
+        case dayKey?:
+            return EpicStatus(text: epic.textSnapshot, progress: .doneToday(daysToSpare: left), coins: epic.points ?? 0)
+        case let day? where day < dayKey:
+            return EpicStatus(text: epic.textSnapshot, progress: .doneEarlier, coins: 0)
+        default:
+            return EpicStatus(text: epic.textSnapshot, progress: .open(daysLeft: left), coins: 0)
+        }
     }
 }

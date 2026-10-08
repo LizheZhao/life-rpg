@@ -7,16 +7,47 @@ import FoundationModels
 /// The on-device model as `JournalWording`. A fresh session per call keeps it stateless and the
 /// context small: everything the model needs is in the prompt, and nothing the user wrote on an
 /// earlier turn can reach it. Anything that throws (guardrails, an unsupported language, the model
-/// going away mid-call) is a nil, which `JournalAsk.resolve` treats as "use the next fixed prompt".
+/// going away mid-call) is a nil, which `JournalAsk.resolve` treats as "use the next fixed prompt";
+/// the error is kept for the Debug page (`JournalAskDebug`).
 @available(iOS 26.0, *)
 struct FoundationModelsWording: JournalWording {
+    let language: JournalLanguage
+
+    /// The editor calls this when it opens: a session for this language's instructions is made and
+    /// prewarmed, and the next `word` with those instructions uses it, once. Still one session per
+    /// question, so nothing carries over between questions.
+    func prewarm() {
+        let session = LanguageModelSession(instructions: JournalPromptBuilder.instructions(language: language))
+        session.prewarm()
+        WarmSessions.shared.put(session, for: language)
+    }
+
     func word(instructions: String, prompt: String) async -> String? {
+        let warm = instructions == JournalPromptBuilder.instructions(language: language)
+            ? WarmSessions.shared.take(language) : nil
+        let session = warm ?? LanguageModelSession(instructions: instructions)
         do {
-            let session = LanguageModelSession(instructions: instructions)
             return try await session.respond(to: prompt).content
         } catch {
+            JournalAskDebug.noteError(error)
             return nil
         }
+    }
+}
+
+/// At most one unused prewarmed session per language.
+@available(iOS 26.0, *)
+private final class WarmSessions: @unchecked Sendable {
+    static let shared = WarmSessions()
+    private let lock = NSLock()
+    private var sessions: [JournalLanguage: LanguageModelSession] = [:]
+
+    func put(_ session: LanguageModelSession, for language: JournalLanguage) {
+        lock.withLock { sessions[language] = session }
+    }
+
+    func take(_ language: JournalLanguage) -> LanguageModelSession? {
+        lock.withLock { sessions.removeValue(forKey: language) }
     }
 }
 #endif
@@ -31,7 +62,7 @@ enum JournalWordingProvider {
         guard model.availability == .available,
               model.supportsLocale(Locale(identifier: language.rawValue))
         else { return nil }
-        return FoundationModelsWording()
+        return FoundationModelsWording(language: language)
         #else
         return nil
         #endif
