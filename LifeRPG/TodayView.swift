@@ -466,7 +466,10 @@ struct TodayView: View {
             SectionTitle(title: "Hidden")
             HiddenGateTile(unlocked: hiddenUnlocked, onReveal: revealHidden)
         }
-        ForEach(randomQuests.filter(\.replaced)) { ReplacedRowView(state: ReplacedRowState($0)) }
+        // A slot the re-plan dropped was not your doing, so Today leaves it out; the day sheet keeps it.
+        ForEach(randomQuests.filter { $0.replaced && $0.replacedReason != .replan }) {
+            ReplacedRowView(state: ReplacedRowState($0))
+        }
     }
 
     /// Everything finished today, gathered under one header after the open work.

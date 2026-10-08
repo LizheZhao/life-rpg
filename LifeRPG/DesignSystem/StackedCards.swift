@@ -2,7 +2,7 @@ import SwiftUI
 
 /// A section of cards that gathers into one stack: the first card on top with up to two more
 /// peeking out behind it and `+N more`. A tap on the stack or the header fans it out into the
-/// full list; `Collapse` or the header folds it again. The flag lives with the caller, so a lazily
+/// full list; the header, whose label reads `Collapse` while open, folds it again. The flag lives with the caller, so a lazily
 /// recycled row cannot forget it and the caller's own rule can drive it.
 struct StackedCards<Item: Identifiable, Row: View>: View {
     let title: String
@@ -45,10 +45,6 @@ struct StackedCards<Item: Identifiable, Row: View>: View {
             if expanded {
                 VStack(spacing: LR.Spacing.gridGap) {
                     ForEach(items) { row($0) }
-                    Button("Collapse", action: toggle)
-                        .lr(.bodyStrong).foregroundStyle(LR.Color.ink)
-                        .frame(maxWidth: .infinity, minHeight: 44)
-                        .lrCard(.surface, radius: LR.Radius.row)
                 }
                 .transition(reduceMotion ? .opacity : .opacity.combined(with: .scale(scale: 0.95, anchor: .top)))
             } else if let top = items.first {
@@ -94,9 +90,14 @@ struct StackedCards<Item: Identifiable, Row: View>: View {
         Text(title).lr(.heading).foregroundStyle(LR.Color.ink)
     }
 
+    /// Open, the summary gives way to `Collapse`: the header is the one way to fold the list.
     @ViewBuilder private var headerLabels: some View {
-        HandText(summary, .hand).foregroundStyle(LR.Color.accent)
-        if let badge { HandText(badge, .hand).foregroundStyle(LR.Color.clay) }
+        if expanded {
+            HandText("Collapse", .hand).foregroundStyle(LR.Color.accent)
+        } else {
+            HandText(summary, .hand).foregroundStyle(LR.Color.accent)
+            if let badge { HandText(badge, .hand).foregroundStyle(LR.Color.clay) }
+        }
     }
 
     private var chevron: some View {
