@@ -4,7 +4,8 @@ import Foundation
 /// wrote: the staged rhythms that make generated text recognisable (contrast, dramatic openers and
 /// closers, em dashes), more than one question, a question that opens with "why", a markdown
 /// marker. `JournalAsk.accept` adds the length, one-question, placeholder and novelty rules on top;
-/// a failure there means the caller falls back to a fixed prompt, never to a retry.
+/// a failure there means the caller falls back to a fixed prompt. Only a copy of a question
+/// already asked (`notFresh`) is asked for again, once (`JournalAsk.resolve`).
 ///
 /// The pool itself passes every rule except the one-question rule on two deliberate two-part
 /// rows, which `JournalTextCheckTests` asserts, so the check can't drift into rejecting the app's

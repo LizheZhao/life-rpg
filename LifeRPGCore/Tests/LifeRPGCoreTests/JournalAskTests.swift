@@ -24,14 +24,16 @@ struct JournalAskTests {
 
     private func request(_ signals: JournalSignals? = nil, document: JournalDocument? = nil,
                          previous: [String] = [], includeWriting: Bool = true,
-                         language: JournalLanguage = .en) -> JournalAskRequest {
+                         language: JournalLanguage = .en, listsRecent: Bool = false) -> JournalAskRequest {
         JournalAsk.request(language: language, signals: signals ?? F.signals(), document: document ?? entry(),
-                           previousQuestions: previous, includeWriting: includeWriting)
+                           previousQuestions: previous, includeWriting: includeWriting,
+                           listsRecentQuestions: listsRecent)
     }
 
     /// Replies as scripted, counts its calls, or waits until `release()` and ignores cancellation.
+    /// A script gives one behavior per call, the last repeating.
     private final class FakeWording: JournalWording, @unchecked Sendable {
-        enum Behavior { case reply(String?), hang }
+        indirect enum Behavior { case reply(String?), hang, script([Behavior]) }
         private let lock = NSLock()
         private let behavior: Behavior
         private var released = false
@@ -43,16 +45,23 @@ struct JournalAskTests {
 
         convenience init(_ reply: String?) { self.init(.reply(reply)) }
 
+        convenience init(script replies: [String?]) { self.init(.script(replies.map { .reply($0) })) }
+
         var callCount: Int { lock.withLock { prompts.count } }
 
         func word(instructions: String, prompt: String) async -> String? {
-            lock.withLock {
+            let call = lock.withLock {
                 self.instructions.append(instructions)
                 prompts.append(prompt)
+                return prompts.count - 1
             }
-            switch behavior {
+            var current = behavior
+            if case .script(let steps) = behavior { current = steps[min(call, steps.count - 1)] }
+            switch current {
             case .reply(let text):
                 return text
+            case .script:
+                return nil
             case .hang:
                 await withCheckedContinuation { (c: CheckedContinuation<Void, Never>) in
                     let now: Bool = lock.withLock {
@@ -79,11 +88,13 @@ struct JournalAskTests {
 
     private func resolve(_ wording: (any JournalWording)?, document: JournalDocument? = nil,
                          signals: JournalSignals? = nil, previous: [String] = [], includeWriting: Bool = true,
-                         language: JournalLanguage = .en,
-                         timeout: Duration = .seconds(60)) async -> JournalAskResult {
+                         language: JournalLanguage = .en, listsRecent: Bool = false,
+                         timeout: Duration = .seconds(60),
+                         retryTimeout: Duration = .seconds(60)) async -> JournalAskResult {
         await JournalAsk.resolve(language: language, signals: signals ?? F.signals(), document: document ?? entry(),
                                  previousQuestions: previous, includeWriting: includeWriting,
-                                 wording: wording, timeout: timeout)
+                                 listsRecentQuestions: listsRecent, wording: wording,
+                                 timeout: timeout, retryTimeout: retryTimeout)
     }
 
     private func llmPrompts(_ count: Int) -> [JournalBlock] {
@@ -101,7 +112,7 @@ struct JournalAskTests {
         #expect(r.prompt == JournalPromptBuilder.prompt(
             language: .en, signals: signals,
             writing: "\(secretText)\n\nQ: \(grateful)\nA: \(secretAnswer)",
-            existing: [grateful], recent: ["What did you notice yesterday?"],
+            existing: [grateful], recent: [],
             anchors: [
                 "Where did the day weigh on you most, in your body or in your mood?",
                 "If a friend had a day like this, what would you say to them?",
@@ -126,6 +137,41 @@ struct JournalAskTests {
         #expect(r.instructions == JournalPromptBuilder.instructions(language: .zhHans))
         #expect(r.prompt.hasPrefix("为用户的日记写一个关于今天的问题。"))
         #expect(r.avoiding.first == "今天你做了不少事，但听起来感觉并不好。当时是什么样的？")
+    }
+
+    private let album = "What did you think of the new album?"
+
+    @Test func thePromptListsNoQuestionFromRecentEntriesByDefault() {
+        let r = request(previous: [album, "What was the best moment of your day?"])
+        #expect(!r.prompt.contains(album))
+        #expect(!r.prompt.contains("What was the best moment of your day?"))
+        #expect(!r.prompt.contains("recent entries"))
+    }
+
+    @Test func aRecentEntrysQuestionIsStillHeldAgainstTheAnswerWhenThePromptLeftItOut() {
+        let r = request(previous: [album])
+        #expect(r.avoiding.contains(album))
+        #expect(JournalAsk.check(album, request: r) == .failure(.notFresh))
+        #expect(JournalAsk.check("what did you think of the new album?", request: r) == .failure(.notFresh))
+    }
+
+    @Test func theExperimentSwitchRestoresTheRecentSectionExactly() {
+        let signals = F.signals(tier: .low)
+        let recent = [album, "What did you notice yesterday?"]
+        let r = request(signals, previous: recent, listsRecent: true)
+        #expect(r.prompt.contains(
+            "Questions from recent entries. Do not ask anything like these:\n- \(album)\n- What did you notice yesterday?"))
+        let off = request(signals, previous: recent)
+        #expect(r.avoiding == off.avoiding)
+        #expect(r.prompt == JournalPromptBuilder.prompt(
+            language: .en, signals: signals,
+            writing: "\(secretText)\n\nQ: \(grateful)\nA: \(secretAnswer)",
+            existing: [grateful], recent: recent, anchors: JournalAsk.anchors(signals: signals, questionsInEntry: 1, language: .en)))
+    }
+
+    @Test func theExperimentSwitchStillSendsNothingWhenTheWritingSwitchIsOff() {
+        let r = request(previous: [album], includeWriting: false, listsRecent: true)
+        #expect(!r.prompt.contains(album))
     }
 
     // MARK: anchors by the day's facts
@@ -439,7 +485,7 @@ struct JournalAskTests {
         #expect(result == .exhausted)
     }
 
-    @Test func aRejectedAnswerFallsBackAndIsNotRetried() async {
+    @Test func aRejectedAnswerOtherThanNotFreshFallsBackAndIsNotRetried() async {
         let wording = FakeWording("What happened? How did it feel?")
         #expect(await resolve(wording, document: JournalDocument()) == .fallback(.favoriteMoment, toast: toast))
         #expect(wording.callCount == 1)
@@ -484,27 +530,175 @@ struct JournalAskTests {
         var all: [JournalAskDiagnosis] { lock.withLock { value } }
     }
 
-    private func diagnosis(_ wording: (any JournalWording)?, timeout: Duration = .seconds(60)) async -> [JournalAskDiagnosis] {
+    private func diagnosis(_ wording: (any JournalWording)?, previous: [String] = [],
+                           timeout: Duration = .seconds(60),
+                           retryTimeout: Duration = .seconds(60)) async -> [JournalAskDiagnosis] {
         let heard = Heard()
         _ = await JournalAsk.resolve(language: .en, signals: F.signals(), document: JournalDocument(),
-                                     previousQuestions: [], includeWriting: true, wording: wording,
-                                     timeout: timeout, diagnose: { heard.add($0) })
+                                     previousQuestions: previous, includeWriting: true, wording: wording,
+                                     timeout: timeout, retryTimeout: retryTimeout, diagnose: { heard.add($0) })
         return heard.all
     }
 
     @Test func eachWayTheModelFailsIsToldApart() async {
-        #expect(await diagnosis(nil) == [.noModel])
-        #expect(await diagnosis(FakeWording(nil)) == [.noAnswer])
+        #expect(await diagnosis(nil) == [JournalAskDiagnosis(.noModel)])
+        #expect(await diagnosis(FakeWording(nil)) == [JournalAskDiagnosis(.noAnswer)])
         #expect(await diagnosis(FakeWording("Absolutely, here you go!"))
-                == [.rejected(text: "Absolutely, here you go!", reason: .noQuestionMark)])
-        #expect(await diagnosis(FakeWording(walkQuestion)) == [.answered])
+                == [JournalAskDiagnosis(.rejected(text: "Absolutely, here you go!", reason: .noQuestionMark,
+                                                  nearest: nil))])
+        #expect(await diagnosis(FakeWording(walkQuestion)) == [JournalAskDiagnosis(.answered)])
     }
 
     @Test(.timeLimit(.minutes(1)))
     func aHangingModelIsDiagnosedAsTimedOut() async {
         let wording = FakeWording(.hang)
-        #expect(await diagnosis(wording, timeout: .milliseconds(50)) == [.timedOut])
+        #expect(await diagnosis(wording, timeout: .milliseconds(50)) == [JournalAskDiagnosis(.timedOut)])
         wording.release()
+    }
+
+    // MARK: the retry
+
+    @Test func aCopyOfAnOlderQuestionIsAskedAgainWithTheRejectedTextInThePrompt() async {
+        let wording = FakeWording(script: [album, walkQuestion])
+        let result = await resolve(wording, document: JournalDocument(), previous: [album])
+        #expect(result == .question(walkQuestion))
+        #expect(wording.callCount == 2)
+        let first = request(document: JournalDocument(), previous: [album])
+        #expect(wording.prompts[0] == first.prompt)
+        #expect(wording.prompts[1] == JournalPromptBuilder.retryPrompt(first.prompt, rejected: album, language: .en))
+        #expect(wording.prompts[1].contains(album))
+        #expect(wording.instructions == [first.instructions, first.instructions])
+    }
+
+    @Test func theRetryPromptNamesTheRejectedQuestionAsItWouldHaveBeenShown() async {
+        // Quoted, with a second line: the retry prompt names the question as it would have been shown.
+        let wording = FakeWording(script: ["\"\(album)\"\nand a second line", walkQuestion])
+        _ = await resolve(wording, document: JournalDocument(), previous: [album])
+        #expect(wording.prompts[1].hasSuffix(JournalPromptBuilder.retryPrompt("", rejected: album, language: .en)))
+        #expect(!wording.prompts[1].contains("second line"))
+    }
+
+    @Test func aSecondAnswerThatIsAlsoRejectedFallsBackAfterTwoCalls() async {
+        let wording = FakeWording(script: [album, album])
+        let result = await resolve(wording, document: JournalDocument(), previous: [album])
+        #expect(result == .fallback(.favoriteMoment, toast: toast))
+        #expect(wording.callCount == 2)
+    }
+
+    @Test func aSecondAnswerRejectedForAnotherReasonFallsBackAfterTwoCalls() async {
+        let wording = FakeWording(script: [album, "Absolutely, here you go!"])
+        let result = await resolve(wording, document: JournalDocument(), previous: [album])
+        #expect(result == .fallback(.favoriteMoment, toast: toast))
+        #expect(wording.callCount == 2)
+    }
+
+    @Test func aSecondCallThatAnswersNothingFallsBack() async {
+        let wording = FakeWording(script: [album, nil])
+        let result = await resolve(wording, document: JournalDocument(), previous: [album])
+        #expect(result == .fallback(.favoriteMoment, toast: toast))
+        #expect(wording.callCount == 2)
+    }
+
+    @Test func aFirstAnswerRejectedForAnyOtherReasonIsNotAskedAgain() async {
+        let cases: [(String, JournalAskRejection)] = [
+            ("", .empty), (String(repeating: "word ", count: 20) + "?", .tooLong),
+            ("What happened? How did it feel?", .noQuestionMark), ("What about {quest}?", .placeholder),
+            ("Why did the walk feel slow?", .voice),
+        ]
+        for (text, reason) in cases {
+            let wording = FakeWording(script: [text, walkQuestion])
+            let result = await resolve(wording, document: JournalDocument(), previous: [album])
+            #expect(result == .fallback(.favoriteMoment, toast: toast), "\(reason)")
+            #expect(wording.callCount == 1, "\(reason)")
+        }
+    }
+
+    @Test(.timeLimit(.minutes(1)))
+    func aFirstCallThatTimesOutIsNotAskedAgain() async {
+        let wording = FakeWording(.hang)
+        let result = await resolve(wording, document: JournalDocument(), timeout: .milliseconds(50))
+        #expect(result == .fallback(.favoriteMoment, toast: toast))
+        #expect(wording.callCount == 1)
+        wording.release()
+    }
+
+    @Test func aModelThatThrewIsNotAskedAgain() async {
+        let wording = FakeWording(nil as String?)
+        _ = await resolve(wording, document: JournalDocument(), previous: [album])
+        #expect(wording.callCount == 1)
+    }
+
+    @Test(.timeLimit(.minutes(1)))
+    func aSecondCallThatHangsIsCutOffByTheRetryTimeoutAlone() async {
+        let wording = FakeWording(.script([.reply(album), .hang]))
+        let result = await resolve(wording, document: JournalDocument(), previous: [album],
+                                   timeout: .seconds(60), retryTimeout: .milliseconds(50))
+        #expect(result == .fallback(.favoriteMoment, toast: toast))
+        #expect(wording.callCount == 2)
+        wording.release()
+    }
+
+    @Test func theRetryHasFiveSeconds() {
+        #expect(JournalAsk.retryTimeout == .seconds(5))
+    }
+
+    // MARK: the diagnosis of a retry
+
+    @Test func aCopyIsDiagnosedWithTheNearestQuestionAndHowAlike() async {
+        let heard = await diagnosis(FakeWording(album), previous: [album], retryTimeout: .seconds(60))
+        #expect(heard == [JournalAskDiagnosis(
+            .rejected(text: album, reason: .notFresh, nearest: JournalNovelty.Match(question: album, similarity: 1)),
+            retried: true)])
+    }
+
+    @Test func aFreshSecondAnswerIsToldApartFromAFreshFirstOne() async {
+        let heard = await diagnosis(FakeWording(script: [album, walkQuestion]), previous: [album])
+        #expect(heard == [JournalAskDiagnosis(.answered, retried: true)])
+        #expect(heard != [JournalAskDiagnosis(.answered)])
+    }
+
+    @Test func aSecondAnswerRejectedForAnotherReasonIsDiagnosedAsThatReasonAfterARetry() async {
+        let heard = await diagnosis(FakeWording(script: [album, "Absolutely, here you go!"]), previous: [album])
+        #expect(heard == [JournalAskDiagnosis(
+            .rejected(text: "Absolutely, here you go!", reason: .noQuestionMark, nearest: nil), retried: true)])
+    }
+
+    @Test(.timeLimit(.minutes(1)))
+    func aSecondCallThatHangsIsDiagnosedAsTimedOutAfterARetry() async {
+        let wording = FakeWording(.script([.reply(album), .hang]))
+        let heard = await diagnosis(wording, previous: [album], retryTimeout: .milliseconds(50))
+        #expect(heard == [JournalAskDiagnosis(.timedOut, retried: true)])
+        wording.release()
+    }
+
+    @Test func nearestAvoidedQuestionComesFromEverythingTheAnswerIsHeldAgainst() {
+        let r = request(previous: ["What was the best moment of your day?", album])
+        let match = JournalAsk.nearestAvoided(" \"\(album)\" ", request: r)
+        #expect(match == JournalNovelty.Match(question: album, similarity: 1))
+        // Only "moment" is shared, with the favorite-moment chip: 1 of 4 distinct content words.
+        #expect(JournalAsk.nearestAvoided("Which moment stood out?", request: r)
+                == JournalNovelty.Match(question: "What was your favorite moment today?", similarity: 0.25))
+    }
+
+    @Test func theSummariesReadAsOneLineEach() {
+        func summary(_ outcome: JournalAskDiagnosis.Outcome, retried: Bool = false) -> String {
+            JournalAskDiagnosis(outcome, retried: retried).summary
+        }
+        let copy = JournalAskDiagnosis.Outcome.rejected(
+            text: album, reason: .notFresh, nearest: JournalNovelty.Match(question: album, similarity: 1))
+        #expect(summary(.noModel) == "no model on this device")
+        #expect(summary(.timedOut) == "timed out after 10 s")
+        #expect(summary(.timedOut, retried: true) == "timed out after 5 s, on the second ask")
+        #expect(summary(.noAnswer) == "the model threw or answered nothing")
+        #expect(summary(.answered) == "answered")
+        #expect(summary(.answered, retried: true) == "answered on the second ask")
+        #expect(summary(.rejected(text: "Hi", reason: .noQuestionMark, nearest: nil))
+                == "rejected (noQuestionMark): Hi")
+        #expect(summary(copy) == "rejected (notFresh): What did you think of the new album? "
+                + "closest to \"What did you think of the new album?\" at 1.00")
+        #expect(summary(.rejected(text: "Which moment stood out?", reason: .notFresh,
+                                  nearest: JournalNovelty.Match(question: "Q?", similarity: 0.6666)), retried: true)
+                == "rejected (notFresh): Which moment stood out? closest to \"Q?\" at 0.67, on the second ask")
     }
 
     @Test func checkNamesTheFirstRuleATextBreaks() {

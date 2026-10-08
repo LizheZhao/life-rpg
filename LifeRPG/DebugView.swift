@@ -24,6 +24,9 @@ struct DebugView: View {
     @State private var handOffText: String?
     @State private var trendsSeedText: String?
     @State private var turnSeedText: String?
+    /// The progress line, then the summary line, of the last "Ask evaluation" run.
+    @State private var askEvalText: String?
+    @State private var askEvalRunning = false
     #else
     /// Time travel is simulator-only; on a device the day is today (as in `RootView`).
     private let dayOffset = 0
@@ -172,6 +175,20 @@ struct DebugView: View {
                         }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                section("Ask evaluation (simulator only)", footer: "Runs the real on-device model over \(JournalAskEvaluation.samplesPerVariant) samples of 13 made-up days, each with the prompt that lists the last entries' questions and without it, one attempt per sample and no retry. Nothing is stored in the app. It writes ask-eval-<time>.json and .md (the full prompts, the model's text, Core's verdict and a table of counts) to the app's Documents directory, and writes nothing when the model is unavailable.") {
+                    Button {
+                        askEvalRunning = true
+                        Task {
+                            askEvalText = await JournalAskEvaluation.run { askEvalText = $0 }
+                            askEvalRunning = false
+                        }
+                    } label: {
+                        Label(askEvalRunning ? "Running…" : "Run", systemImage: "play")
+                    }
+                    .buttonStyle(PillButtonStyle())
+                    .disabled(askEvalRunning)
+                    if let askEvalText { note(askEvalText) }
                 }
                 section("Old journal turns (simulator only)", footer: "Writes turn-based days two, three and four days before the app's day, as the build before entries stored them. The migration runs once at launch, guarded by a flag: Reset the flag, then relaunch the app to see those days become entries. A second relaunch must not bring back a day you cleared.") {
                     FlowRow(spacing: 8) {

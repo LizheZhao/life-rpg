@@ -8,7 +8,8 @@ public struct JournalAskRequest: Equatable, Sendable {
     public let prompt: String
     /// The entry's own questions, then those of the last three entries, then the tone anchors the
     /// prompt showed, then the four chip questions, so the model can not hand back a chip in other
-    /// words. Held against the model's answer even when the prompt left some of them out.
+    /// words. Held against the model's answer even when the prompt left some of them out (it does
+    /// not list the last entries' questions unless asked to).
     public let avoiding: [String]
 }
 
@@ -33,31 +34,52 @@ public enum JournalAskResult: Equatable, Sendable {
 }
 
 /// Why `JournalAsk.check` turned the model's text away, in the order the checks run.
-public enum JournalAskRejection: String, Error, Equatable, Sendable {
+public enum JournalAskRejection: String, Error, Equatable, CaseIterable, Sendable {
     case empty, tooLong, noQuestionMark, placeholder, voice, notFresh
 }
 
 /// What became of the model on one tap. The editor shows the same fallback toast for every case
 /// but `answered`, so the Debug page reads this to tell them apart.
-public enum JournalAskDiagnosis: Equatable, Sendable {
-    /// No model on the device (`JournalWordingProvider` answered nil).
-    case noModel
-    /// The model did not answer within `JournalAsk.timeout`.
-    case timedOut
-    /// The model answered nil: it threw (guardrails, an unsupported language) or said nothing.
-    case noAnswer
-    /// The model wrote this, and `check` turned it away for this reason.
-    case rejected(text: String, reason: JournalAskRejection)
-    case answered
+public struct JournalAskDiagnosis: Equatable, Sendable {
+    public enum Outcome: Equatable, Sendable {
+        /// No model on the device (`JournalWordingProvider` answered nil).
+        case noModel
+        /// The model did not answer within `JournalAsk.timeout` (`retryTimeout` on the second ask).
+        case timedOut
+        /// The model answered nil: it threw (guardrails, an unsupported language) or said nothing.
+        case noAnswer
+        /// The model wrote this, and `check` turned it away for this reason. For `notFresh`,
+        /// `nearest` is the question it was closest to.
+        case rejected(text: String, reason: JournalAskRejection, nearest: JournalNovelty.Match?)
+        case answered
+    }
+
+    /// What became of the last call to the model.
+    public let outcome: Outcome
+    /// The first answer was `notFresh`, so the model was asked a second time and `outcome` is what
+    /// became of that second call.
+    public let retried: Bool
+
+    public init(_ outcome: Outcome, retried: Bool = false) {
+        self.outcome = outcome
+        self.retried = retried
+    }
 
     public var summary: String {
-        switch self {
-        case .noModel: "no model on this device"
-        case .timedOut: "timed out after \(JournalAsk.timeout)"
-        case .noAnswer: "the model threw or answered nothing"
-        case .rejected(let text, let reason): "rejected (\(reason.rawValue)): \(text)"
-        case .answered: "answered"
+        let timeout = retried ? JournalAsk.retryTimeout : JournalAsk.timeout
+        let text: String
+        switch outcome {
+        case .noModel: text = "no model on this device"
+        case .timedOut: text = "timed out after \(timeout.components.seconds) s"
+        case .noAnswer: text = "the model threw or answered nothing"
+        case .rejected(let written, let reason, let nearest):
+            text = "rejected (\(reason.rawValue)): \(written)"
+                + (nearest.map { " closest to \"\($0.question)\" at " + String(format: "%.2f", $0.similarity) } ?? "")
+        case .answered: text = "answered"
         }
+        guard retried else { return text }
+        if case .answered = outcome { return text + " on the second ask" }
+        return text + ", on the second ask"
     }
 }
 
@@ -84,6 +106,9 @@ public enum JournalAsk {
     /// after launch loads the model, which is why this is not shorter; the editor prewarms it.
     public static let timeout: Duration = .seconds(10)
 
+    /// The second ask, after a `notFresh` first answer, is to a model that is already warm.
+    public static let retryTimeout: Duration = .seconds(5)
+
     /// How many earlier entries the request holds its question against.
     static let previousEntryCount = 3
 
@@ -102,14 +127,18 @@ public enum JournalAsk {
     ///     the prompt carries the day's quests and the entry's own questions and nothing else:
     ///     no text, no answers, and not the older entries' questions either. Those are still held
     ///     against the answer, locally.
+    ///   - listsRecentQuestions: whether the prompt lists `previousQuestions`, which only goes in with
+    ///     the writing. Off by default, since a small model copies from a list it is told to avoid;
+    ///     they are held against the answer either way. Exists to compare the two prompts.
     public static func request(language: JournalLanguage, signals: JournalSignals, document: JournalDocument,
-                               previousQuestions: [String], includeWriting: Bool) -> JournalAskRequest {
+                               previousQuestions: [String], includeWriting: Bool,
+                               listsRecentQuestions: Bool = false) -> JournalAskRequest {
         let existing = document.questions
         let anchors = anchors(signals: signals, questionsInEntry: existing.count, language: language)
         let prompt = JournalPromptBuilder.prompt(
             language: language, signals: signals,
             writing: includeWriting ? JournalPromptBuilder.writing(of: document) : nil,
-            existing: existing, recent: includeWriting ? previousQuestions : [], anchors: anchors)
+            existing: existing, recent: includeWriting && listsRecentQuestions ? previousQuestions : [], anchors: anchors)
         return JournalAskRequest(language: language,
                                  instructions: JournalPromptBuilder.instructions(language: language),
                                  prompt: prompt,
@@ -165,7 +194,7 @@ public enum JournalAsk {
     /// `accept` with the reason for a refusal: the first check the text fails.
     public static func check(_ raw: String, request: JournalAskRequest) -> Result<String, JournalAskRejection> {
         let language = request.language
-        let text = unquoted(firstLine(of: raw))
+        let text = cleaned(raw)
         guard !text.isEmpty else { return .failure(.empty) }
         guard withinLimit(text, language: language) else { return .failure(.tooLong) }
         // At most one mark is `JournalTextCheck`'s rule below, so one is there exactly when any is.
@@ -176,6 +205,17 @@ public enum JournalAsk {
             return .failure(.notFresh)
         }
         return .success(text)
+    }
+
+    /// What `check` judges: the first line of `raw`, without surrounding quotes.
+    private static func cleaned(_ raw: String) -> String {
+        unquoted(firstLine(of: raw))
+    }
+
+    /// The question in `request.avoiding` that `raw` is closest to, for saying why a `notFresh`
+    /// text was turned away.
+    public static func nearestAvoided(_ raw: String, request: JournalAskRequest) -> JournalNovelty.Match? {
+        JournalNovelty.closestMatch(cleaned(raw), to: request.avoiding, language: request.language)
     }
 
     private static func firstLine(of raw: String) -> String {
@@ -208,16 +248,21 @@ public enum JournalAsk {
     /// The one decision behind a tap, in this order. Five model prompts already in the entry is
     /// `capped`, before anything else. Writing that holds a safety word gets the safety line and
     /// the model is not called, whether or not the writing would have been sent. Otherwise the
-    /// model is asked once: a question it wrote that `accept` takes is the result. Anything else
-    /// (no model, a timeout, an error, nothing, a rejected text) is a question about one thing from
-    /// the day (`dayQuestion`), else the first fixed prompt in `JournalFixedKey.fallbackOrder` the
-    /// entry lacks, or `exhausted` when it has them all.
-    /// Nothing is retried. `diagnose` hears what became of the model whenever it was the model's
-    /// turn, which is every result but `capped` and `safety`.
+    /// model is asked: a question it wrote that `accept` takes is the result. An answer that is
+    /// `notFresh` (a copy of a question already asked) is asked for once more, with
+    /// `JournalPromptBuilder.retryPrompt` and `retryTimeout`; a second answer that `accept` takes is
+    /// the result. Anything else (no model, a timeout, an error, nothing, a text rejected for
+    /// another reason, a second answer that fails) is a question about one thing from the day
+    /// (`dayQuestion`), else the first fixed prompt in `JournalFixedKey.fallbackOrder` the entry
+    /// lacks, or `exhausted` when it has them all.
+    /// The model is called at most twice. `diagnose` hears what became of the model, once, whenever
+    /// it was the model's turn, which is every result but `capped` and `safety`.
     public static func resolve(language: JournalLanguage, signals: JournalSignals, document: JournalDocument,
                                previousQuestions: [String], includeWriting: Bool,
+                               listsRecentQuestions: Bool = false,
                                wording: (any JournalWording)?,
                                timeout: Duration = JournalAsk.timeout,
+                               retryTimeout: Duration = JournalAsk.retryTimeout,
                                diagnose: (@Sendable (JournalAskDiagnosis) -> Void)? = nil) async -> JournalAskResult {
         if isCapped(document) { return .capped }
         let written = document.blocks.map(\.writtenText).joined(separator: "\n")
@@ -226,28 +271,24 @@ public enum JournalAsk {
         }
         if let wording {
             let asked = request(language: language, signals: signals, document: document,
-                                previousQuestions: previousQuestions, includeWriting: includeWriting)
-            // Wrapped, so a model that answered nothing is told apart from one that ran out of time.
-            let answer = await JournalConversation.raced(timeout) {
-                Answer(text: await wording.word(instructions: asked.instructions, prompt: asked.prompt))
+                                previousQuestions: previousQuestions, includeWriting: includeWriting,
+                                listsRecentQuestions: listsRecentQuestions)
+            var attempt = await ask(wording, asked, prompt: asked.prompt, timeout: timeout)
+            var retried = false
+            if case .failed(.rejected(let text, .notFresh, _)) = attempt {
+                retried = true
+                let again = JournalPromptBuilder.retryPrompt(asked.prompt, rejected: cleaned(text), language: language)
+                attempt = await ask(wording, asked, prompt: again, timeout: retryTimeout)
             }
-            if let answer {
-                if let raw = answer.text {
-                    switch check(raw, request: asked) {
-                    case .success(let question):
-                        diagnose?(.answered)
-                        return .question(question)
-                    case .failure(let reason):
-                        diagnose?(.rejected(text: raw, reason: reason))
-                    }
-                } else {
-                    diagnose?(.noAnswer)
-                }
-            } else {
-                diagnose?(.timedOut)
+            switch attempt {
+            case .accepted(let question):
+                diagnose?(JournalAskDiagnosis(.answered, retried: retried))
+                return .question(question)
+            case .failed(let outcome):
+                diagnose?(JournalAskDiagnosis(outcome, retried: retried))
             }
         } else {
-            diagnose?(.noModel)
+            diagnose?(JournalAskDiagnosis(.noModel))
         }
         if let question = dayQuestion(signals: signals, document: document,
                                       previousQuestions: previousQuestions, language: language) {
@@ -255,6 +296,29 @@ public enum JournalAsk {
         }
         guard let key = JournalFixedKey.nextFallback(missingFrom: document) else { return .exhausted }
         return .fallback(key, toast: fallbackToast(language: language))
+    }
+
+    private enum Attempt {
+        case accepted(String)
+        case failed(JournalAskDiagnosis.Outcome)
+    }
+
+    /// One call to the model, judged by `check`.
+    private static func ask(_ wording: any JournalWording, _ asked: JournalAskRequest, prompt: String,
+                            timeout: Duration) async -> Attempt {
+        // Wrapped, so a model that answered nothing is told apart from one that ran out of time.
+        let answer = await JournalConversation.raced(timeout) {
+            Answer(text: await wording.word(instructions: asked.instructions, prompt: prompt))
+        }
+        guard let answer else { return .failed(.timedOut) }
+        guard let raw = answer.text else { return .failed(.noAnswer) }
+        switch check(raw, request: asked) {
+        case .success(let question):
+            return .accepted(question)
+        case .failure(let reason):
+            let nearest = reason == .notFresh ? nearestAvoided(raw, request: asked) : nil
+            return .failed(.rejected(text: raw, reason: reason, nearest: nearest))
+        }
     }
 
     /// A `fact` row filled with one concrete thing from the day, for when the model could not be

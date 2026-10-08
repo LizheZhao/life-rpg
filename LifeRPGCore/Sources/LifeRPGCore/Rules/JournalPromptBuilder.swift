@@ -56,7 +56,8 @@ public enum JournalPromptBuilder {
 
     /// The prompt: the day's facts, then each section that has something in it. `writing` is nil to
     /// leave out everything the user wrote (the privacy switch), and `recent` is passed empty then
-    /// too; the caller decides, so this function can not leak what it is not given.
+    /// too; the caller decides, so this function can not leak what it is not given. `JournalAsk`
+    /// passes `recent` empty unless an experiment asks for it.
     public static func prompt(language: JournalLanguage, signals: JournalSignals, writing: String?,
                               existing: [String], recent: [String], anchors: [String]) -> String {
         let words = Words(language)
@@ -72,6 +73,17 @@ public enum JournalPromptBuilder {
             sections.append(heading + "\n" + lines.map { "- " + $0 }.joined(separator: "\n"))
         }
         return sections.joined(separator: "\n\n")
+    }
+
+    /// The prompt again after `rejected` came back too close to a question already asked: the same
+    /// prompt, then one sentence naming the rejected question and asking for another subject.
+    public static func retryPrompt(_ prompt: String, rejected: String, language: JournalLanguage) -> String {
+        switch language {
+        case .en:
+            return prompt + "\n\nThe question you just wrote, \"\(rejected)\", is too close to one that was already asked. Ask about something else from the facts."
+        case .zhHans:
+            return prompt + "\n\n你刚写的问题“\(rejected)”和已经问过的太接近了。请从上面的情况里换一件事来问。"
+        }
     }
 
     /// The entry as plain text for the prompt: a text as it is, a prompt as `Q: ...` over `A: ...`,

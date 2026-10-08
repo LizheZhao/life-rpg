@@ -221,6 +221,24 @@ struct JournalPromptBuilderTests {
         #expect(!prompt.contains("\u{2026}"))
     }
 
+    // MARK: the retry
+
+    @Test func theEnglishRetryPromptIsThePromptPlusOneSentencePinnedWhole() {
+        #expect(JournalPromptBuilder.retryPrompt("THE PROMPT", rejected: "What did you think of the new album?", language: .en) == """
+            THE PROMPT
+
+            The question you just wrote, "What did you think of the new album?", is too close to one that was already asked. Ask about something else from the facts.
+            """)
+    }
+
+    @Test func theChineseRetryPromptIsThePromptPlusOneSentencePinnedWhole() {
+        #expect(JournalPromptBuilder.retryPrompt("提示", rejected: "你觉得新专辑怎么样？", language: .zhHans) == """
+            提示
+
+            你刚写的问题“你觉得新专辑怎么样？”和已经问过的太接近了。请从上面的情况里换一件事来问。
+            """)
+    }
+
     // MARK: the entry as text
 
     @Test func promptsReadAsQAndAAndTextsAsTheyAre() {

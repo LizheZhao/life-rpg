@@ -7,6 +7,18 @@ struct JournalNoveltyTests {
         JournalNovelty.similarity(a, b, language: language)
     }
 
+    // MARK: the closest question
+
+    @Test func theClosestMatchNamesTheQuestionAndHowAlikeItIs() {
+        let others = ["What was the best moment of your day?", "What did you think of the new album?"]
+        #expect(JournalNovelty.closestMatch("what do you think about the new album", to: others, language: .en)
+                == JournalNovelty.Match(question: "What did you think of the new album?", similarity: 1))
+        // On a tie the question listed first is named.
+        #expect(JournalNovelty.closestMatch("album?", to: ["new album", "old album"], language: .en)?.question == "new album")
+        #expect(JournalNovelty.closestMatch("anything", to: [], language: .en) == nil)
+        #expect(JournalNovelty.closest("anything", to: [], language: .en) == 0)
+    }
+
     // MARK: similarity
 
     @Test func englishIsJaccardOverLowercasedContentWordsWithoutPunctuation() {

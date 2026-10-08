@@ -37,9 +37,30 @@ public enum JournalNovelty {
         return union == 0 ? 0 : Double(left.intersection(right).count) / Double(union)
     }
 
+    /// The one of `others` that `text` is most like, with how like; the first listed on a tie.
+    public struct Match: Equatable, Sendable {
+        public let question: String
+        public let similarity: Double
+
+        public init(question: String, similarity: Double) {
+            self.question = question
+            self.similarity = similarity
+        }
+    }
+
+    /// The question in `others` closest to `text`; nil with none.
+    public static func closestMatch(_ text: String, to others: [String], language: JournalLanguage) -> Match? {
+        var best: Match?
+        for other in others {
+            let score = similarity(text, other, language: language)
+            if best.map({ score > $0.similarity }) ?? true { best = Match(question: other, similarity: score) }
+        }
+        return best
+    }
+
     /// The highest similarity of `text` to any of `others`; 0 with none.
     public static func closest(_ text: String, to others: [String], language: JournalLanguage) -> Double {
-        others.map { similarity(text, $0, language: language) }.max() ?? 0
+        closestMatch(text, to: others, language: language)?.similarity ?? 0
     }
 
     /// Whether `text` is below `threshold` against every one of `others`.

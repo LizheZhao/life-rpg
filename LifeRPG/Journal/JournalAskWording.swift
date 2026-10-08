@@ -25,10 +25,17 @@ enum JournalAskDebug {
         UserDefaults.standard.set(String(describing: error), forKey: errorKey)
     }
 
+    /// The error `noteError` kept since the last call, forgotten once read.
+    nonisolated static func takeError() -> String? {
+        let defaults = UserDefaults.standard
+        defer { defaults.removeObject(forKey: errorKey) }
+        return defaults.string(forKey: errorKey)
+    }
+
     nonisolated static func record(_ diagnosis: JournalAskDiagnosis) {
         let defaults = UserDefaults.standard
         var line = diagnosis.summary
-        if diagnosis == .noAnswer, let error = defaults.string(forKey: errorKey) {
+        if diagnosis.outcome == .noAnswer, let error = defaults.string(forKey: errorKey) {
             line += ": " + error
         }
         defaults.removeObject(forKey: errorKey)

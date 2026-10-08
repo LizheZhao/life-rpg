@@ -20,7 +20,7 @@ public enum JournalConversation {
     /// `work`'s result, or nil once `timeout` has passed. The two run as separate tasks that race
     /// to resume one continuation, so a model that ignores cancellation cannot hold the caller
     /// past the timeout the way a task group (which waits for every child) would.
-    static func raced<T: Sendable>(_ timeout: Duration,
+    public static func raced<T: Sendable>(_ timeout: Duration,
                                    _ work: @escaping @Sendable () async -> T?) async -> T? {
         await withCheckedContinuation { (continuation: CheckedContinuation<T?, Never>) in
             let gate = Gate(continuation)
