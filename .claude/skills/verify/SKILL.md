@@ -24,7 +24,9 @@ Everything runs through `.claude/skills/verify/scripts/verify.sh` (below: `V`). 
 .claude/skills/verify/scripts/verify.sh up --fresh    # same, but wipes the app's data first (new seed, new grant, new day)
 ```
 
-Ready when it prints `ready: <udid>` and `V doctor` shows `build: up to date` and a non-empty `rows:` line. Build output goes to `build/verify-derived/` (gitignored).
+Ready when it prints `ready: <udid>` and `V doctor` shows `build: up to date` and a non-empty `rows:` line.
+
+`up` cannot hang: every step has its own time limit (boot, boot-status, xcodebuild 20 min, uninstall, install, launch, the container lookup, the store read) and a step that overruns is killed with its whole process group, with a message naming it (`verify.sh: step "xcodebuild" did not finish in 1200s and was killed`, exit 124). It prints a `[verify]` line per stage, keeps the full build output in `build/verify-build.log`, and takes a lock (`build/verify-up.lock`): a second `up` while one runs exits 3 and names the pid, and a lock whose process is gone is taken over. A normal `up --fresh` takes about 10 s with a warm build and about 40 s from a shut-down simulator. If a step reports a timeout, run `V doctor`, read `build/verify-build.log`, and retry; a repeating timeout on `simctl` itself means the simulator needs `xcrun simctl shutdown` and a fresh boot. Build output goes to `build/verify-derived/` (gitignored).
 
 Pass the UDID from `V udid` as `device` to every `mcp__Claude_Code_iOS_Simulator__control` call.
 
@@ -54,7 +56,7 @@ Stable points on iPhone 17 Pro Max (440×956 pt):
 | Sheet `Done` (a pushed page's sheet, e.g. the Levels sheet) | 220, 890 |
 | Close a bottom sheet with no button (the Calendar day sheet) | swipe down from about 220, 300 to 220, 900 |
 
-Settings is the fifth tab. It lists Library, Workout detection, Output records to JSON, Tables (CSV), Restore from JSON…, a Journal section (Apple Journal status, the `Send my writing with the question request` toggle, the Shortcut set-up text), Design gallery and Debug; Library, Workout detection, Design and Debug are pushed onto the Settings stack, so the floating bar stays visible on them. At the default text size, with Settings scrolled to the top, the rows sit at about y = 247 (Library), 381 (Workout detection), 514 / 588 / 662 (the three Data rows), 795 (Design gallery); Debug is behind the floating bar there; scrolled to the bottom Design gallery sits at about 590 and Debug at 723. The Settings tab keeps whatever page was pushed when you switch tabs and come back (a relaunch resets it), so check which page you are on. The bar hides while the keyboard is up, and a tap issued right after an alert, sheet, card or file panel closes is swallowed.
+Settings is the fifth tab. It lists Library, Workout detection, Reminders (two switches), Output records to JSON, Tables (CSV), Restore from JSON…, a Journal section (Apple Journal status, the `Send my writing with the question request` toggle, the Shortcut set-up text), Design gallery and Debug; Library, Workout detection, Design and Debug are pushed onto the Settings stack, so the floating bar stays visible on them. At the default text size, with Settings scrolled to the top, the rows sit at about y = 247 (Library), 381 (Workout detection), 514 / 588 / 662 (the three Data rows), 795 (Design gallery); Debug is behind the floating bar there; scrolled to the bottom Design gallery sits at about 590 and Debug at 723. The Settings tab keeps whatever page was pushed when you switch tabs and come back (a relaunch resets it), so check which page you are on. The bar hides while the keyboard is up, and a tap issued right after an alert, sheet, card or file panel closes is swallowed.
 
 Everything else moves with content: find it from a screenshot. Time travel is scripted rather than tapped: `V day <N>`.
 

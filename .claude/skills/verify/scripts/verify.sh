@@ -23,15 +23,59 @@ DERIVED="$ROOT/build/verify-derived"
 APP="$DERIVED/Build/Products/Debug-iphonesimulator/LifeRPG.app"
 EVIDENCE="$ROOT/build/verify-evidence"
 STATE="$ROOT/build/verify-state"          # holds "we-booted" when `up` booted the sim
+LOCK="$ROOT/build/verify-up.lock"         # one `up` at a time: two of them fight over the derived data and the sim
 
-udid() { xcrun simctl list devices | awk -v n="$NAME" '$0 ~ n" \\(" { match($0, /[0-9A-F-]{36}/); print substr($0, RSTART, RLENGTH); exit }'; }
-sim_state() { xcrun simctl list devices | grep "$NAME (" | grep -o -E "\((Booted|Shutdown|Booting)\)" | tr -d '()' | head -1; }
-store() { echo "$(xcrun simctl get_app_container "$(udid)" "$BUNDLE" data)/Library/Application Support/default.store"; }
+# run_to <seconds> <label> <command...>: runs the command, and if it is still going after <seconds> kills its whole
+# process group and says which step hung (exit 124). Nothing here may wait forever: a stuck `simctl` or `xcodebuild`
+# used to hang `up` for good and leave processes behind that hung the next run too. RUN_TO_QUIET=1 drops the
+# command's own stderr (not the timeout message).
+run_to() {
+  local secs="$1" label="$2"; shift 2
+  perl -e '
+    use POSIX ":sys_wait_h";
+    my ($secs, $label, @cmd) = @ARGV;
+    my $pid = fork(); die "fork: $!" unless defined $pid;
+    if (!$pid) { setpgrp(0, 0); open(STDERR, ">/dev/null") if $ENV{RUN_TO_QUIET}; exec { $cmd[0] } @cmd or die "exec $cmd[0]: $!"; }
+    my $deadline = time + $secs;
+    while (1) {
+      my $r = waitpid($pid, WNOHANG);
+      if ($r == $pid) { exit(($? & 127) ? 128 + ($? & 127) : $? >> 8); }
+      if (time >= $deadline) {
+        kill "TERM", -$pid; select(undef, undef, undef, 2); kill "KILL", -$pid; waitpid($pid, 0);
+        print STDERR "verify.sh: step \"$label\" did not finish in ${secs}s and was killed\n";
+        exit 124;
+      }
+      select(undef, undef, undef, 0.2);
+    }
+  ' "$secs" "$label" "$@"
+}
+
+say() { echo "[verify] $*" >&2; }
+
+# Only one `up` at a time; a lock whose process is gone is taken over.
+take_up_lock() {
+  mkdir -p "$ROOT/build"
+  if ! mkdir "$LOCK" 2>/dev/null; then
+    local old; old="$(cat "$LOCK/pid" 2>/dev/null || true)"
+    if [ -n "$old" ] && kill -0 "$old" 2>/dev/null; then
+      echo "verify.sh: another 'up' is already running (pid $old). Wait for it, or kill it, then retry." >&2; exit 3
+    fi
+    say "taking over a stale lock (pid ${old:-unknown} is gone)"
+    rm -f "$LOCK/pid"; rmdir "$LOCK" 2>/dev/null || true
+    mkdir "$LOCK"
+  fi
+  echo $$ > "$LOCK/pid"
+  trap 'rm -f "$LOCK/pid"; rmdir "$LOCK" 2>/dev/null || true' EXIT
+}
+
+udid() { run_to 30 "simctl list" xcrun simctl list devices | awk -v n="$NAME" '$0 ~ n" \\(" { match($0, /[0-9A-F-]{36}/); print substr($0, RSTART, RLENGTH); exit }'; }
+sim_state() { run_to 30 "simctl list" xcrun simctl list devices | grep "$NAME (" | grep -o -E "\((Booted|Shutdown|Booting)\)" | tr -d '()' | head -1; }
+store() { echo "$(run_to 20 get_app_container xcrun simctl get_app_container "$(udid)" "$BUNDLE" data)/Library/Application Support/default.store"; }
 # The app's own writes (Debug → Advance one day) land in its container plist, and that value beats
 # anything `simctl spawn … defaults write` sets (a device-level layer). So read and write the
 # container plist itself, with the app terminated, then restart the sim's cfprefsd, which otherwise
 # keeps serving the value the app last wrote from its memory.
-prefs() { echo "$(xcrun simctl get_app_container "$(udid)" "$BUNDLE" data)/Library/Preferences/$BUNDLE.plist"; }
+prefs() { echo "$(run_to 20 get_app_container xcrun simctl get_app_container "$(udid)" "$BUNDLE" data)/Library/Preferences/$BUNDLE.plist"; }
 # A fresh install has no preferences file yet, and PlistBuddy prints a notice to stdout for a missing one.
 offset() { local f; f="$(prefs)"; { [ -f "$f" ] && /usr/libexec/PlistBuddy -c "Print :debugDayOffset" "$f" 2>/dev/null; } || echo 0; }
 set_offset() {
@@ -47,27 +91,41 @@ wait_for_day() {
   local i s
   for i in $(seq 1 120); do
     s="$(store 2>/dev/null)" || s=""
-    if [ -f "$s" ] && [ "$(sqlite3 -readonly "$s" 'select count(*) from ZDAILYQUEST' 2>/dev/null || echo 0)" -gt 0 ]; then return 0; fi
+    if [ -f "$s" ] && [ "$(sqlite3 -readonly -cmd '.timeout 3000' "$s" 'select count(*) from ZDAILYQUEST' 2>/dev/null || echo 0)" -gt 0 ]; then return 0; fi
     sleep 0.5
   done
-  echo "timed out (60s) waiting for today to be generated" >&2; return 1
+  echo "timed out (60s) waiting for today to be generated: the app launched but wrote no day (is it running? try: verify.sh doctor)" >&2; return 1
 }
 
 cmd_up() {
+  take_up_lock
   mkdir -p "$ROOT/build" "$EVIDENCE"
-  [ -n "$(udid)" ] || xcrun simctl create "$NAME" "$MODEL" "$RUNTIME" >/dev/null
+  [ -n "$(udid)" ] || run_to 120 "create simulator" xcrun simctl create "$NAME" "$MODEL" "$RUNTIME" >/dev/null
   local u; u="$(udid)"
   if [ "$(sim_state)" != "Booted" ]; then
-    xcrun simctl boot "$u"; echo we-booted > "$STATE"
+    say "booting the simulator"
+    run_to 120 "boot simulator" xcrun simctl boot "$u"; echo we-booted > "$STATE"
   fi
-  xcrun simctl bootstatus "$u" -b >/dev/null 2>&1
-  (cd "$ROOT" && xcodebuild -scheme LifeRPG -destination "platform=iOS Simulator,id=$u" \
-      -derivedDataPath "$DERIVED" build 2>&1 | tail -3)
+  run_to 180 "wait for the simulator to finish booting" xcrun simctl bootstatus "$u" -b >/dev/null 2>&1 || {
+    [ $? -eq 124 ] && exit 124; true; }
+  # The full build log is kept, so a slow or stuck build can be looked at; 20 minutes is a cold build with room to spare.
+  say "building (full log: build/verify-build.log)"
+  (cd "$ROOT" && run_to 1200 "xcodebuild" xcodebuild -scheme LifeRPG -destination "platform=iOS Simulator,id=$u" \
+      -derivedDataPath "$DERIVED" build 2>&1 | tee "$ROOT/build/verify-build.log" | tail -3)
   [ -d "$APP" ] || { echo "build produced no app at $APP" >&2; exit 1; }
-  if [ "${1:-}" = "--fresh" ]; then xcrun simctl uninstall "$u" "$BUNDLE" 2>/dev/null || true; fi
-  xcrun simctl terminate "$u" "$BUNDLE" 2>/dev/null || true
-  xcrun simctl install "$u" "$APP"
-  xcrun simctl launch "$u" "$BUNDLE"
+  if [ "${1:-}" = "--fresh" ]; then
+    say "removing the installed app (fresh)"
+    local rc=0
+    RUN_TO_QUIET=1 run_to 90 "uninstall app" xcrun simctl uninstall "$u" "$BUNDLE" >/dev/null || rc=$?
+    # "not installed" is fine; a hang is not (installing over the old data would defeat --fresh)
+    [ "$rc" -eq 124 ] && exit 124
+  fi
+  RUN_TO_QUIET=1 run_to 30 "terminate app" xcrun simctl terminate "$u" "$BUNDLE" || true
+  say "installing"
+  run_to 120 "install app" xcrun simctl install "$u" "$APP"
+  say "launching"
+  run_to 60 "launch app" xcrun simctl launch "$u" "$BUNDLE"
+  say "waiting for today to be generated"
   wait_for_day
   echo "ready: $u"
 }
@@ -77,52 +135,52 @@ cmd_doctor() {
   local u; u="$(udid)"
   echo "sim:       $NAME $u $(sim_state)"
   [ "$(sim_state)" = "Booted" ] || { echo "FAIL: sim not booted"; exit 1; }
-  xcrun simctl get_app_container "$u" "$BUNDLE" >/dev/null 2>&1 || { echo "FAIL: app not installed"; exit 1; }
+  run_to 20 get_app_container xcrun simctl get_app_container "$u" "$BUNDLE" >/dev/null 2>&1 || { echo "FAIL: app not installed (or the simulator is not answering)"; exit 1; }
   local newest built
   newest=$(find "$ROOT/LifeRPG" "$ROOT/LifeRPGCore/Sources" -name '*.swift' -print0 | xargs -0 stat -f '%m' | sort -n | tail -1)
   built=$(stat -f '%m' "$APP/LifeRPG" 2>/dev/null || echo 0)
   if [ "$newest" -gt "$built" ]; then echo "STALE: sources are newer than the built app — run: verify.sh up"; else echo "build:     up to date"; fi
-  echo "running:   $(xcrun simctl spawn "$u" launchctl list | grep -c "UIKitApplication:$BUNDLE" | sed 's/0/no/;s/1/yes/')"
+  echo "running:   $(run_to 20 "launchctl list" xcrun simctl spawn "$u" launchctl list | grep -c "UIKitApplication:$BUNDLE" | sed 's/0/no/;s/1/yes/')"
   echo "offset:    $(offset) day(s)"
   local s; s="$(store)"
   [ -f "$s" ] || { echo "FAIL: no store at $s"; exit 1; }
-  sqlite3 -readonly "$s" "select 'rows:      ledger='||(select count(*) from ZLEDGERENTRY)||' dailyQuest='||(select count(*) from ZDAILYQUEST)||' templates='||(select count(*) from ZQUESTTEMPLATE)||' routines='||(select count(*) from ZROUTINETASK)"
+  sqlite3 -readonly -cmd '.timeout 3000' "$s" "select 'rows:      ledger='||(select count(*) from ZLEDGERENTRY)||' dailyQuest='||(select count(*) from ZDAILYQUEST)||' templates='||(select count(*) from ZQUESTTEMPLATE)||' routines='||(select count(*) from ZROUTINETASK)"
   local off; off="$(offset)"
   echo "app day:   $(date -v-5H -v+"${off}"d '+%Y-%m-%d')  (host: $(date '+%Y-%m-%d %H:%M'); the app's day ends at 05:00; offset applied)"
-  echo "generated: up to $(sqlite3 -readonly "$s" 'select max(ZDAYKEY) from ZDAILYCONTEXT')  (time travel leaves future days behind)"
+  echo "generated: up to $(sqlite3 -readonly -cmd '.timeout 3000' "$s" 'select max(ZDAYKEY) from ZDAILYCONTEXT')  (time travel leaves future days behind)"
 }
 
-cmd_sql() { need_sim; sqlite3 -readonly -header -column "$(store)" "$1"; }
+cmd_sql() { need_sim; sqlite3 -readonly -cmd '.timeout 5000' -header -column "$(store)" "$1"; }
 cmd_ledger() { need_sim; cmd_sql "select ZDAYKEY day, ZKIND kind, ZPOINTS points, ZNOTE note from ZLEDGERENTRY order by ZTIMESTAMP, Z_PK; select 'balance' as '', sum(ZPOINTS) from ZLEDGERENTRY;"; }
 
 cmd_day() {
   need_sim; local u before i cur; u="$(udid)"
   cur="$(offset)"
-  before="$(sqlite3 -readonly "$(store)" 'select count(*) from ZDAILYCONTEXT')"
-  xcrun simctl terminate "$u" "$BUNDLE" 2>/dev/null || true
+  before="$(sqlite3 -readonly -cmd '.timeout 3000' "$(store)" 'select count(*) from ZDAILYCONTEXT')"
+  RUN_TO_QUIET=1 run_to 30 "terminate app" xcrun simctl terminate "$u" "$BUNDLE" || true
   set_offset "$1"
-  xcrun simctl spawn "$u" launchctl kickstart -k system/com.apple.cfprefsd.xpc.daemon >/dev/null 2>&1 || true
+  RUN_TO_QUIET=1 run_to 30 "restart cfprefsd" xcrun simctl spawn "$u" launchctl kickstart -k system/com.apple.cfprefsd.xpc.daemon >/dev/null || true
   sleep 1
-  xcrun simctl launch "$u" "$BUNDLE" >/dev/null
+  run_to 60 "launch app" xcrun simctl launch "$u" "$BUNDLE" >/dev/null
   # Only going forward generates a new day (a new DailyContext row); otherwise just let the refresh settle.
   for i in $(seq 1 120); do
-    [ "$(sqlite3 -readonly "$(store)" 'select count(*) from ZDAILYCONTEXT')" -gt "$before" ] && break
+    [ "$(sqlite3 -readonly -cmd '.timeout 3000' "$(store)" 'select count(*) from ZDAILYCONTEXT')" -gt "$before" ] && break
     [ "$1" -le "$cur" ] && [ "$i" -ge 8 ] && break
     sleep 0.5
   done
-  echo "offset=$1; latest generated day $(sqlite3 -readonly "$(store)" 'select max(ZDAYKEY) from ZDAILYCONTEXT')"
+  echo "offset=$1; latest generated day $(sqlite3 -readonly -cmd '.timeout 3000' "$(store)" 'select max(ZDAYKEY) from ZDAILYCONTEXT')"
 }
 
-cmd_shot() { need_sim; mkdir -p "$EVIDENCE"; xcrun simctl io "$(udid)" screenshot "$EVIDENCE/$1.png" >/dev/null 2>&1; echo "$EVIDENCE/$1.png"; }
-cmd_relaunch() { need_sim; local u; u="$(udid)"; xcrun simctl terminate "$u" "$BUNDLE" 2>/dev/null || true; xcrun simctl launch "$u" "$BUNDLE" >/dev/null; sleep 2; }
+cmd_shot() { need_sim; mkdir -p "$EVIDENCE"; run_to 30 "screenshot" xcrun simctl io "$(udid)" screenshot "$EVIDENCE/$1.png" >/dev/null 2>&1; echo "$EVIDENCE/$1.png"; }
+cmd_relaunch() { need_sim; local u; u="$(udid)"; RUN_TO_QUIET=1 run_to 30 "terminate app" xcrun simctl terminate "$u" "$BUNDLE" || true; run_to 60 "launch app" xcrun simctl launch "$u" "$BUNDLE" >/dev/null; sleep 2; }
 
 cmd_down() {
   [ -n "$(udid)" ] || exit 0
   local u; u="$(udid)"
-  xcrun simctl terminate "$u" "$BUNDLE" 2>/dev/null || true
-  if [ -f "$STATE" ] && [ "$(sim_state)" = "Booted" ]; then xcrun simctl shutdown "$u"; rm "$STATE"; fi
+  RUN_TO_QUIET=1 run_to 30 "terminate app" xcrun simctl terminate "$u" "$BUNDLE" || true
+  if [ -f "$STATE" ] && [ "$(sim_state)" = "Booted" ]; then run_to 90 "shut the simulator down" xcrun simctl shutdown "$u"; rm "$STATE"; fi
 }
-cmd_destroy() { cmd_down; [ -z "$(udid)" ] || { xcrun simctl shutdown "$(udid)" 2>/dev/null || true; xcrun simctl delete "$(udid)"; }; }
+cmd_destroy() { cmd_down; [ -z "$(udid)" ] || { RUN_TO_QUIET=1 run_to 90 "shut the simulator down" xcrun simctl shutdown "$(udid)" || true; run_to 90 "delete simulator" xcrun simctl delete "$(udid)"; }; }
 
 c="${1:-}"; shift || true
 case "$c" in
