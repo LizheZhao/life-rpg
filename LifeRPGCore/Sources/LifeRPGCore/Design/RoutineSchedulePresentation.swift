@@ -45,8 +45,6 @@ public struct RoutineSchedulePresentation: Equatable, Sendable {
     public let summary: String
     /// When it comes up, in words. This is also what VoiceOver reads.
     public let sentence: String
-    /// What leaving it undone costs. Nil where `Overdue` says nothing about it.
-    public let missRule: String?
     /// Nil for a routine that has no schedule of its own.
     public let weeklyTarget: Int?
     public let countsForClear: Bool
@@ -72,7 +70,6 @@ public struct RoutineSchedulePresentation: Equatable, Sendable {
             sentence = isLightVersion
                 ? "Offered instead of its original routine on low days. It is never scheduled on its own."
                 : "Its schedule could not be read, so it never comes up."
-            missRule = nil
             self.weeklyTarget = nil
             self.anchorWeekKey = nil
             usesAnchorWeek = false
@@ -152,7 +149,6 @@ public struct RoutineSchedulePresentation: Equatable, Sendable {
         self.weeklyTarget = weeklyTarget
         self.anchorWeekKey = anchor
         usesAnchorWeek = usesAnchor
-        missRule = Self.miss(flexible: flexibleWithinWeek, countsForClear: countsForClear)
     }
 
     public init(_ routine: RoutineTask, isLightVersion: Bool) {
@@ -177,16 +173,25 @@ public struct RoutineSchedulePresentation: Equatable, Sendable {
 
     // MARK: words
 
-    private static func miss(flexible: Bool, countsForClear: Bool) -> String {
+    /// What a routine pays and what leaving it undone costs, in plain words, for the row's
+    /// difficulty control. The numbers are `Scoring`'s: a fixed routine is charged each night it is
+    /// still undone (they add up), a flexible one once on Sunday per session short of the week's
+    /// target, and one that does not gate the day is never charged.
+    public static func difficultyNote(basePoints: Int, flexible: Bool, countsForClear: Bool) -> String {
+        let forward = " A change applies from the next time it comes up."
+        let pays = "Pays \(basePoints) each time."
         switch (flexible, countsForClear) {
         case (false, true):
-            "Left undone, it costs 50% of its points at the end of the day, 75% the next day and 100% the day after, then it is skipped."
+            let night = (1...3).map { Scoring.overduePenalty(basePoints: basePoints, roundDay: $0) }
+            return "\(pays) Left undone, it costs \(night[0]) at the end of the day, \(night[1]) the next day and "
+                + "\(night[2]) the day after (they add up), then it is dropped.\(forward)"
         case (false, false):
-            "Never charged. It is skipped if it is still open after three days."
+            return "\(pays) Never charged for leaving it undone; it is dropped after three days.\(forward)"
         case (true, true):
-            "No daily charge. On Sunday the week is settled: each session short of the target costs 50% of its points."
+            return "\(pays) No daily charge; on Sunday every session you are short of the week's target costs "
+                + "\(Scoring.flexibleShortfallPenalty(basePoints: basePoints)).\(forward)"
         case (true, false):
-            "Never charged. Whatever is still open is skipped on Sunday."
+            return "\(pays) Never charged for leaving it undone; whatever is still open is dropped on Sunday.\(forward)"
         }
     }
 

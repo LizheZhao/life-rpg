@@ -15,7 +15,17 @@ import SwiftData
     public var lastServedDayKey: String?          // drawn but not completed → 1-day cooldown
     public var lastCompletedDayKey: String?       // completed → full cooldown
     public var isActive: Bool = true
+    /// Deleted by the user, as far as the Library is concerned: the row stays, so what the history,
+    /// the ratings and the notes point at still resolves, but it is not listed. Not the same as
+    /// `isActive` (turned off, still listed, can be turned back on). An archived row is always
+    /// inactive too, so every place that draws, schedules or offers rows needs no second test.
+    public var isArchived: Bool = false
     /// `LibraryOrigin` raw value. Every row that existed before the field is a seed row.
+    /// The key the starter library gave the row it was installed from (nil for the user's own rows and
+    /// for rows from before keys existed, which `StarterUpdate.claim` matches by text once). It is what
+    /// tells a starter row apart from the user's edits of it, so a renamed or deleted row is never
+    /// offered again.
+    public var starterKey: String?
     public var originRaw: String = LibraryOrigin.seed.rawValue
 
     public init() {}

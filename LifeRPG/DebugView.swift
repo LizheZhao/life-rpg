@@ -33,6 +33,8 @@ struct DebugView: View {
     @State private var confirmingReset = false
     @State private var confirmingWholeReset = false
     @State private var resetResult: String?
+    @State private var queuedReminders: [String] = []
+    @State private var reminderNote: String?
     @State private var permissionError: String?
     @State private var preview: HealthService.Body?
     @State private var previewError: String?
@@ -113,6 +115,26 @@ struct DebugView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     if let resetResult { note(resetResult) }
                 }
+
+                section("Reminders", footer: "What is queued right now, soonest first. The queue is rebuilt when the app comes forward or goes away, so writing today's entry and leaving removes tonight's. A test fires in five seconds: lock the app or go home to see it, since a reminder is not shown while the app is open.") {
+                    if queuedReminders.isEmpty {
+                        note("Nothing queued")
+                    } else {
+                        ForEach(queuedReminders, id: \.self) { Text($0).lr(.caption).foregroundStyle(LR.Color.inkSecondary) }
+                    }
+                    FlowRow(spacing: 8) {
+                        Button { Task { await NotificationService.reschedule(in: modelContext); await loadReminders() } } label: {
+                            Label("Rebuild the queue", systemImage: "arrow.clockwise")
+                        }
+                        .buttonStyle(PillButtonStyle())
+                        Button { Task { await NotificationService.sendTest(); reminderNote = "A test reminder fires in 5 seconds"; await loadReminders() } } label: {
+                            Label("Test in 5 s", systemImage: "bell")
+                        }
+                        .buttonStyle(PillButtonStyle())
+                    }
+                    if let reminderNote { note(reminderNote) }
+                }
+                .task { await loadReminders() }
 
                 #if targetEnvironment(simulator)
                 section("Time travel (simulator only)", footer: "Each step is like opening the app the next morning: yesterday is judged, today is generated. Going back does not undo anything — future days stay generated. To start clean, delete the app from the simulator.") {
@@ -224,6 +246,12 @@ struct DebugView: View {
     private static let mono = Font.system(.footnote, design: .monospaced)
 
     /// A header in the Settings style, one card of rows, and the explanation under it.
+    private func loadReminders() async {
+        queuedReminders = await NotificationService.pending().map { item in
+            "\(item.id)  ·  \(item.fires.map { $0.formatted(date: .abbreviated, time: .shortened) } ?? "no time")"
+        }
+    }
+
     private func section<Content: View>(_ title: LocalizedStringKey, footer: LocalizedStringKey? = nil,
                                         @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 8) {

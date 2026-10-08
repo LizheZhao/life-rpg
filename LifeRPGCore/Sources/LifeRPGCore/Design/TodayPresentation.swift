@@ -420,15 +420,16 @@ public struct TodayGreeting: Equatable, Sendable {
 
     /// `hour` is the wall clock's, not the app day's: the 05:00 day boundary does not apply to a
     /// greeting, so 02:00 still says morning.
-    public init(dayKey: String, hour: Int, streak: Int) {
+    public init(dayKey: String, hour: Int, streak: Int, name: String? = nil) {
         let date = PresentationText.shortDate(dayKey).split(separator: " ")
         let day = date.count == 3 ? "\(date[0]) · \(date[1]) \(date[2])" : dayKey
         handLine = streak > 0 ? "\(day) · \(streak) day streak" : day
-        salutation = switch hour {
-        case ..<12: "Good morning,"
-        case ..<18: "Good afternoon,"
-        default: "Good evening,"
+        let greeting = switch hour {
+        case ..<12: "Good morning"
+        case ..<18: "Good afternoon"
+        default: "Good evening"
         }
+        salutation = UserProfile.cleanName(name).map { "\(greeting), \($0)," } ?? "\(greeting),"
         emphasis = hour >= 18 ? "wrap up" : "level up"
     }
 }

@@ -20,7 +20,14 @@ import SwiftData
     public var autoVerifyRule: String?
     public var lastCompletedDayKey: String?
     public var isActive: Bool = true
+    /// Deleted by the user as far as the Library is concerned; see `QuestTemplate.isArchived`.
+    public var isArchived: Bool = false
     /// `LibraryOrigin` raw value. Every row that existed before the field is a seed row.
+    /// The key the starter library gave the row it was installed from (nil for the user's own rows and
+    /// for rows from before keys existed, which `StarterUpdate.claim` matches by text once). It is what
+    /// tells a starter row apart from the user's edits of it, so a renamed or deleted row is never
+    /// offered again.
+    public var starterKey: String?
     public var originRaw: String = LibraryOrigin.seed.rawValue
 
     public init() {}

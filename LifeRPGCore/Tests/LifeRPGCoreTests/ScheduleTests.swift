@@ -151,7 +151,7 @@ struct ScheduleTests {
 
     private func seeded() throws -> (ModelContext, [RoutineTask]) {
         let ctx = try Fixtures.context()
-        try SeedImporter.mergeSeeds(ctx, sideQuestsCSV: Fixtures.csv("side_quests.csv"),
+        try SeedImporter.seedIfEmpty(ctx, sideQuestsCSV: Fixtures.csv("side_quests.csv"),
                                     routinesCSV: Fixtures.csv("routine_quests.csv"))
         return (ctx, try ctx.fetch(FetchDescriptor<RoutineTask>()))
     }

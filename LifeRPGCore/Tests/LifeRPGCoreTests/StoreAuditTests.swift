@@ -12,7 +12,7 @@ struct StoreAuditTests {
 
     @Test func realSeedDataIsClean() throws {
         let ctx = try makeContext()
-        try SeedImporter.mergeSeeds(ctx,
+        try SeedImporter.seedIfEmpty(ctx,
                                     sideQuestsCSV: Fixtures.csv("side_quests.csv"),
                                     routinesCSV: Fixtures.csv("routine_quests.csv"))
         #expect(try StoreAudit.issues(ctx).isEmpty)

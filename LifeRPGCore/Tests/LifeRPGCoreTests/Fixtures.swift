@@ -2,8 +2,13 @@ import Foundation
 import SwiftData
 @testable import LifeRPGCore
 
-/// Reads the real seed CSVs from `doc/` — they are the single source of truth.
+/// Reads the seed CSVs the tests run against (`Fixtures/*.csv`, the author's original draft; the app
+/// itself starts from `doc/starter_library.json`, see `StarterLibraryTests`).
 enum Fixtures {
+    static let fixtureDir = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent()   // LifeRPGCoreTests
+        .appendingPathComponent("Fixtures")
+
     static let docDir = URL(fileURLWithPath: #filePath)
         .deletingLastPathComponent()   // LifeRPGCoreTests
         .deletingLastPathComponent()   // Tests
@@ -11,8 +16,13 @@ enum Fixtures {
         .deletingLastPathComponent()   // repo root
         .appendingPathComponent("doc")
 
-    static func csv(_ name: String) throws -> String {
+    /// A file under `doc/` (the design notes the tests keep honest).
+    static func doc(_ name: String) throws -> String {
         try String(contentsOf: docDir.appendingPathComponent(name), encoding: .utf8)
+    }
+
+    static func csv(_ name: String) throws -> String {
+        try String(contentsOf: fixtureDir.appendingPathComponent(name), encoding: .utf8)
     }
 }
 

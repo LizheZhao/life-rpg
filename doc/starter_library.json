@@ -1,0 +1,1077 @@
+{
+ "schemaVersion": 1,
+ "quests": [
+  {
+   "key": "add-a-favorite-song-to-a-playlist",
+   "text": "Add a favorite song to a playlist",
+   "difficulty": "trivial",
+   "hiddenEligible": true,
+   "weekendOnly": false,
+   "launchURL": "music://"
+  },
+  {
+   "key": "apply-body-lotion",
+   "text": "Apply body lotion",
+   "difficulty": "trivial",
+   "hiddenEligible": false,
+   "weekendOnly": false
+  },
+  {
+   "key": "apply-hand-cream",
+   "text": "Apply hand cream",
+   "difficulty": "trivial",
+   "hiddenEligible": false,
+   "weekendOnly": false
+  },
+  {
+   "key": "change-your-phone-wallpaper",
+   "text": "Change your phone wallpaper",
+   "difficulty": "trivial",
+   "hiddenEligible": true,
+   "weekendOnly": false,
+   "cooldownDays": 7
+  },
+  {
+   "key": "describe-today-s-mood-as-a-color",
+   "text": "Describe today's mood as a color",
+   "difficulty": "trivial",
+   "hiddenEligible": false,
+   "weekendOnly": false
+  },
+  {
+   "key": "do-wrist-mobility-exercises",
+   "text": "Do wrist mobility exercises",
+   "difficulty": "trivial",
+   "hiddenEligible": true,
+   "weekendOnly": false
+  },
+  {
+   "key": "drink-a-glass-of-water-right-now",
+   "text": "Drink a glass of water right now",
+   "difficulty": "trivial",
+   "hiddenEligible": false,
+   "weekendOnly": false
+  },
+  {
+   "key": "floss",
+   "text": "Floss",
+   "difficulty": "trivial",
+   "hiddenEligible": false,
+   "weekendOnly": false
+  },
+  {
+   "key": "fluff-your-pillow",
+   "text": "Fluff your pillow",
+   "difficulty": "trivial",
+   "hiddenEligible": false,
+   "weekendOnly": false
+  },
+  {
+   "key": "hang-up-frequently-worn-clothes",
+   "text": "Hang up frequently worn clothes",
+   "difficulty": "trivial",
+   "hiddenEligible": false,
+   "weekendOnly": false
+  },
+  {
+   "key": "listen-to-an-old-song",
+   "text": "Listen to an old song",
+   "difficulty": "trivial",
+   "hiddenEligible": true,
+   "weekendOnly": false,
+   "launchURL": "music://"
+  },
+  {
+   "key": "look-at-photos-from-this-day-last-year",
+   "text": "Look at photos from this day last year",
+   "difficulty": "trivial",
+   "hiddenEligible": true,
+   "weekendOnly": false
+  },
+  {
+   "key": "make-a-cup-of-tea",
+   "text": "Make a cup of tea",
+   "difficulty": "trivial",
+   "hiddenEligible": true,
+   "weekendOnly": false
+  },
+  {
+   "key": "open-a-window-and-take-five-breaths-of-fresh-air",
+   "text": "Open a window and take five breaths of fresh air",
+   "difficulty": "trivial",
+   "hiddenEligible": true,
+   "weekendOnly": false
+  },
+  {
+   "key": "put-one-thing-back-where-it-belongs",
+   "text": "Put one thing back where it belongs",
+   "difficulty": "trivial",
+   "hiddenEligible": false,
+   "weekendOnly": false
+  },
+  {
+   "key": "smile-at-yourself-in-the-mirror-for-ten-seconds",
+   "text": "Smile at yourself in the mirror for ten seconds",
+   "difficulty": "trivial",
+   "hiddenEligible": true,
+   "weekendOnly": false
+  },
+  {
+   "key": "stare-out-the-window-for-five-minutes",
+   "text": "Stare out the window for five minutes",
+   "difficulty": "trivial",
+   "hiddenEligible": true,
+   "weekendOnly": false
+  },
+  {
+   "key": "stretch-your-arms-overhead-and-roll-your-shoulders",
+   "text": "Stretch your arms overhead and roll your shoulders",
+   "difficulty": "trivial",
+   "hiddenEligible": false,
+   "weekendOnly": false
+  },
+  {
+   "key": "take-a-photo-of-the-sky",
+   "text": "Take a photo of the sky",
+   "difficulty": "trivial",
+   "hiddenEligible": true,
+   "weekendOnly": false
+  },
+  {
+   "key": "take-ten-slow-deep-breaths",
+   "text": "Take ten slow, deep breaths",
+   "difficulty": "trivial",
+   "hiddenEligible": false,
+   "weekendOnly": false
+  },
+  {
+   "key": "trim-your-nails",
+   "text": "Trim your nails",
+   "difficulty": "trivial",
+   "hiddenEligible": false,
+   "weekendOnly": false,
+   "cooldownDays": 7
+  },
+  {
+   "key": "unsubscribe-from-one-email-you-never-read",
+   "text": "Unsubscribe from one email you never read",
+   "difficulty": "trivial",
+   "hiddenEligible": false,
+   "weekendOnly": false
+  },
+  {
+   "key": "use-eye-drops",
+   "text": "Use eye drops",
+   "difficulty": "trivial",
+   "hiddenEligible": false,
+   "weekendOnly": false
+  },
+  {
+   "key": "wipe-down-your-desk-or-table",
+   "text": "Wipe down your desk or table",
+   "difficulty": "trivial",
+   "hiddenEligible": false,
+   "weekendOnly": false
+  },
+  {
+   "key": "write-down-one-thing-you-re-looking-forward-to",
+   "text": "Write down one thing you're looking forward to",
+   "difficulty": "trivial",
+   "hiddenEligible": true,
+   "weekendOnly": false
+  },
+  {
+   "key": "dance-to-one-full-song",
+   "text": "Dance to one full song",
+   "difficulty": "easy",
+   "hiddenEligible": true,
+   "weekendOnly": false
+  },
+  {
+   "key": "do-a-face-mask",
+   "text": "Do a face mask",
+   "difficulty": "easy",
+   "hiddenEligible": true,
+   "weekendOnly": false
+  },
+  {
+   "key": "do-a-ten-minute-tidy-sprint-with-a-timer",
+   "text": "Do a ten-minute tidy sprint with a timer",
+   "difficulty": "easy",
+   "hiddenEligible": false,
+   "weekendOnly": false
+  },
+  {
+   "key": "draw-anything-for-five-minutes-however-it-comes-out",
+   "text": "Draw anything for five minutes, however it comes out",
+   "difficulty": "easy",
+   "hiddenEligible": true,
+   "weekendOnly": false
+  },
+  {
+   "key": "drink-2l-of-water",
+   "text": "Drink 2L of water",
+   "difficulty": "easy",
+   "hiddenEligible": false,
+   "weekendOnly": false
+  },
+  {
+   "key": "eat-a-fruit-you-haven-t-had-in-a-while",
+   "text": "Eat a fruit you haven't had in a while",
+   "difficulty": "easy",
+   "hiddenEligible": false,
+   "weekendOnly": false
+  },
+  {
+   "key": "eat-a-meal-slowly-and-mindfully",
+   "text": "Eat a meal slowly and mindfully",
+   "difficulty": "easy",
+   "hiddenEligible": false,
+   "weekendOnly": false
+  },
+  {
+   "key": "enjoy-a-meal-without-watching-videos",
+   "text": "Enjoy a meal without watching videos",
+   "difficulty": "easy",
+   "hiddenEligible": false,
+   "weekendOnly": false
+  },
+  {
+   "key": "learn-five-words-in-a-new-language",
+   "text": "Learn five words in a new language",
+   "difficulty": "easy",
+   "hiddenEligible": false,
+   "weekendOnly": false,
+   "variants": [
+    "Spanish",
+    "French",
+    "Japanese",
+    "Korean",
+    "German",
+    "Italian",
+    "Mandarin",
+    "Portuguese"
+   ]
+  },
+  {
+   "key": "listen-to-a-new-album-start-to-finish",
+   "text": "Listen to a new album start to finish",
+   "difficulty": "easy",
+   "hiddenEligible": true,
+   "weekendOnly": false,
+   "cooldownDays": 7,
+   "launchURL": "music://"
+  },
+  {
+   "key": "listen-to-a-stand-up-comedy-clip",
+   "text": "Listen to a stand-up comedy clip",
+   "difficulty": "easy",
+   "hiddenEligible": true,
+   "weekendOnly": false
+  },
+  {
+   "key": "meditate-for-15-minutes",
+   "text": "Meditate for 15 minutes",
+   "difficulty": "easy",
+   "hiddenEligible": false,
+   "weekendOnly": false,
+   "autoVerifyRule": "mindful:15"
+  },
+  {
+   "key": "photograph-a-set-of-things-in-a-given-color",
+   "text": "Photograph a set of things in a given color",
+   "difficulty": "easy",
+   "hiddenEligible": true,
+   "weekendOnly": false,
+   "cooldownDays": 7,
+   "variants": [
+    "Red",
+    "Blue",
+    "Yellow",
+    "Green",
+    "White",
+    "Orange"
+   ]
+  },
+  {
+   "key": "read-for-20-minutes",
+   "text": "Read for 20 minutes",
+   "difficulty": "easy",
+   "hiddenEligible": false,
+   "weekendOnly": false,
+   "launchURL": "ibooks://"
+  },
+  {
+   "key": "sing-a-song-out-loud-at-home",
+   "text": "Sing a song out loud at home",
+   "difficulty": "easy",
+   "hiddenEligible": true,
+   "weekendOnly": false
+  },
+  {
+   "key": "soak-your-feet",
+   "text": "Soak your feet",
+   "difficulty": "easy",
+   "hiddenEligible": true,
+   "weekendOnly": false
+  },
+  {
+   "key": "stretch-or-use-a-massage-gun-for-10-minutes",
+   "text": "Stretch or use a massage gun for 10 minutes",
+   "difficulty": "easy",
+   "hiddenEligible": false,
+   "weekendOnly": false
+  },
+  {
+   "key": "take-a-different-route-somewhere-today",
+   "text": "Take a different route somewhere today",
+   "difficulty": "easy",
+   "hiddenEligible": true,
+   "weekendOnly": false
+  },
+  {
+   "key": "take-a-ten-minute-walk-without-your-phone",
+   "text": "Take a ten-minute walk without your phone",
+   "difficulty": "easy",
+   "hiddenEligible": true,
+   "weekendOnly": false
+  },
+  {
+   "key": "take-photos-of-today-s-three-meals",
+   "text": "Take photos of today's three meals",
+   "difficulty": "easy",
+   "hiddenEligible": false,
+   "weekendOnly": false
+  },
+  {
+   "key": "watch-a-saved-long-video-all-the-way-through",
+   "text": "Watch a saved long video all the way through",
+   "difficulty": "easy",
+   "hiddenEligible": false,
+   "weekendOnly": false
+  },
+  {
+   "key": "watch-a-short-documentary-about-something-random",
+   "text": "Watch a short documentary about something random",
+   "difficulty": "easy",
+   "hiddenEligible": true,
+   "weekendOnly": false
+  },
+  {
+   "key": "watch-a-sunset",
+   "text": "Watch a sunset",
+   "difficulty": "easy",
+   "hiddenEligible": true,
+   "weekendOnly": false
+  },
+  {
+   "key": "write-a-journal-entry",
+   "text": "Write a journal entry",
+   "difficulty": "easy",
+   "hiddenEligible": false,
+   "weekendOnly": false,
+   "variants": [
+    "The thing that drained me most today",
+    "A view I've recently changed",
+    "Who surprised me today",
+    "What I'd change if I redid today",
+    "What I've been avoiding lately"
+   ]
+  },
+  {
+   "key": "write-an-affirmation-to-yourself",
+   "text": "Write an affirmation to yourself",
+   "difficulty": "easy",
+   "hiddenEligible": true,
+   "weekendOnly": false
+  },
+  {
+   "key": "write-down-a-dream",
+   "text": "Write down a dream",
+   "difficulty": "easy",
+   "hiddenEligible": false,
+   "weekendOnly": false
+  },
+  {
+   "key": "write-down-three-things-that-went-well-today",
+   "text": "Write down three things that went well today",
+   "difficulty": "easy",
+   "hiddenEligible": false,
+   "weekendOnly": false
+  },
+  {
+   "key": "ask-someone-a-question-you-ve-been-curious-about",
+   "text": "Ask someone a question you've been curious about",
+   "difficulty": "medium",
+   "hiddenEligible": false,
+   "weekendOnly": false
+  },
+  {
+   "key": "browse-a-supermarket-without-buying-anything",
+   "text": "Browse a supermarket without buying anything",
+   "difficulty": "medium",
+   "hiddenEligible": true,
+   "weekendOnly": false,
+   "cooldownDays": 14
+  },
+  {
+   "key": "compliment-a-stranger",
+   "text": "Compliment a stranger",
+   "difficulty": "medium",
+   "hiddenEligible": true,
+   "weekendOnly": false,
+   "cooldownDays": 14
+  },
+  {
+   "key": "cook-a-dish-you-ve-never-made",
+   "text": "Cook a dish you've never made",
+   "difficulty": "medium",
+   "hiddenEligible": true,
+   "weekendOnly": false
+  },
+  {
+   "key": "cook-a-recipe-from-a-cuisine-you-rarely-eat",
+   "text": "Cook a recipe from a cuisine you rarely eat",
+   "difficulty": "medium",
+   "hiddenEligible": true,
+   "weekendOnly": false,
+   "cooldownDays": 14
+  },
+  {
+   "key": "cook-yourself-a-meal",
+   "text": "Cook yourself a meal",
+   "difficulty": "medium",
+   "hiddenEligible": false,
+   "weekendOnly": false,
+   "cooldownDays": 3
+  },
+  {
+   "key": "learn-a-new-origami-fold",
+   "text": "Learn a new origami fold",
+   "difficulty": "medium",
+   "hiddenEligible": true,
+   "weekendOnly": false,
+   "cooldownDays": 14
+  },
+  {
+   "key": "learn-about-a-niche-hobby",
+   "text": "Learn about a niche hobby",
+   "difficulty": "medium",
+   "hiddenEligible": true,
+   "weekendOnly": false,
+   "cooldownDays": 14
+  },
+  {
+   "key": "learn-one-card-or-coin-trick-well-enough-to-show-someone",
+   "text": "Learn one card or coin trick well enough to show someone",
+   "difficulty": "medium",
+   "hiddenEligible": true,
+   "weekendOnly": false,
+   "cooldownDays": 14
+  },
+  {
+   "key": "learn-the-full-backstory-of-something",
+   "text": "Learn the full backstory of something",
+   "difficulty": "medium",
+   "hiddenEligible": true,
+   "weekendOnly": false,
+   "variants": [
+    "A fermented food",
+    "A musical instrument",
+    "A city's subway history",
+    "A material",
+    "A mathematical constant"
+   ]
+  },
+  {
+   "key": "make-something-with-your-hands-fold-knit-whittle-glue-bu",
+   "text": "Make something with your hands (fold, knit, whittle, glue, build)",
+   "difficulty": "medium",
+   "hiddenEligible": true,
+   "weekendOnly": false,
+   "cooldownDays": 14
+  },
+  {
+   "key": "mix-a-new-cocktail-recipe",
+   "text": "Mix a new cocktail recipe",
+   "difficulty": "medium",
+   "hiddenEligible": true,
+   "weekendOnly": false,
+   "cooldownDays": 14
+  },
+  {
+   "key": "name-three-of-your-strengths",
+   "text": "Name three of your strengths",
+   "difficulty": "medium",
+   "hiddenEligible": false,
+   "weekendOnly": false,
+   "cooldownDays": 14
+  },
+  {
+   "key": "photograph-your-own-neighborhood-as-if-you-were-a-touris",
+   "text": "Photograph your own neighborhood as if you were a tourist",
+   "difficulty": "medium",
+   "hiddenEligible": true,
+   "weekendOnly": false,
+   "cooldownDays": 14
+  },
+  {
+   "key": "plan-a-small-weekend-adventure-and-put-it-on-your-calend",
+   "text": "Plan a small weekend adventure and put it on your calendar",
+   "difficulty": "medium",
+   "hiddenEligible": false,
+   "weekendOnly": false
+  },
+  {
+   "key": "re-read-or-re-watch-something-you-loved-years-ago",
+   "text": "Re-read or re-watch something you loved years ago",
+   "difficulty": "medium",
+   "hiddenEligible": true,
+   "weekendOnly": false
+  },
+  {
+   "key": "spend-30-minutes-on-a-beginner-tutorial-for-something-ne",
+   "text": "Spend 30 minutes on a beginner tutorial for something new",
+   "difficulty": "medium",
+   "hiddenEligible": false,
+   "weekendOnly": false,
+   "variants": [
+    "Juggling",
+    "Basic drawing",
+    "Guitar chords",
+    "Calligraphy",
+    "Useful knots",
+    "Baking bread",
+    "Chess openings",
+    "Speed cubing"
+   ]
+  },
+  {
+   "key": "thank-someone-who-recently-helped-you",
+   "text": "Thank someone who recently helped you",
+   "difficulty": "medium",
+   "hiddenEligible": false,
+   "weekendOnly": false
+  },
+  {
+   "key": "try-a-food-you-wouldn-t-normally-eat",
+   "text": "Try a food you wouldn't normally eat",
+   "difficulty": "medium",
+   "hiddenEligible": true,
+   "weekendOnly": false
+  },
+  {
+   "key": "visit-a-coffee-shop-you-ve-never-been-to",
+   "text": "Visit a coffee shop you've never been to",
+   "difficulty": "medium",
+   "hiddenEligible": true,
+   "weekendOnly": false,
+   "cooldownDays": 14
+  },
+  {
+   "key": "walk-around-a-neighborhood-you-ve-never-been-to",
+   "text": "Walk around a neighborhood you've never been to",
+   "difficulty": "medium",
+   "hiddenEligible": true,
+   "weekendOnly": false,
+   "cooldownDays": 14
+  },
+  {
+   "key": "walk-by-the-river",
+   "text": "Walk by the river",
+   "difficulty": "medium",
+   "hiddenEligible": false,
+   "weekendOnly": false,
+   "autoVerifyRule": "calendar_workout:20"
+  },
+  {
+   "key": "write-a-real-letter-or-long-message-to-someone-who-matte",
+   "text": "Write a real letter or long message to someone who matters",
+   "difficulty": "medium",
+   "hiddenEligible": false,
+   "weekendOnly": false
+  },
+  {
+   "key": "write-down-a-preference-of-yours-that-s-hardest-for-othe",
+   "text": "Write down a preference of yours that's hardest for others to understand",
+   "difficulty": "medium",
+   "hiddenEligible": false,
+   "weekendOnly": false,
+   "cooldownDays": 14
+  },
+  {
+   "key": "ask-for-something-you-want-a-favor-help-a-discount",
+   "text": "Ask for something you want (a favor, help, a discount)",
+   "difficulty": "hard",
+   "hiddenEligible": false,
+   "weekendOnly": false
+  },
+  {
+   "key": "cook-a-meal-for-a-friend-or-neighbor",
+   "text": "Cook a meal for a friend or neighbor",
+   "difficulty": "hard",
+   "hiddenEligible": false,
+   "weekendOnly": true
+  },
+  {
+   "key": "day-trip-to-a-town-or-city-you-ve-never-been-to",
+   "text": "Day trip to a town or city you've never been to",
+   "difficulty": "hard",
+   "hiddenEligible": false,
+   "weekendOnly": true,
+   "cooldownDays": 30
+  },
+  {
+   "key": "declutter-the-wardrobe-and-donate-or-sell-what-you-don-t",
+   "text": "Declutter the wardrobe and donate or sell what you don't wear",
+   "difficulty": "hard",
+   "hiddenEligible": false,
+   "weekendOnly": true,
+   "cooldownDays": 30
+  },
+  {
+   "key": "finish-something-you-ve-been-putting-off",
+   "text": "Finish something you've been putting off",
+   "difficulty": "hard",
+   "hiddenEligible": false,
+   "weekendOnly": false,
+   "cooldownDays": 7
+  },
+  {
+   "key": "forgive-something-you-ve-held-onto-for-a-long-time",
+   "text": "Forgive something you've held onto for a long time",
+   "difficulty": "hard",
+   "hiddenEligible": false,
+   "weekendOnly": false,
+   "cooldownDays": 30
+  },
+  {
+   "key": "go-out-alone-for-a-meal-or-a-coffee-phone-away",
+   "text": "Go out alone for a meal or a coffee, phone away",
+   "difficulty": "hard",
+   "hiddenEligible": false,
+   "weekendOnly": true
+  },
+  {
+   "key": "half-day-hike-or-long-bike-ride",
+   "text": "Half-day hike or long bike ride",
+   "difficulty": "hard",
+   "hiddenEligible": false,
+   "weekendOnly": true
+  },
+  {
+   "key": "host-friends-for-a-home-cooked-dinner",
+   "text": "Host friends for a home-cooked dinner",
+   "difficulty": "hard",
+   "hiddenEligible": false,
+   "weekendOnly": true,
+   "cooldownDays": 30
+  },
+  {
+   "key": "make-a-picture-with-ai",
+   "text": "Make a picture with AI",
+   "difficulty": "hard",
+   "hiddenEligible": false,
+   "weekendOnly": false,
+   "cooldownDays": 7
+  },
+  {
+   "key": "meet-a-friend-in-person-meal-coffee-or-a-walk",
+   "text": "Meet a friend in person (meal, coffee, or a walk)",
+   "difficulty": "hard",
+   "hiddenEligible": false,
+   "weekendOnly": true
+  },
+  {
+   "key": "message-a-friend-you-haven-t-talked-to-in-a-long-time",
+   "text": "Message a friend you haven't talked to in a long time",
+   "difficulty": "hard",
+   "hiddenEligible": false,
+   "weekendOnly": false
+  },
+  {
+   "key": "put-your-phone-away-and-focus-deeply-for-90-minutes",
+   "text": "Put your phone away and focus deeply for 90 minutes",
+   "difficulty": "hard",
+   "hiddenEligible": false,
+   "weekendOnly": false,
+   "cooldownDays": 7
+  },
+  {
+   "key": "say-no-to-something",
+   "text": "Say no to something",
+   "difficulty": "hard",
+   "hiddenEligible": false,
+   "weekendOnly": false
+  },
+  {
+   "key": "see-a-live-show-or-exhibition-going-alone-counts",
+   "text": "See a live show or exhibition (going alone counts)",
+   "difficulty": "hard",
+   "hiddenEligible": false,
+   "weekendOnly": true
+  },
+  {
+   "key": "sign-up-for-an-in-person-event-or-class-and-attend-it",
+   "text": "Sign up for an in-person event or class and attend it",
+   "difficulty": "hard",
+   "hiddenEligible": false,
+   "weekendOnly": true,
+   "cooldownDays": 30
+  },
+  {
+   "key": "sort-and-back-up-a-year-of-photos",
+   "text": "Sort and back up a year of photos",
+   "difficulty": "hard",
+   "hiddenEligible": false,
+   "weekendOnly": true,
+   "cooldownDays": 30
+  },
+  {
+   "key": "speak-up-with-your-opinion-in-the-moment",
+   "text": "Speak up with your opinion in the moment",
+   "difficulty": "hard",
+   "hiddenEligible": false,
+   "weekendOnly": false
+  },
+  {
+   "key": "spend-an-hour-alone-with-no-screens-and-no-tasks",
+   "text": "Spend an hour alone with no screens and no tasks",
+   "difficulty": "hard",
+   "hiddenEligible": false,
+   "weekendOnly": false
+  },
+  {
+   "key": "start-the-thing-you-keep-postponing-for-just-25-minutes",
+   "text": "Start the thing you keep postponing, for just 25 minutes",
+   "difficulty": "hard",
+   "hiddenEligible": false,
+   "weekendOnly": false
+  },
+  {
+   "key": "tell-someone-you-admire-what-you-genuinely-appreciate-ab",
+   "text": "Tell someone you admire what you genuinely appreciate about their work",
+   "difficulty": "hard",
+   "hiddenEligible": false,
+   "weekendOnly": false
+  },
+  {
+   "key": "try-something-you-expect-to-be-bad-at-in-front-of-someon",
+   "text": "Try something you expect to be bad at, in front of someone",
+   "difficulty": "hard",
+   "hiddenEligible": false,
+   "weekendOnly": false
+  },
+  {
+   "key": "video-call-with-parents",
+   "text": "Video call with parents",
+   "difficulty": "hard",
+   "hiddenEligible": false,
+   "weekendOnly": true
+  },
+  {
+   "key": "a-full-day-with-only-essential-screen-use",
+   "text": "A full day with only essential screen use",
+   "difficulty": "epic",
+   "hiddenEligible": false,
+   "weekendOnly": false
+  },
+  {
+   "key": "complete-a-long-distance-cardio-session",
+   "text": "Complete a long-distance cardio session",
+   "difficulty": "epic",
+   "hiddenEligible": false,
+   "weekendOnly": false,
+   "autoVerifyRule": "calendar_workout:60"
+  },
+  {
+   "key": "complete-four-workouts-in-one-week",
+   "text": "Complete four workouts in one week",
+   "difficulty": "epic",
+   "hiddenEligible": false,
+   "weekendOnly": false,
+   "autoVerifyRule": "calendar_workout_weekly:4"
+  },
+  {
+   "key": "cook-a-three-course-meal-from-scratch",
+   "text": "Cook a three-course meal from scratch",
+   "difficulty": "epic",
+   "hiddenEligible": false,
+   "weekendOnly": false
+  },
+  {
+   "key": "create-something-from-start-to-finish-and-show-it-to-som",
+   "text": "Create something from start to finish and show it to someone (write, draw, record, build)",
+   "difficulty": "epic",
+   "hiddenEligible": false,
+   "weekendOnly": false
+  },
+  {
+   "key": "do-one-tiny-habit-every-day-for-seven-days-in-a-row",
+   "text": "Do one tiny habit every day for seven days in a row",
+   "difficulty": "epic",
+   "hiddenEligible": false,
+   "weekendOnly": false
+  },
+  {
+   "key": "finish-reading-a-book",
+   "text": "Finish reading a book",
+   "difficulty": "epic",
+   "hiddenEligible": false,
+   "weekendOnly": false,
+   "launchURL": "ibooks://"
+  },
+  {
+   "key": "learn-the-basics-of-a-new-skill-then-teach-it-to-someone",
+   "text": "Learn the basics of a new skill, then teach it to someone else",
+   "difficulty": "epic",
+   "hiddenEligible": false,
+   "weekendOnly": false
+  },
+  {
+   "key": "no-snacks-for-a-week",
+   "text": "No snacks for a week",
+   "difficulty": "epic",
+   "hiddenEligible": false,
+   "weekendOnly": false
+  }
+ ],
+ "routines": [
+  {
+   "key": "change-bedsheets",
+   "text": "Change bedsheets",
+   "difficulty": "medium",
+   "basePoints": 15,
+   "kind": "nthWeekdayOfMonth",
+   "spec": "1:SAT",
+   "weeklyTarget": 1,
+   "flexibleWithinWeek": true,
+   "countsForClear": true
+  },
+  {
+   "key": "clean-and-tidy-the-apartment-vacuum-dishes-dust",
+   "text": "Clean and tidy the apartment (vacuum, dishes, dust)",
+   "difficulty": "medium",
+   "basePoints": 25,
+   "kind": "weekly",
+   "spec": "SAT",
+   "weeklyTarget": 1,
+   "flexibleWithinWeek": false,
+   "countsForClear": true
+  },
+  {
+   "key": "focused-work-or-study-block-90-minutes-no-distractions",
+   "text": "Focused work or study block (90 minutes, no distractions)",
+   "difficulty": "hard",
+   "basePoints": 35,
+   "kind": "weekly",
+   "spec": "SAT,SUN",
+   "weeklyTarget": 2,
+   "flexibleWithinWeek": true,
+   "countsForClear": true
+  },
+  {
+   "key": "grocery-shopping-and-cleaning-out-the-fridge",
+   "text": "Grocery shopping and cleaning out the fridge",
+   "difficulty": "easy",
+   "basePoints": 10,
+   "kind": "weekly",
+   "spec": "SAT",
+   "weeklyTarget": 1,
+   "flexibleWithinWeek": true,
+   "countsForClear": true
+  },
+  {
+   "key": "plan-the-week-ten-minutes",
+   "text": "Plan the week (ten minutes)",
+   "difficulty": "easy",
+   "basePoints": 8,
+   "kind": "weekly",
+   "spec": "SAT,SUN",
+   "weeklyTarget": 1,
+   "flexibleWithinWeek": true,
+   "countsForClear": true
+  },
+  {
+   "key": "practice-a-skill-you-re-learning",
+   "text": "Practice a skill you're learning",
+   "difficulty": "medium",
+   "basePoints": 20,
+   "kind": "weekly",
+   "spec": "MON,TUE,WED",
+   "weeklyTarget": 3,
+   "flexibleWithinWeek": true,
+   "countsForClear": true
+  },
+  {
+   "key": "review-bills-statements",
+   "text": "Review bills/statements",
+   "difficulty": "medium",
+   "basePoints": 20,
+   "kind": "nthWeekdayOfMonth",
+   "spec": "-1:SAT",
+   "weeklyTarget": 1,
+   "flexibleWithinWeek": true,
+   "countsForClear": true
+  },
+  {
+   "key": "take-out-the-trash",
+   "text": "Take out the trash",
+   "difficulty": "easy",
+   "basePoints": 5,
+   "kind": "weekly",
+   "spec": "WED,SAT",
+   "weeklyTarget": 2,
+   "flexibleWithinWeek": false,
+   "countsForClear": true
+  },
+  {
+   "key": "weekly-reset-laundry-plants-a-quick-room-tidy",
+   "text": "Weekly reset: laundry, plants, a quick room tidy",
+   "difficulty": "easy",
+   "basePoints": 15,
+   "kind": "weekly",
+   "spec": "SUN",
+   "weeklyTarget": 1,
+   "flexibleWithinWeek": false,
+   "countsForClear": true
+  },
+  {
+   "key": "workout-dumbbell-training",
+   "text": "Workout: dumbbell training",
+   "difficulty": "medium",
+   "basePoints": 20,
+   "kind": "weekly",
+   "spec": "TUE,WED",
+   "weeklyTarget": 2,
+   "flexibleWithinWeek": true,
+   "countsForClear": true,
+   "autoVerifyRule": "calendar_workout:20"
+  },
+  {
+   "key": "workout-running",
+   "text": "Workout: running",
+   "difficulty": "medium",
+   "basePoints": 25,
+   "kind": "weekly",
+   "spec": "FRI",
+   "weeklyTarget": 1,
+   "flexibleWithinWeek": true,
+   "countsForClear": true,
+   "autoVerifyRule": "calendar_workout:25"
+  },
+  {
+   "key": "workout-weight-training",
+   "text": "Workout: weight training",
+   "difficulty": "medium",
+   "basePoints": 30,
+   "kind": "weekly",
+   "spec": "SAT,SUN",
+   "weeklyTarget": 2,
+   "flexibleWithinWeek": true,
+   "countsForClear": true,
+   "autoVerifyRule": "calendar_workout:40"
+  },
+  {
+   "key": "check-the-credit-card-statement-only-skip-the-full-recon",
+   "text": "Check the credit card statement only, skip the full reconciliation",
+   "difficulty": "easy",
+   "basePoints": 10,
+   "kind": "weekly",
+   "spec": "",
+   "weeklyTarget": 1,
+   "flexibleWithinWeek": true,
+   "countsForClear": true,
+   "downgradeOf": [
+    "Review bills/statements"
+   ]
+  },
+  {
+   "key": "incline-walk-30-minutes",
+   "text": "Incline walk, 30 minutes",
+   "difficulty": "easy",
+   "basePoints": 12,
+   "kind": "weekly",
+   "spec": "",
+   "weeklyTarget": 1,
+   "flexibleWithinWeek": true,
+   "countsForClear": true,
+   "autoVerifyRule": "calendar_workout:30",
+   "downgradeOf": [
+    "Workout: running"
+   ]
+  },
+  {
+   "key": "just-30-minutes-no-progress-required",
+   "text": "Just 30 minutes, no progress required",
+   "difficulty": "easy",
+   "basePoints": 15,
+   "kind": "weekly",
+   "spec": "",
+   "weeklyTarget": 1,
+   "flexibleWithinWeek": true,
+   "countsForClear": true,
+   "downgradeOf": [
+    "Focused work or study block (90 minutes, no distractions)"
+   ]
+  },
+  {
+   "key": "just-one-load-of-laundry",
+   "text": "Just one load of laundry",
+   "difficulty": "easy",
+   "basePoints": 10,
+   "kind": "weekly",
+   "spec": "",
+   "weeklyTarget": 1,
+   "flexibleWithinWeek": false,
+   "countsForClear": true,
+   "downgradeOf": [
+    "Weekly reset: laundry, plants, a quick room tidy"
+   ]
+  },
+  {
+   "key": "just-ten-minutes-of-it",
+   "text": "Just ten minutes of it",
+   "difficulty": "easy",
+   "basePoints": 8,
+   "kind": "weekly",
+   "spec": "",
+   "weeklyTarget": 1,
+   "flexibleWithinWeek": true,
+   "countsForClear": true,
+   "downgradeOf": [
+    "Practice a skill you're learning"
+   ]
+  },
+  {
+   "key": "just-the-dishes-and-a-quick-tidy",
+   "text": "Just the dishes and a quick tidy",
+   "difficulty": "easy",
+   "basePoints": 10,
+   "kind": "weekly",
+   "spec": "",
+   "weeklyTarget": 1,
+   "flexibleWithinWeek": false,
+   "countsForClear": true,
+   "downgradeOf": [
+    "Clean and tidy the apartment (vacuum, dishes, dust)"
+   ]
+  },
+  {
+   "key": "walk-30-minutes",
+   "text": "Walk, 30 minutes",
+   "difficulty": "easy",
+   "basePoints": 10,
+   "kind": "weekly",
+   "spec": "",
+   "weeklyTarget": 1,
+   "flexibleWithinWeek": true,
+   "countsForClear": true,
+   "autoVerifyRule": "calendar_workout:30",
+   "downgradeOf": [
+    "Workout: dumbbell training",
+    "Workout: weight training"
+   ]
+  }
+ ]
+}

@@ -93,7 +93,7 @@ struct LibraryEditTests {
         #expect(r.basePoints == 5000)
     }
 
-    // MARK: the backup remembers what changed on the seed rows
+    // MARK: an older backup remembers what changed on the seed rows
 
     private let sideCSV = """
     text,difficulty,hidden_eligible,weekend_only,cooldown_days,auto_verify,launch_url,variants,is_active
@@ -105,43 +105,31 @@ struct LibraryEditTests {
     Seed routine,weekly,SAT,1,25,E,FALSE,TRUE,TRUE,,,,
     """
 
-    private func seeded() throws -> (ModelContext, JSONExport.Seeds) {
+    private func seeded() throws -> ModelContext {
         let ctx = try Fixtures.context()
-        _ = try SeedImporter.mergeSeeds(ctx, sideQuestsCSV: sideCSV, routinesCSV: routineCSV)
-        return (ctx, .init(sideQuestsCSV: sideCSV, routinesCSV: routineCSV))
+        try SeedImporter.seedIfEmpty(ctx, sideQuestsCSV: sideCSV, routinesCSV: routineCSV)
+        return ctx
     }
 
-    @Test func untouchedSeedRowsAddNothingToTheBackup() throws {
-        let (ctx, seeds) = try seeded()
-        #expect(try JSONExport.snapshot(ctx, seeds: seeds).libraryChanges == nil)
+    @Test func untouchedSeedRowsAddNothingToAnOldBackup() throws {
+        let ctx = try seeded()
+        let file = try LegacyBackup.data(ctx, sideQuestsCSV: sideCSV, routinesCSV: routineCSV)
+        #expect(try JSONExport.decode(file).libraryChanges == nil)
     }
 
-    @Test func onlyWhatDiffersFromTheCSVIsRemembered() throws {
-        let (ctx, seeds) = try seeded()
-        let quests = try ctx.fetch(FetchDescriptor<QuestTemplate>())
-        let a = try #require(quests.first { $0.text == "Seed quest A" })
-        let b = try #require(quests.first { $0.text == "Seed quest B" })   // inactive in the CSV already
-        let r = try #require(try ctx.fetch(FetchDescriptor<RoutineTask>()).first)
-        try LibraryEdit.setActive(false, .quest, id: a.id, in: ctx)
-        try LibraryEdit.setActive(true, .quest, id: b.id, in: ctx)
-        try LibraryEdit.setBasePoints(40, forRoutine: r.id, in: ctx)
-
-        let changes = try #require(try JSONExport.snapshot(ctx, seeds: seeds).libraryChanges)
-        #expect(Dictionary(uniqueKeysWithValues: changes.quests.map { ($0.text, $0.isActive) })
-                == ["Seed quest A": false, "Seed quest B": true])
-        #expect(changes.routines.map(\.text) == ["Seed routine"])
-        #expect(changes.routines.first?.basePoints == 40 && changes.routines.first?.isActive == true)
-    }
-
-    @Test func aReinstallGetsTheChangesBack() throws {
-        let (source, seeds) = try seeded()
+    @Test func aSchemaEightReinstallGetsTheChangesBack() throws {
+        let source = try seeded()
         let a = try #require(try source.fetch(FetchDescriptor<QuestTemplate>()).first { $0.text == "Seed quest A" })
         let r = try #require(try source.fetch(FetchDescriptor<RoutineTask>()).first)
         try LibraryEdit.setActive(false, .quest, id: a.id, in: source)
         try LibraryEdit.setBasePoints(40, forRoutine: r.id, in: source)
+        let file = try LegacyBackup.data(source, sideQuestsCSV: sideCSV, routinesCSV: routineCSV)
+        let changes = try #require(try JSONExport.decode(file).libraryChanges)
+        #expect(Dictionary(uniqueKeysWithValues: changes.quests.map { ($0.text, $0.isActive) }) == ["Seed quest A": false])
+        #expect(changes.routines.map(\.text) == ["Seed routine"] && changes.routines.first?.basePoints == 40)
 
-        let (target, _) = try seeded()                                       // a fresh install: the CSV's values
-        let plan = try JSONImport.plan(try JSONExport.data(source, seeds: seeds), against: target)
+        let target = try seeded()                                            // a fresh install: the CSV's values
+        let plan = try JSONImport.plan(file, against: target)
         #expect(plan.summary.libraryChanges == 2)
         try JSONImport.apply(plan, to: target)
 
@@ -149,12 +137,5 @@ struct LibraryEditTests {
         #expect(try target.fetch(FetchDescriptor<RoutineTask>()).first?.basePoints == 40)
         // What the backup did not mention keeps the CSV's value.
         #expect(try target.fetch(FetchDescriptor<QuestTemplate>()).first { $0.text == "Seed quest B" }?.isActive == false)
-    }
-
-    @Test func aBackupMadeWithoutTheCSVsRecordsNoChanges() throws {
-        let (ctx, _) = try seeded()
-        let a = try #require(try ctx.fetch(FetchDescriptor<QuestTemplate>()).first { $0.text == "Seed quest A" })
-        try LibraryEdit.setActive(false, .quest, id: a.id, in: ctx)
-        #expect(try JSONExport.snapshot(ctx).libraryChanges == nil)
     }
 }

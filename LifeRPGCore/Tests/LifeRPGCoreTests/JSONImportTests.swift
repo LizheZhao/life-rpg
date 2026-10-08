@@ -68,6 +68,14 @@ struct JSONImportTests {
         return plan
     }
 
+    /// What a file from before schema 9 needs: the library re-pointed by text, so a reinstall's
+    /// new UUIDs are no problem.
+    private func restoreLegacy(_ source: ModelContext, into target: ModelContext) throws -> JSONImport.Plan {
+        let plan = try JSONImport.plan(try LegacyBackup.data(source), against: target)
+        try JSONImport.apply(plan, to: target)
+        return plan
+    }
+
     // MARK: the done-when
 
     @Test func balanceMatchesExactlyAfterAReinstall() throws {
@@ -97,10 +105,10 @@ struct JSONImportTests {
 
     // MARK: ids — the reinstall gave every library row a new UUID
 
-    @Test func templateAndRoutineIDsAreRemappedByText() throws {
+    @Test func templateAndRoutineIDsAreRemappedByTextInAnOlderFile() throws {
         let source = try sourceStore()
         let target = try freshStore()
-        _ = try restore(source, into: target)
+        _ = try restoreLegacy(source, into: target)
 
         let templates = Dictionary(uniqueKeysWithValues:
             try target.fetch(FetchDescriptor<QuestTemplate>()).map { ($0.id, $0.text) })
@@ -137,13 +145,14 @@ struct JSONImportTests {
         #expect(try target.fetch(FetchDescriptor<RoutineTask>()).first?.lastCompletedDayKey == saturday)
     }
 
-    /// Stamps the target set itself, on a day the backup never saw, belong to history that is gone.
-    @Test func stampsNotInTheBackupAreCleared() throws {
+    /// An older file: stamps the target set itself, on a day the backup never saw, belong to history
+    /// that is gone.
+    @Test func stampsNotInAnOlderBackupAreCleared() throws {
         let source = try sourceStore()
         let target = try freshStore()
         let extra = Fixtures.quest(target, "Only in the new CSV", served: "2026-09-27")
         try target.save()
-        _ = try restore(source, into: target)
+        _ = try restoreLegacy(source, into: target)
         #expect(extra.lastServedDayKey == nil)
     }
 
@@ -151,19 +160,24 @@ struct JSONImportTests {
 
     @Test func planSummarisesWithoutWriting() throws {
         let source = try sourceStore()
-        // Stamped, so it is something the backup carries (a row nothing needs is left out of it).
         Fixtures.quest(source, "Removed from the CSV since", served: saturday)
         try source.save()
         let target = try freshStore()
         let balanceBefore = try Economy.balance(target)
 
+        // An older file names the library texts this store lacks, a current one carries the library.
+        let older = try JSONImport.plan(try LegacyBackup.data(source), against: target)
+        #expect(older.summary.unmatchedLibrary == ["Removed from the CSV since"])
+
         let plan = try JSONImport.plan(try JSONExport.data(source), against: target)
+        #expect(plan.summary.libraryQuests == (try source.fetchCount(FetchDescriptor<QuestTemplate>())))
+        #expect(plan.summary.libraryRoutines == 1 && plan.summary.libraryArchived == 0)
         #expect(plan.summary.balance == (try Economy.balance(source)))
         #expect(plan.summary.dailyQuests == (try source.fetchCount(FetchDescriptor<DailyQuest>())))
         #expect(plan.summary.ledgerEntries == (try source.fetchCount(FetchDescriptor<LedgerEntry>())))
         #expect(plan.summary.ratings == 1)
         #expect(plan.summary.rewards == 1)
-        #expect(plan.summary.unmatchedLibrary == ["Removed from the CSV since"])
+        #expect(plan.summary.unmatchedLibrary.isEmpty)
         #expect(plan.summary.lastDayKey == saturday)
         #expect(try Economy.balance(target) == balanceBefore)
     }
@@ -259,6 +273,7 @@ struct JSONImportTests {
     @Test func anExportWithoutTheLibraryIsTooOld() throws {
         var snapshot = try JSONExport.snapshot(try sourceStore())
         snapshot.library = nil
+        snapshot.fullLibrary = nil
         #expect(throws: JSONImport.Failure.exportTooOld) {
             try JSONImport.plan(try JSONExport.encode(snapshot), against: try Fixtures.context())
         }

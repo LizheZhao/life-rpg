@@ -18,8 +18,10 @@ public enum JSONExport {
     /// Bumped when the model changes shape, independently of the GitHub tag. Import reads this
     /// and nothing else. 4 added `Occurrence.iconKey`, 5 the user's own library rows
     /// (`userLibrary`), 6 the journal, 7 `Turn.writingSeconds`, 8 the day documents
-    /// (`journalEntries`); an older file simply lacks them.
-    public static let schemaVersion = 8
+    /// (`journalEntries`), 9 the whole library (`fullLibrary`: every row with its id, edits, stamps
+    /// and archived mark, because the library in the store is the truth, not the starter file), 10
+    /// the starter library's key on each library row (`starterKey`); an older file simply lacks them.
+    public static let schemaVersion = 10
 
     /// The oldest export import still reads. Anything between this and `schemaVersion` decodes into
     /// the current shape, the fields added since being optional.
@@ -34,15 +36,19 @@ public enum JSONExport {
         public var dailyContexts: [Context]
         public var ratings: [Rating]
         public var comments: [Comment]
-        /// Nil in exports written before import existed; `JSONImport` refuses those.
+        /// Schema 8 and older only: the ids and texts the history points at, so a reinstall's reseeded
+        /// library can be re-pointed by text. Nil from 9 on, and nil in exports written before import
+        /// existed (`JSONImport` refuses those when there is no `fullLibrary` either).
         public var library: Library?
         public var rewards: [RewardRow]?
-        /// The rows the user saved themselves (`LibraryOrigin.user`), in full: nothing else can give
-        /// them back. Nil when there are none, which is most backups.
+        /// Schema 5 to 8 only: the rows the user saved themselves, in full.
         public var userLibrary: UserLibrary?
-        /// What the user changed on the seed rows (turned off or on, a routine's points): only the
-        /// rows that differ from the CSV. Nil when nothing does, or when the CSVs weren't to hand.
+        /// Schema 5 to 8 only: what the user turned off or on, or re-priced, on the seed rows.
         public var libraryChanges: LibraryChanges?
+        /// The whole library, from schema 9 on, empty or not (so import can tell a v9 file from an
+        /// older one): every row under the id it has, with its edits, its stamps and whether it was
+        /// deleted. A restore puts exactly these rows back, so no id has to be re-pointed.
+        public var fullLibrary: FullLibrary?
         /// Nil only in a file written before the journal existed (schema 5 and older). From 6 on the
         /// block is always written, empty or not, so import can tell "no journal in this backup" from
         /// "a backup with nothing in its journal" and leave the first alone.
@@ -51,17 +57,6 @@ public enum JSONExport {
         /// always written, empty or not, so import can tell "no entries in this backup" (an older
         /// file, whose entries are rebuilt from its turns) from "a backup with none".
         public var journalEntries: [JournalEntryRow]?
-    }
-
-    /// The seed CSVs' text, to tell what the user changed from what they started with.
-    public struct Seeds: Sendable {
-        public var sideQuestsCSV: String
-        public var routinesCSV: String
-
-        public init(sideQuestsCSV: String, routinesCSV: String) {
-            self.sideQuestsCSV = sideQuestsCSV
-            self.routinesCSV = routinesCSV
-        }
     }
 
     public struct LibraryChanges: Codable, Equatable, Sendable {
@@ -78,6 +73,54 @@ public enum JSONExport {
         public var text: String
         public var isActive: Bool
         public var basePoints: Int
+    }
+
+    /// The library as it is: see `Snapshot.fullLibrary`.
+    public struct FullLibrary: Codable, Equatable, Sendable {
+        public var quests: [FullQuest]
+        public var routines: [FullRoutine]
+    }
+
+    public struct FullQuest: Codable, Equatable, Sendable {
+        public var id: UUID
+        public var text: String
+        public var difficulty: String
+        public var hiddenEligible: Bool
+        public var weekendOnly: Bool
+        public var cooldownDaysOverride: Int?
+        public var variants: [String]
+        public var launchURL: String?
+        public var autoVerifyRule: String?
+        public var affinity: Int
+        public var lastServedDayKey: String?
+        public var lastCompletedDayKey: String?
+        public var isActive: Bool
+        public var isArchived: Bool
+        /// `LibraryOrigin` raw value.
+        public var origin: String
+        /// The starter library's key for the row (schema 10 and later); nil for the user's own rows.
+        public var starterKey: String?
+    }
+
+    public struct FullRoutine: Codable, Equatable, Sendable {
+        public var id: UUID
+        public var text: String
+        public var difficulty: String
+        public var basePoints: Int
+        public var kind: String
+        public var spec: String
+        public var anchorWeekKey: String?
+        public var weeklyTarget: Int
+        public var flexibleWithinWeek: Bool
+        public var countsForClear: Bool
+        public var downgradeIDs: [UUID]
+        public var launchURL: String?
+        public var autoVerifyRule: String?
+        public var lastCompletedDayKey: String?
+        public var isActive: Bool
+        public var isArchived: Bool
+        public var origin: String
+        public var starterKey: String?
     }
 
     public struct UserLibrary: Codable, Equatable, Sendable {
@@ -280,67 +323,31 @@ public enum JSONExport {
         public var writingSeconds: Int?
     }
 
-    /// The ids of every library row the history tables point at — what `library` has to be able to
-    /// re-point on import.
-    static func referencedLibraryIDs(quests: [DailyQuest], occurrences: [RoutineOccurrence],
-                                     ratings: [QuestRating], comments: [QuestComment]) -> Set<UUID> {
-        var ids = Set<UUID>()
-        for q in quests {
-            if let id = q.templateID { ids.insert(id) }
-            ids.formUnion(q.trivialTemplateIDs)
-        }
-        for o in occurrences {
-            for id in [o.routineID, o.adHocSourceRoutineID, o.degradedRoutineID] { if let id { ids.insert(id) } }
-        }
-        for id in ratings.compactMap(\.targetID) + comments.compactMap(\.targetID) { ids.insert(id) }
-        return ids
-    }
-
-    /// The seed rows whose on / off or points differ from the CSVs they came from. A row the
-    /// user never touched is exactly what a reseed brings back, so it is not listed.
-    static func libraryChanges(templates: [QuestTemplate], routines: [RoutineTask],
-                               seeds: Seeds) -> LibraryChanges? {
-        guard let quests = try? SeedParser.sideQuests(csv: seeds.sideQuestsCSV),
-              let routineSeeds = try? SeedParser.routines(csv: seeds.routinesCSV) else { return nil }
-        let questByText = Dictionary(quests.map { ($0.text, $0) }, uniquingKeysWith: { a, _ in a })
-        let routineByText = Dictionary(routineSeeds.map { ($0.text, $0) }, uniquingKeysWith: { a, _ in a })
-        let changedQuests = templates.filter { $0.origin == .seed }
-            .compactMap { t -> QuestChange? in
-                guard let seed = questByText[t.text], seed.isActive != t.isActive else { return nil }
-                return QuestChange(text: t.text, isActive: t.isActive)
-            }.sorted { $0.text < $1.text }
-        let changedRoutines = routines.filter { $0.origin == .seed }
-            .compactMap { r -> RoutineChange? in
-                guard let seed = routineByText[r.text],
-                      seed.isActive != r.isActive || seed.basePoints != r.basePoints else { return nil }
-                return RoutineChange(text: r.text, isActive: r.isActive, basePoints: r.basePoints)
-            }.sorted { $0.text < $1.text }
-        return changedQuests.isEmpty && changedRoutines.isEmpty
-            ? nil : LibraryChanges(quests: changedQuests, routines: changedRoutines)
-    }
-
-    public static func snapshot(_ context: ModelContext, seeds: Seeds? = nil, now: Date = Date()) throws -> Snapshot {
+    public static func snapshot(_ context: ModelContext, now: Date = Date()) throws -> Snapshot {
         let quests = try context.fetch(FetchDescriptor<DailyQuest>())
         let occurrences = try context.fetch(FetchDescriptor<RoutineOccurrence>())
         let ratings = try context.fetch(FetchDescriptor<QuestRating>())
         let comments = try context.fetch(FetchDescriptor<QuestComment>())
-        let referenced = referencedLibraryIDs(quests: quests, occurrences: occurrences,
-                                              ratings: ratings, comments: comments)
         let templates = try context.fetch(FetchDescriptor<QuestTemplate>())
         let routines = try context.fetch(FetchDescriptor<RoutineTask>())
-        let mine = UserLibrary(
-            quests: templates.filter { $0.origin == .user }.sorted { $0.text < $1.text }.map {
-                UserQuest(id: $0.id, text: $0.text, difficulty: $0.difficultyRaw,
+        let full = FullLibrary(
+            quests: templates.sorted { ($0.text, $0.id.uuidString) < ($1.text, $1.id.uuidString) }.map {
+                FullQuest(id: $0.id, text: $0.text, difficulty: $0.difficultyRaw,
                           hiddenEligible: $0.hiddenEligible, weekendOnly: $0.weekendOnly,
                           cooldownDaysOverride: $0.cooldownDaysOverride, variants: $0.variants,
-                          launchURL: $0.launchURLString, autoVerifyRule: $0.autoVerifyRule, isActive: $0.isActive)
+                          launchURL: $0.launchURLString, autoVerifyRule: $0.autoVerifyRule, affinity: $0.affinity,
+                          lastServedDayKey: $0.lastServedDayKey, lastCompletedDayKey: $0.lastCompletedDayKey,
+                          isActive: $0.isActive, isArchived: $0.isArchived, origin: $0.originRaw,
+                          starterKey: $0.starterKey)
             },
-            routines: routines.filter { $0.origin == .user }.sorted { $0.text < $1.text }.map {
-                UserRoutine(id: $0.id, text: $0.text, difficulty: $0.difficultyRaw, basePoints: $0.basePoints,
+            routines: routines.sorted { ($0.text, $0.id.uuidString) < ($1.text, $1.id.uuidString) }.map {
+                FullRoutine(id: $0.id, text: $0.text, difficulty: $0.difficultyRaw, basePoints: $0.basePoints,
                             kind: $0.kindRaw, spec: $0.spec, anchorWeekKey: $0.anchorWeekKey,
                             weeklyTarget: $0.weeklyTarget, flexibleWithinWeek: $0.flexibleWithinWeek,
                             countsForClear: $0.countsForClear, downgradeIDs: $0.downgradeIDs,
-                            launchURL: $0.launchURLString, autoVerifyRule: $0.autoVerifyRule, isActive: $0.isActive)
+                            launchURL: $0.launchURLString, autoVerifyRule: $0.autoVerifyRule,
+                            lastCompletedDayKey: $0.lastCompletedDayKey, isActive: $0.isActive,
+                            isArchived: $0.isArchived, origin: $0.originRaw, starterKey: $0.starterKey)
             })
         return Snapshot(
             schemaVersion: schemaVersion,
@@ -391,25 +398,15 @@ public enum JSONExport {
                         text: $0.textSnapshot, comment: $0.comment, dayKey: $0.dayKey,
                         timestamp: $0.timestamp)
             },
-            library: Library(
-                quests: templates
-                    .filter { referenced.contains($0.id) || $0.lastServedDayKey != nil || $0.lastCompletedDayKey != nil }
-                    .sorted { $0.text < $1.text }.map {
-                        LibraryQuest(id: $0.id, text: $0.text, lastServedDayKey: $0.lastServedDayKey,
-                                     lastCompletedDayKey: $0.lastCompletedDayKey)
-                    },
-                routines: routines
-                    .filter { referenced.contains($0.id) || $0.lastCompletedDayKey != nil }
-                    .sorted { $0.text < $1.text }.map {
-                        LibraryRoutine(id: $0.id, text: $0.text, lastCompletedDayKey: $0.lastCompletedDayKey)
-                    }),
+            library: nil,
             rewards: try context.fetch(FetchDescriptor<Reward>()).sorted { $0.name < $1.name }.map {
                 RewardRow(id: $0.id, name: $0.name, estimatedCost: $0.estimatedCost,
                           virtualKind: $0.virtualKind, fixedCoins: $0.fixedCoins, isActive: $0.isActive,
                           isGoal: $0.isGoal)
             },
-            userLibrary: mine.quests.isEmpty && mine.routines.isEmpty ? nil : mine,
-            libraryChanges: seeds.flatMap { libraryChanges(templates: templates, routines: routines, seeds: $0) },
+            userLibrary: nil,
+            libraryChanges: nil,
+            fullLibrary: full,
             journal: Journal(turns: try context.fetch(FetchDescriptor<JournalTurn>())
                 .sorted { ($0.dayKey, $0.index) < ($1.dayKey, $1.index) }.map {
                     Turn(id: $0.id, dayKey: $0.dayKey, index: $0.index, kind: $0.kindRaw,
@@ -424,8 +421,8 @@ public enum JSONExport {
             })
     }
 
-    public static func data(_ context: ModelContext, seeds: Seeds? = nil, now: Date = Date()) throws -> Data {
-        try encode(snapshot(context, seeds: seeds, now: now))
+    public static func data(_ context: ModelContext, now: Date = Date()) throws -> Data {
+        try encode(snapshot(context, now: now))
     }
 
     public static func encode(_ snapshot: Snapshot) throws -> Data {

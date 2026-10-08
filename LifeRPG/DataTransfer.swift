@@ -17,12 +17,11 @@ final class DataTransfer {
     var importing = false
     /// A decoded backup waiting for the overwrite to be confirmed. Nothing is written until then.
     var importPlan: JSONImport.Plan?
+    /// What "Erase all records" is about to remove, while its confirmation is up. Nothing is deleted before then.
+    var eraseCounts: EraseRecords.Result?
 
     func prepareJSONExport(_ context: ModelContext) {
-        // The bundled CSVs are what "unchanged" means: only what differs from them is written down.
-        let seeds = (try? JSONExport.Seeds(sideQuestsCSV: LifeRPGApp.bundledCSV("side_quests"),
-                                           routinesCSV: LifeRPGApp.bundledCSV("routine_quests")))
-        export { .json(try JSONExport.data(context, seeds: seeds), name: JSONExport.filename()) }
+        export { .json(try JSONExport.data(context), name: JSONExport.filename()) }
     }
 
     func prepareCSVExport(_ context: ModelContext) {
@@ -39,6 +38,29 @@ final class DataTransfer {
             error = nil
         } catch {
             self.error = "Import failed: \(error)"
+        }
+    }
+
+    func prepareErase(_ context: ModelContext) {
+        do {
+            eraseCounts = try EraseRecords.preview(in: context)
+            error = nil
+        } catch {
+            self.error = "Couldn't read the records: \(error)"
+        }
+    }
+
+    /// Erases, gives the opening balance again (a fresh start is a first launch for the economy) and
+    /// forgets which days were handed to Apple Journal; the caller then draws today again.
+    func performErase(_ context: ModelContext, onDone: () -> Void) {
+        do {
+            try EraseRecords.erase(in: context)
+            try Economy.grantStartingBalanceIfNeeded(context, dayKey: Date().dayKey)
+            UserDefaults.standard.removeObject(forKey: JournalSentLog.key)
+            error = nil
+            onDone()
+        } catch {
+            self.error = "Erase failed: \(error)"
         }
     }
 
@@ -62,11 +84,15 @@ final class DataTransfer {
             "Balance after restoring: \(s.balance).",
             "Everything in this app's history is replaced by the backup.",
         ]
+        if s.libraryQuests + s.libraryRoutines > 0 {
+            lines.append("The library is replaced too: \(s.libraryQuests) quest(s) and \(s.libraryRoutines) routine(s)"
+                         + (s.libraryArchived > 0 ? ", \(s.libraryArchived) of them deleted (kept under Archived)" : "") + ".")
+        }
         if !s.unmatchedLibrary.isEmpty {
             lines.append("\(s.unmatchedLibrary.count) quest(s) or routine(s) in the backup aren't in this library; "
                          + "their history is kept but won't link back.")
         }
-        // Never taken from the library by a restore: only put back.
+        // An older backup (before the whole library was written): only put back, never taken from.
         let mine = s.userQuests + s.userRoutines
         if mine > 0 || s.libraryChanges > 0 {
             lines.append("Your library: " + [mine > 0 ? "\(s.userQuests) quest(s) and \(s.userRoutines) routine(s) of your own, "
@@ -121,7 +147,7 @@ private struct DataTransferModifier: ViewModifier {
                 transfer.pendingExport = nil
             }
             // Behind the card the page is not reachable, for VoiceOver either.
-            .accessibilityHidden(transfer.importPlan != nil)
+            .accessibilityHidden(transfer.importPlan != nil || transfer.eraseCounts != nil)
             .overlay {
                 if let plan = transfer.importPlan {
                     MomentCard(header: MomentHeader(doodle: .notebook, tint: nil,
@@ -137,8 +163,23 @@ private struct DataTransferModifier: ViewModifier {
                                    dismiss: { transfer.importPlan = nil })))
                 }
             }
-            .animation(.easeOut(duration: reduceMotion ? 0.2 : 0.22), value: transfer.importPlan != nil)
-            .onChange(of: transfer.importPlan != nil) { _, up in hidesTabBar.wrappedValue = up }
+            .overlay {
+                if let counts = transfer.eraseCounts {
+                    MomentCard(header: MomentHeader(doodle: .notebook, tint: nil,
+                                                    title: "Erase all records?", clay: true),
+                               content: .notice(MomentNotice(
+                                   message: counts.message,
+                                   primary: "Erase everything",
+                                   quiet: "Not yet",
+                                   confirm: {
+                                       transfer.performErase(context, onDone: onImported)
+                                       transfer.eraseCounts = nil
+                                   },
+                                   dismiss: { transfer.eraseCounts = nil })))
+                }
+            }
+            .animation(.easeOut(duration: reduceMotion ? 0.2 : 0.22), value: transfer.importPlan != nil || transfer.eraseCounts != nil)
+            .onChange(of: transfer.importPlan != nil || transfer.eraseCounts != nil) { _, up in hidesTabBar.wrappedValue = up }
             .onDisappear { hidesTabBar.wrappedValue = false }
     }
 }

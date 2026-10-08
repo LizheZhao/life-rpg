@@ -26,7 +26,7 @@ struct ScenarioTests {
         init(_ tz: TimeZone) throws {
             ctx = try Fixtures.context()
             self.tz = tz
-            try SeedImporter.mergeSeeds(ctx, sideQuestsCSV: Fixtures.csv("side_quests.csv"),
+            try SeedImporter.seedIfEmpty(ctx, sideQuestsCSV: Fixtures.csv("side_quests.csv"),
                                         routinesCSV: Fixtures.csv("routine_quests.csv"))
         }
 

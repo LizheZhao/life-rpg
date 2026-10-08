@@ -34,14 +34,14 @@ import SwiftUI
         }
     }
 
-    /// Additive merge from the CSVs bundled from `doc/` (via symlinks in `LifeRPG/Seed/`):
-    /// new rows are inserted, existing ones are left alone.
+    /// Starts an empty library from the starter library bundled from `doc/starter_library.json`
+    /// (via a symlink in `LifeRPG/Seed/`), once. From then on the library in the store is the
+    /// truth: a row the user renamed or deleted stays that way, and a row added to the file later
+    /// does not arrive by itself.
     @MainActor
     private static func seed(_ context: ModelContext) -> String {
         do {
-            let result = try SeedImporter.mergeSeeds(context,
-                                                     sideQuestsCSV: try bundledCSV("side_quests"),
-                                                     routinesCSV: try bundledCSV("routine_quests"))
+            let result = try StarterLibrary.install(try StarterLibraryFile.data(), into: context)
             // The opening float, once ever. Without it coins mean nothing for the first week:
             // nothing can be spent, so nothing has a price.
             let granted = try Economy.grantStartingBalanceIfNeeded(context, dayKey: Date().dayKey)
@@ -50,12 +50,5 @@ import SwiftUI
         } catch {
             return "Seed failed: \(error)"
         }
-    }
-
-    static func bundledCSV(_ name: String) throws -> String {
-        guard let url = Bundle.main.url(forResource: name, withExtension: "csv") else {
-            throw CocoaError(.fileNoSuchFile, userInfo: [NSFilePathErrorKey: "\(name).csv"])
-        }
-        return try String(contentsOf: url, encoding: .utf8)
     }
 }

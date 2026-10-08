@@ -16,7 +16,14 @@ struct LibraryView: View {
     @Query private var ratings: [QuestRating]
     @Query private var comments: [QuestComment]
 
+    @Environment(\.modelContext) private var context
     @State private var kind: FeedbackTarget = .quest
+    @State private var adding = false
+    @State private var restoreError: String?
+    // What the starter library has that this library doesn't (`StarterUpdate`), and the ids the user hid.
+    @State private var offered: [StarterUpdate.Item] = []
+    @State private var reviewingOffer = false
+    @AppStorage("starter.dismissed") private var dismissedRaw = ""
     @State private var search = ""
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     // Which sections are open, as comma-joined keys: quests by tier name (none open by default),
@@ -32,20 +39,32 @@ struct LibraryView: View {
     private var questGroups: [(difficulty: Difficulty, rows: [QuestTemplate])] {
         // Easiest first, the way the today page and the composition table read.
         Difficulty.allCases.compactMap { d in
-            let rows = templates.filter { $0.difficulty == d && matches($0.text) }
+            let rows = LibraryEdit.listed(templates).filter { $0.difficulty == d && matches($0.text) }
             return rows.isEmpty ? nil : (d, rows)
         }
     }
 
     private var routineSections: [RoutineSchedulePresentation.Section] {
-        RoutineSchedulePresentation.grouped(routines.filter { matches($0.text) },
+        RoutineSchedulePresentation.grouped(LibraryEdit.listed(routines).filter { matches($0.text) },
                                             lightIDs: Degrade.versionIDs(in: routines))
+    }
+
+    /// Deleted rows of the shown kind, which stay in the store but out of the sections above.
+    private var archivedEntries: [LibraryEntry] {
+        switch kind {
+        case .quest:
+            LibraryEdit.archived(templates).filter { matches($0.text) }.map { LibraryEntry(template: $0) }
+        case .routine:
+            LibraryEdit.archived(routines).filter { matches($0.text) }.map {
+                LibraryEntry(routine: $0, schedule: RoutineSchedulePresentation($0, isLightVersion: false))
+            }
+        }
     }
 
     private var isEmpty: Bool {
         switch kind {
-        case .quest: questGroups.isEmpty
-        case .routine: routineSections.isEmpty
+        case .quest: questGroups.isEmpty && archivedEntries.isEmpty
+        case .routine: routineSections.isEmpty && archivedEntries.isEmpty
         }
     }
 
@@ -66,6 +85,7 @@ struct LibraryView: View {
         let latest = Feedback.latestRatings(ratings)
         ScrollView {
             VStack(alignment: .leading, spacing: LR.Spacing.sectionGap) {
+                if !offered.isEmpty && search.isEmpty { starterOfferCard }
                 PillSegmentedControl(options: [("Quests", FeedbackTarget.quest), ("Routines", FeedbackTarget.routine)],
                                      selection: $kind, accessibilityLabel: "Library")
                 switch kind {
@@ -100,6 +120,7 @@ struct LibraryView: View {
                         }
                     }
                 }
+                archivedSection
                 if isEmpty {
                     RecordRowView(title: search.isEmpty ? "Nothing in the library yet" : "Nothing matches \"\(search)\"",
                                   secondary: true) { EmptyView() }
@@ -113,6 +134,99 @@ struct LibraryView: View {
         .background(LR.Color.canvas.ignoresSafeArea())
         .navigationTitle("Library")
         .searchable(text: $search)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button { adding = true } label: {
+                    Image(systemName: "plus").foregroundStyle(LR.Color.ink)
+                }
+                .accessibilityLabel("Add to library")
+            }
+        }
+        .sheet(isPresented: $adding) { NewLibraryRowEditor() }
+        .sheet(isPresented: $reviewingOffer) {
+            StarterUpdateSheet(items: offered, onAdd: addFromStarter, onHide: hideOffered)
+        }
+        .task { refreshOffer() }
+        .onChange(of: templates.count + routines.count) { _, _ in refreshOffer() }
+        .alert("Couldn't restore", isPresented: Binding(get: { restoreError != nil },
+                                                       set: { if !$0 { restoreError = nil } })) {
+            Button("OK", role: .cancel) {}
+        } message: { Text(restoreError ?? "") }
+    }
+
+    /// One line at the top when the starter library has rows this library lacks.
+    private var starterOfferCard: some View {
+        Button { reviewingOffer = true } label: {
+            HStack(spacing: 12) {
+                Image(systemName: "sparkles").font(.system(size: 20)).foregroundStyle(LR.Color.accent)
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("\(offered.count) new in the starter library").lr(.bodyStrong).foregroundStyle(LR.Color.ink)
+                    Text("Look through them and add what you like").lr(.caption).foregroundStyle(LR.Color.inkSecondary)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(LR.Color.iconNeutral).accessibilityHidden(true)
+            }
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .lrCard(.surface, radius: LR.Radius.row)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(PressableCardStyle())
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(offered.count) new in the starter library")
+        .accessibilityHint("Opens a list to add from")
+        .accessibilityAddTraits(.isButton)
+    }
+
+    private var dismissedIDs: Set<String> { Set(dismissedRaw.split(separator: ",").map(String.init)) }
+
+    /// Keys rows that match by words (rows from before keys existed), then lists what is missing.
+    private func refreshOffer() {
+        guard let library = try? StarterLibraryFile.library() else { offered = []; return }
+        try? StarterUpdate.claim(library, in: context)
+        offered = (try? StarterUpdate.offered(library, in: context, dismissed: dismissedIDs)) ?? []
+    }
+
+    private func addFromStarter(_ ids: Set<String>) throws {
+        try StarterUpdate.add(ids, from: try StarterLibraryFile.library(), in: context)
+        Haptics.selection()
+        refreshOffer()
+    }
+
+    private func hideOffered(_ ids: Set<String>) {
+        dismissedRaw = dismissedIDs.union(ids).sorted().joined(separator: ",")
+        refreshOffer()
+    }
+
+    /// What was deleted, last and closed: a row stays here until it is restored, so a deletion is
+    /// never a loss. Its history, ratings and notes were never touched.
+    @ViewBuilder private var archivedSection: some View {
+        let rows = archivedEntries
+        if !rows.isEmpty {
+            let stored = kind == .quest ? $openTiers : $openGroups
+            let open = isOpen(stored.wrappedValue, "archived")
+            VStack(alignment: .leading, spacing: 10) {
+                LibrarySectionHeader(title: "Archived", tint: nil, count: rows.count, noun: "deleted row",
+                                     isOpen: open) { toggle(stored, "archived") }
+                if open {
+                    ForEach(rows, id: \.id) { entry in
+                        ArchivedRow(entry: entry) { restore(entry) }
+                    }
+                    .transition(.opacity)
+                }
+            }
+        }
+    }
+
+    private func restore(_ entry: LibraryEntry) {
+        do {
+            try LibraryEdit.restore(entry.target, id: entry.id, in: context)
+            Haptics.selection()
+        } catch {
+            restoreError = "\(error)"
+        }
     }
 
     private func link(_ entry: LibraryEntry, latest: [UUID: QuestRating]) -> some View {
@@ -200,10 +314,34 @@ private struct LibraryRow: View {
     }
 }
 
+/// A deleted row in the Archived section: dimmed, not a link (its page is gone with it), with the
+/// one thing that can be done to it.
+private struct ArchivedRow: View {
+    let entry: LibraryEntry
+    let restore: () -> Void
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 12) {
+            LibraryDisc(entry: entry, dimmed: true)
+            VStack(alignment: .leading, spacing: 6) {
+                Text(entry.text).lr(.bodyStrong).foregroundStyle(LR.Color.inkSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                PillLabel(text: entry.tierName)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            Button("Restore", action: restore).buttonStyle(PillButtonStyle())
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .lrCard(.surface, radius: LR.Radius.row)
+    }
+}
+
 /// The entry's doodle (from its text, like every other row) on a disc in its tier's colour, the
 /// way Today's rows wear theirs. The section header and VoiceOver name the tier in words.
 private struct LibraryDisc: View {
     let entry: LibraryEntry
+    var dimmed = false
 
     var body: some View {
         Circle().fill(entry.tint.color)
@@ -211,7 +349,7 @@ private struct LibraryDisc: View {
             .overlay {
                 DoodleView(key: DoodleKey.forText(entry.text), size: 28, tint: LR.Color.ink(on: entry.tint))
             }
-            .opacity(entry.isActive ? 1 : 0.4)
+            .opacity(entry.isActive && !dimmed ? 1 : 0.4)
     }
 }
 
@@ -263,23 +401,36 @@ private struct LibraryDetailView: View {
     let today: String
 
     @Environment(\.modelContext) private var context
+    @Environment(\.dismiss) private var dismiss
     /// The live rows: `entry` is a snapshot taken when the list was drawn, and what is changed here
-    /// (on or off, a routine's points) has to show at once.
+    /// (on or off, a routine's difficulty or days) has to show at once.
     @Query private var templates: [QuestTemplate]
     @Query private var routines: [RoutineTask]
+    @Query private var occurrences: [RoutineOccurrence]
     @State private var editError: String?
+    @State private var editingSchedule = false
+    @State private var managing = false
+    /// Set by the manage sheet's Delete, so the page closes once the sheet has gone.
+    @State private var deleted = false
 
     private var template: QuestTemplate? { templates.first { $0.id == entry.id } }
     private var routine: RoutineTask? { routines.first { $0.id == entry.id } }
     private var isActive: Bool { template?.isActive ?? routine?.isActive ?? entry.isActive }
+    /// The row as it is now (`entry` is the list's snapshot): a rename changes its words and so
+    /// its doodle.
+    private var live: LibraryEntry {
+        if let template { return LibraryEntry(template: template) }
+        if let routine, let schedule = liveSchedule { return LibraryEntry(routine: routine, schedule: schedule) }
+        return entry
+    }
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: LR.Spacing.sectionGap) {
                 summaryCard
                 settingsSection
-                if let schedule = entry.schedule { scheduleSection(schedule) }
-                FeedbackPanel(target: entry.target, id: entry.id, text: entry.text, today: today)
+                if let schedule = liveSchedule { scheduleSection(schedule) }
+                FeedbackPanel(target: entry.target, id: entry.id, text: live.text, today: today)
             }
             .padding(.horizontal, 16)
             .padding(.bottom, 8)
@@ -289,6 +440,38 @@ private struct LibraryDetailView: View {
         .background(LR.Color.canvas.ignoresSafeArea())
         .navigationTitle(entry.target == .quest ? "Quest" : "Routine")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button { managing = true } label: {
+                    Image(systemName: "pencil").foregroundStyle(LR.Color.ink)
+                }
+                .accessibilityLabel("Rename or delete")
+            }
+        }
+        // The row keeps its id: a rename changes what the library calls it, a delete only unlists it.
+        .sheet(isPresented: $managing, onDismiss: { if deleted { dismiss() } }) {
+            LibraryManageSheet(
+                name: live.text,
+                rename: { try LibraryEdit.rename($0, entry.target, id: entry.id, in: context) },
+                delete: {
+                    try LibraryEdit.archive(entry.target, id: entry.id, in: context)
+                    deleted = true
+                })
+        }
+        .sheet(isPresented: $editingSchedule) {
+            if let routine, let draft = LibraryEdit.scheduleDraft(of: routine, in: routines) {
+                LibraryScheduleEditor(
+                    routineID: routine.id, routineText: routine.text, draft: draft,
+                    locked: LibraryEdit.sessionIsOpen(routineID: routine.id, occurrences: occurrences)
+                        ? (routine.flexibleWithinWeek, routine.weeklyTarget) : nil)
+            }
+        }
+    }
+
+    /// The schedule as the row says it now: `entry` is a snapshot from when the list was drawn.
+    private var liveSchedule: RoutineSchedulePresentation? {
+        guard let routine else { return entry.schedule }
+        return RoutineSchedulePresentation(routine, isLightVersion: Degrade.versionIDs(in: routines).contains(routine.id))
     }
 
     // MARK: pieces
@@ -320,13 +503,13 @@ private struct LibraryDetailView: View {
     private var summaryCard: some View {
         card {
             HStack(alignment: .center, spacing: 12) {
-                LibraryDisc(entry: entry)
+                LibraryDisc(entry: live)
                 VStack(alignment: .leading, spacing: 6) {
-                    Text(entry.text).lr(.bodyStrong)
+                    Text(live.text).lr(.bodyStrong)
                         .foregroundStyle(isActive ? LR.Color.ink : LR.Color.inkSecondary)
                         .fixedSize(horizontal: false, vertical: true)
                     FlowRow(spacing: 6) {
-                        LibraryTierPill(entry: entry)
+                        if entry.target == .quest { LibraryTierPill(entry: entry) }
                         if entry.isMine { PillLabel(text: "Mine") }
                         if !isActive { PillLabel(text: "inactive") }
                     }
@@ -340,14 +523,14 @@ private struct LibraryDetailView: View {
             }
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(entry.text)
+        .accessibilityLabel(live.text)
         .accessibilityValue([entry.tierName, isActive ? nil : "inactive, not drawn any more"]
             .compactMap { $0 }.joined(separator: ", "))
     }
 
     // MARK: settings
 
-    /// On or off, and a routine's points. Both reach forward only: what is already on the page
+    /// On or off, and a routine's difficulty. Both reach forward only: what is already on the page
     /// keeps its own state and its own points (`LibraryEdit`).
     private var settingsSection: some View {
         section("Settings") {
@@ -358,20 +541,19 @@ private struct LibraryDetailView: View {
                     }
                     .tint(LR.Color.accent)
                     .frame(minHeight: 44)
-                    caption(isActive ? "Comes up as usual."
-                                     : "Off: not drawn, scheduled or offered any more. What is already on today's page stays.")
+                    if !isActive {
+                        caption("Off: not drawn, scheduled or offered any more. What is already on today's page stays.")
+                    }
                     if let routine {
                         Rectangle().fill(LR.Color.divider).frame(height: 1).padding(.vertical, 6)
-                        Stepper {
-                            Text("Pays \(routine.basePoints)").lr(.bodyStrong).foregroundStyle(LR.Color.ink)
-                                .monospacedDigit()
-                        } onIncrement: {
-                            setPoints(routine.basePoints + LibraryEdit.pointsStep)
-                        } onDecrement: {
-                            setPoints(max(routine.basePoints - LibraryEdit.pointsStep, LibraryEdit.minimumPoints))
-                        }
-                        .frame(minHeight: 44)
-                        caption("From the next time it comes due; one already on the page keeps what it was asked at.")
+                        Text("Difficulty").lr(.bodyStrong).foregroundStyle(LR.Color.ink)
+                        PillSegmentedControl(
+                            options: [("Easy", Difficulty.easy), ("Medium", .medium), ("Hard", .hard)],
+                            selection: Binding(get: { routine.difficulty }, set: setDifficulty),
+                            accessibilityLabel: "Difficulty")
+                        caption(RoutineSchedulePresentation.difficultyNote(
+                            basePoints: routine.basePoints, flexible: routine.flexibleWithinWeek,
+                            countsForClear: routine.countsForClear))
                     }
                     if let editError { Text(editError).lr(.caption).foregroundStyle(LR.Color.clay) }
                 }
@@ -388,9 +570,9 @@ private struct LibraryDetailView: View {
         }
     }
 
-    private func setPoints(_ points: Int) {
+    private func setDifficulty(_ difficulty: Difficulty) {
         do {
-            try LibraryEdit.setBasePoints(points, forRoutine: entry.id, in: context)
+            try LibraryEdit.setDifficulty(difficulty, forRoutine: entry.id, in: context)
             editError = nil
         } catch {
             editError = "\(error)"
@@ -404,22 +586,16 @@ private struct LibraryDetailView: View {
             card {
                 VStack(alignment: .leading, spacing: 12) {
                     PillLabel(text: s.summary)
-                    if s.strip != .none { WeekStrip(schedule: s, large: true, dimmed: !entry.isActive) }
+                    if s.strip != .none { WeekStrip(schedule: s, large: true, dimmed: !isActive) }
                     Text(s.sentence).lr(.bodyStrong).foregroundStyle(LR.Color.ink)
                         .fixedSize(horizontal: false, vertical: true)
-                    if let miss = s.missRule {
-                        Text(miss).lr(.caption).foregroundStyle(LR.Color.inkSecondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    if s.weeklyTarget != nil || s.usesAnchorWeek {
+                    if s.usesAnchorWeek {
                         divider
-                        if let target = s.weeklyTarget {
-                            fact("Weekly target", "\(target)")
-                            fact("Counts toward clearing the day", s.countsForClear ? "Yes" : "No")
-                        }
-                        if s.usesAnchorWeek {
-                            fact("Anchor week", s.anchorWeekKey ?? "Set by the first time you do it")
-                        }
+                        fact("Anchor week", s.anchorWeekKey ?? "Set by the first time you do it")
+                    }
+                    if let routine, LibraryEdit.scheduleDraft(of: routine, in: routines) != nil {
+                        Button("Change days") { editingSchedule = true }
+                            .buttonStyle(PillButtonStyle())
                     }
                 }
             }

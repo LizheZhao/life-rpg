@@ -7,29 +7,30 @@ public enum SeedImporter {
         public var routineTasks: Int
     }
 
-    /// Additive merge keyed on `text`: rows the DB doesn't have yet are inserted, rows it already
-    /// has are left untouched — edits and soft-deletes made in the app always win. Rows removed
-    /// from the CSV stay in the DB. Returns how many rows were inserted.
+    /// Starts an empty library from these rows, once. They come from the starter library
+    /// (`StarterLibrary`), which is an initial draft: the library in the store is the truth from
+    /// then on, edited, extended and pruned in the app, so a store that already has any row (either
+    /// table, archived ones included) is left exactly as it is. That is also why a row the user
+    /// renamed or deleted can no longer come back: nothing reads the starter file again to look for
+    /// it. Returns how many rows were inserted.
     ///
-    /// Consequence: editing a text in the CSV reads as a new row, so the old one lives on next to
-    /// it; and a hard-deleted quest comes back on the next launch (deactivate instead).
+    /// Duplicate texts are inserted once, and each `downgradeOf` is resolved to the ids of the rows
+    /// just inserted.
     @discardableResult
-    public static func mergeSeeds(_ context: ModelContext,
-                                  sideQuestsCSV: String,
-                                  routinesCSV: String) throws -> Result {
+    public static func seedIfEmpty(_ context: ModelContext,
+                                   quests: [SideQuestSeed],
+                                   routines routineSeeds: [RoutineSeed]) throws -> Result {
         var result = Result(questTemplates: 0, routineTasks: 0)
+        guard try context.fetchCount(FetchDescriptor<QuestTemplate>()) == 0,
+              try context.fetchCount(FetchDescriptor<RoutineTask>()) == 0 else { return result }
 
-        var knownQuests = Set(try context.fetch(FetchDescriptor<QuestTemplate>()).map(\.text))
-        for seed in try SeedParser.sideQuests(csv: sideQuestsCSV)
-        where knownQuests.insert(seed.text).inserted {          // also dedupes within the CSV
+        var knownQuests = Set<String>()
+        for seed in quests where knownQuests.insert(seed.text).inserted {
             context.insert(QuestTemplate(seed: seed))
             result.questTemplates += 1
         }
 
-        let routineSeeds = try SeedParser.routines(csv: routinesCSV)
-        var routinesByText = Dictionary(
-            try context.fetch(FetchDescriptor<RoutineTask>()).map { ($0.text, $0) },
-            uniquingKeysWith: { a, _ in a })
+        var routinesByText: [String: RoutineTask] = [:]
         for seed in routineSeeds where routinesByText[seed.text] == nil {
             let routine = RoutineTask(seed: seed)
             context.insert(routine)
@@ -37,10 +38,6 @@ public enum SeedImporter {
             result.routineTasks += 1
         }
 
-        // Linking a downgrade version onto its parent is the one thing that does reach a row the
-        // DB already has — and it only ever *adds* an id that isn't there yet. Without this, a
-        // store seeded before downgrade versions existed would keep parents that offer nothing,
-        // because their rows are never re-inserted.
         for seed in routineSeeds where !seed.downgradeOf.isEmpty {
             guard let version = routinesByText[seed.text] else { continue }
             for parentText in seed.downgradeOf {
@@ -70,6 +67,7 @@ extension QuestTemplate {
         launchURLString = seed.launchURLString
         autoVerifyRule = seed.autoVerifyRule
         isActive = seed.isActive
+        starterKey = seed.starterKey
     }
 }
 
@@ -87,5 +85,6 @@ extension RoutineTask {
         launchURLString = seed.launchURLString
         autoVerifyRule = seed.autoVerifyRule
         isActive = seed.isActive
+        starterKey = seed.starterKey
     }
 }

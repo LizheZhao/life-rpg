@@ -8,18 +8,19 @@ struct SeedImporterTests {
         try Fixtures.context()
     }
 
+    @discardableResult
     private func merge(_ ctx: ModelContext,
                        side: String? = nil,
                        routines: String? = nil) throws -> SeedImporter.Result {
-        try SeedImporter.mergeSeeds(ctx,
-                                    sideQuestsCSV: side ?? Fixtures.csv("side_quests.csv"),
-                                    routinesCSV: routines ?? Fixtures.csv("routine_quests.csv"))
+        try SeedImporter.seedIfEmpty(ctx,
+                                     sideQuestsCSV: side ?? Fixtures.csv("side_quests.csv"),
+                                     routinesCSV: routines ?? Fixtures.csv("routine_quests.csv"))
     }
 
-    /// Guards the schema declaration: a model missing from `SchemaV8.models` fails here.
+    /// Guards the schema declaration: a model missing from `SchemaV10.models` fails here.
     @Test func containerOpensWithVersionedSchema() throws {
         let ctx = try makeContext()
-        #expect(SchemaV8.versionIdentifier == Schema.Version(8, 0, 0))
+        #expect(SchemaV10.versionIdentifier == Schema.Version(10, 0, 0))
         #expect(LifeRPGMigrationPlan.schemas.count == 1)
         #expect(try ctx.fetchCount(FetchDescriptor<DailyQuest>()) == 0)
         #expect(try ctx.fetchCount(FetchDescriptor<LedgerEntry>()) == 0)
@@ -52,7 +53,11 @@ struct SeedImporterTests {
         #expect(try ctx.fetchCount(FetchDescriptor<QuestTemplate>()) == first.questTemplates)
     }
 
-    @Test func mergeInsertsOnlyNewRows() throws {
+    // MARK: the CSVs are an initial draft, read once
+
+    /// The library in the store is the truth. A CSV that gains a row later does not reach a store
+    /// that already has rows: the user adds to their own library from the Library page.
+    @Test func aCSVThatGrowsLaterDoesNotReachAStoreThatHasRows() throws {
         let ctx = try makeContext()
         try merge(ctx)
         let before = try ctx.fetchCount(FetchDescriptor<QuestTemplate>())
@@ -60,11 +65,33 @@ struct SeedImporterTests {
         let extended = try Fixtures.csv("side_quests.csv") + "Learn to juggle,M,FALSE,FALSE,14,,,,\n"
         let result = try merge(ctx, side: extended)
 
-        #expect(result == .init(questTemplates: 1, routineTasks: 0))
-        #expect(try ctx.fetchCount(FetchDescriptor<QuestTemplate>()) == before + 1)
+        #expect(result == .init(questTemplates: 0, routineTasks: 0))
+        #expect(try ctx.fetchCount(FetchDescriptor<QuestTemplate>()) == before)
     }
 
-    /// An edit made in the app must survive the next launch; the CSV never writes over a known text.
+    /// The reason the rule changed: a row the user renamed or deleted used to come back, because
+    /// the merge only knew a row by its words.
+    @Test func aRenamedOrDeletedSeedRowDoesNotComeBack() throws {
+        let ctx = try makeContext()
+        try merge(ctx)
+        let count = try ctx.fetchCount(FetchDescriptor<QuestTemplate>())
+        let routineCount = try ctx.fetchCount(FetchDescriptor<RoutineTask>())
+
+        let water = try #require(try ctx.fetch(FetchDescriptor<QuestTemplate>())
+            .first { $0.text == "Drink 2L of water" })
+        try LibraryEdit.rename("Drink two litres", .quest, id: water.id, in: ctx)
+        let office = try #require(try ctx.fetch(FetchDescriptor<RoutineTask>())
+            .first { $0.text == "Go to the office" })
+        try LibraryEdit.archive(.routine, id: office.id, in: ctx)
+
+        try merge(ctx)                                                       // the next launch
+        #expect(try ctx.fetchCount(FetchDescriptor<QuestTemplate>()) == count)
+        #expect(try ctx.fetchCount(FetchDescriptor<RoutineTask>()) == routineCount)
+        #expect(try ctx.fetch(FetchDescriptor<QuestTemplate>()).filter { $0.text == "Drink 2L of water" }.isEmpty)
+    }
+
+    /// An edit made in the app must survive the next launch, and so must a store the user has
+    /// turned inside out.
     @Test func existingRowsAreNotOverwritten() throws {
         let ctx = try makeContext()
         try merge(ctx)
@@ -86,6 +113,22 @@ struct SeedImporterTests {
         #expect(after.difficulty == .easy)
         #expect(!after.isActive)
         #expect(after.affinity == -2)
+    }
+
+    /// "Empty" means no row in either library, archived ones included: a user who archived every
+    /// row has not started over.
+    @Test func aStoreWithOnlyOneKindOfRowOrOnlyArchivedRowsIsNotEmpty() throws {
+        let onlyRoutine = try makeContext()
+        let r = RoutineTask(); r.text = "Mine"; r.spec = "MON"
+        onlyRoutine.insert(r)
+        try onlyRoutine.save()
+        #expect(try merge(onlyRoutine) == .init(questTemplates: 0, routineTasks: 0))
+
+        let archivedOnly = try makeContext()
+        let q = QuestTemplate(); q.text = "Mine"; q.isActive = false; q.isArchived = true
+        archivedOnly.insert(q)
+        try archivedOnly.save()
+        #expect(try merge(archivedOnly) == .init(questTemplates: 0, routineTasks: 0))
     }
 
     @Test func duplicateTextsInCSVAreInsertedOnce() throws {
@@ -117,8 +160,7 @@ struct SeedImporterTests {
     /// and the parents it names gain it in `downgradeIDs`.
     @Test func downgradeVersionsAreLinkedToTheirParents() throws {
         let ctx = try Fixtures.context()
-        try SeedImporter.mergeSeeds(ctx, sideQuestsCSV: Fixtures.csv("side_quests.csv"),
-                                    routinesCSV: Fixtures.csv("routine_quests.csv"))
+        try merge(ctx)
         let routines = try ctx.fetch(FetchDescriptor<RoutineTask>())
         let walk = try #require(routines.first { $0.text == "Walk, 30 minutes" })
         for parent in ["Workout: dumbbell training", "Workout: weight training"] {
@@ -131,9 +173,9 @@ struct SeedImporterTests {
         #expect(walk.autoVerify == .calendarWorkout(minutes: 30))
     }
 
-    /// The link is the one thing the merge writes onto a row that already exists: a store seeded
-    /// before downgrade versions existed would otherwise keep parents that offer nothing.
-    @Test func linkingReachesRowsTheDBAlreadyHas() throws {
+    /// The old repair (linking versions onto rows an older store already had) is gone with the
+    /// merge: a store that has rows is not read from the CSV at all. Whatever links it has stay.
+    @Test func aStoreThatHasRowsIsNotRelinked() throws {
         let ctx = try Fixtures.context()
         let existing = RoutineTask()
         existing.text = "Workout: weight training"
@@ -141,17 +183,8 @@ struct SeedImporterTests {
         ctx.insert(existing)
         try ctx.save()
 
-        let result = try SeedImporter.mergeSeeds(ctx, sideQuestsCSV: Fixtures.csv("side_quests.csv"),
-                                                 routinesCSV: Fixtures.csv("routine_quests.csv"))
-        let routines = try ctx.fetch(FetchDescriptor<RoutineTask>())
-        let walk = try #require(routines.first { $0.text == "Walk, 30 minutes" })
-        #expect(existing.downgradeIDs == [walk.id])
-        #expect(routines.filter { $0.text == "Workout: weight training" }.count == 1)
-        #expect(result.routineTasks > 0)
-
-        // Running it again adds nothing — not a second row, not a second id.
-        try SeedImporter.mergeSeeds(ctx, sideQuestsCSV: Fixtures.csv("side_quests.csv"),
-                                    routinesCSV: Fixtures.csv("routine_quests.csv"))
-        #expect(existing.downgradeIDs == [walk.id])
+        let result = try merge(ctx)
+        #expect(result.routineTasks == 0 && existing.downgradeIDs.isEmpty)
+        #expect(try ctx.fetchCount(FetchDescriptor<RoutineTask>()) == 1)
     }
 }

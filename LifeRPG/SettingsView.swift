@@ -23,6 +23,8 @@ struct SettingsView: View {
     @Environment(\.modelContext) private var context
     @State private var transfer = DataTransfer()
     @State private var path: [Page] = []
+    @AppStorage(ProfileKeys.name) private var userName = ""
+    @State private var editingName = false
     /// The sent log, watched so the status line changes when the Shortcut hands a day over.
     @AppStorage(JournalSentLog.key) private var sentLog = Data()
     @AppStorage(JournalAskSettings.sendWritingKey) private var sendWriting = JournalAskSettings.sendWritingDefault
@@ -30,6 +32,26 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack(path: $path) {
             List {
+                Section {
+                    Button { editingName = true } label: {
+                        HStack {
+                            Text("Your name").lr(.bodyStrong).foregroundStyle(LR.Color.ink)
+                            Spacer()
+                            Text(userName.isEmpty ? "Not set" : userName)
+                                .lr(.caption).foregroundStyle(LR.Color.inkSecondary)
+                                .lineLimit(1)
+                            Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold))
+                                .foregroundStyle(LR.Color.iconNeutral).accessibilityHidden(true)
+                        }
+                        .frame(minHeight: 44)
+                        .contentShape(Rectangle())
+                    }
+                    .accessibilityHint("Changes the name the greeting uses")
+                } header: {
+                    header("You")
+                }
+                .listRowBackground(LR.Color.surface)
+
                 Section {
                     Button { path.append(.library) } label: {
                         row("Library", systemImage: "books.vertical", tint: .trivial, pushes: true)
@@ -50,6 +72,8 @@ struct SettingsView: View {
                 }
                 .listRowBackground(LR.Color.surface)
 
+                RemindersSection()
+
                 Section {
                     Button { transfer.prepareJSONExport(context) } label: {
                         row("Output records to JSON", systemImage: "clock.arrow.circlepath", tint: .hidden)
@@ -63,6 +87,10 @@ struct SettingsView: View {
                         row("Restore from JSON…", systemImage: "square.and.arrow.down", tint: .hidden)
                     }
                     .accessibilityHint("Picks a backup file. You confirm before anything is replaced")
+                    Button { transfer.prepareErase(context) } label: {
+                        row("Erase all records…", systemImage: "trash", tint: .hard)
+                    }
+                    .accessibilityHint("Deletes your history, ratings, rewards and journal after you confirm. Your library stays")
                     if let error = transfer.error {
                         BannerView(message: error)
                             .listRowInsets(EdgeInsets(top: 6, leading: 0, bottom: 6, trailing: 0))
@@ -151,6 +179,7 @@ struct SettingsView: View {
             }
         }
         .dataTransfer(transfer, hidesTabBar: hidesTabBar, onImported: onImported)
+        .sheet(isPresented: $editingName) { NamePromptSheet(title: "Your name", caption: "Used for the greeting on Today. It stays on this phone and isn't in a backup.") }
         .reservingTabBarSpace()
     }
 

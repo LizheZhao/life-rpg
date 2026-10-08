@@ -27,9 +27,15 @@ import SwiftData
 /// where a turn without it decodes as 0. V8 added `JournalEntry`, one document per day, as a new
 /// model that lightweight migration infers; no existing row is touched and `JournalTurn` stays. The
 /// export goes to 8 with a `journalEntries` array, and import still reads v3 to v7, where entries
-/// are built from the turns (`JournalMigration`).
-public enum SchemaV8: VersionedSchema {
-    public static var versionIdentifier = Schema.Version(8, 0, 0)
+/// are built from the turns (`JournalMigration`). V9 added `isArchived` to both libraries,
+/// defaulted to false, so every existing row stays listed; the export goes to 9 with the whole
+/// library in a `fullLibrary` block (ids, edits, archived rows), and import still reads v3 to v8,
+/// whose libraries it re-points by text as before. V10 added the optional `starterKey` to both
+/// libraries (nil on every existing row, so nothing changes until `StarterUpdate.claim` stamps the
+/// rows that match the starter library); the export goes to 10 with the key on each `fullLibrary`
+/// row, and import still reads v3 to v9, whose rows simply have none.
+public enum SchemaV10: VersionedSchema {
+    public static var versionIdentifier = Schema.Version(10, 0, 0)
 
     public static var models: [any PersistentModel.Type] = [
         QuestTemplate.self,
@@ -47,13 +53,13 @@ public enum SchemaV8: VersionedSchema {
 }
 
 public enum LifeRPGMigrationPlan: SchemaMigrationPlan {
-    public static var schemas: [any VersionedSchema.Type] = [SchemaV8.self]
+    public static var schemas: [any VersionedSchema.Type] = [SchemaV10.self]
     public static var stages: [MigrationStage] = []
 }
 
 public enum LifeRPGSchema {
-    public static let current = Schema(versionedSchema: SchemaV8.self)
+    public static let current = Schema(versionedSchema: SchemaV10.self)
 
     /// For `#Preview` and tests that just need the model list.
-    public static let models = SchemaV8.models
+    public static let models = SchemaV10.models
 }

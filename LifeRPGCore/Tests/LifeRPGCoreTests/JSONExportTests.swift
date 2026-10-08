@@ -16,7 +16,7 @@ struct JSONExportTests {
         }
 
         let snapshot = try JSONExport.snapshot(ctx)
-        #expect(snapshot.schemaVersion == 8)
+        #expect(snapshot.schemaVersion == 10)
         #expect(snapshot.dailyContexts.count == 1)
         #expect(snapshot.dailyQuests.count == 3)
         #expect(snapshot.ledger.count == 3)
@@ -49,50 +49,6 @@ struct JSONExportTests {
         let decoded = try JSONExport.decode(try JSONExport.data(ctx))
         #expect(decoded.routineOccurrences.first { $0.text == "Fix the bike" }?.iconKey == "dumbbell")
         #expect(decoded.routineOccurrences.first { $0.text == "Walk" }?.iconKey == nil)
-    }
-
-    /// One backup a day means the library list is copied into every file, so it carries only what a
-    /// reseed cannot give back: the rows history points at, and the rows with a cooldown stamp.
-    /// A row nothing refers to and nothing stamped comes back from the seed CSVs on its own.
-    @Test func libraryCarriesOnlyWhatHistoryNeeds() throws {
-        let ctx = try Fixtures.context()
-        let day = "2026-09-18"
-        let drawn = Fixtures.quest(ctx, "Drawn today")
-        let inGroup = Fixtures.quest(ctx, "In a micro group")
-        let rated = Fixtures.quest(ctx, "Only rated")
-        Fixtures.quest(ctx, "Only stamped", served: "2026-09-10")
-        Fixtures.quest(ctx, "Never touched")
-
-        let q = DailyQuest()
-        q.dayKey = day; q.templateID = drawn.id; q.textSnapshot = "Drawn today"
-        let group = DailyQuest()
-        group.dayKey = day; group.trivialGroup = ["In a micro group"]; group.trivialTemplateIDs = [inGroup.id]
-        ctx.insert(q); ctx.insert(group)
-        Feedback.rate(ctx, target: .quest, id: rated.id, text: "Only rated", rating: 1, dayKey: day)
-
-        func routine(_ text: String, completed: String? = nil) -> RoutineTask {
-            let r = RoutineTask()
-            r.text = text; r.lastCompletedDayKey = completed
-            ctx.insert(r)
-            return r
-        }
-        let scheduled = routine("Scheduled"), pickedFromTheLibrary = routine("Picked through +")
-        let light = routine("A light version"), commented = routine("Only commented")
-        routine("Only stamped", completed: "2026-09-12")
-        routine("Never touched")
-        let o = RoutineOccurrence()
-        o.dueDayKey = day; o.routineID = scheduled.id; o.degradedRoutineID = light.id
-        let extra = RoutineOccurrence()
-        extra.dueDayKey = day; extra.adHocSourceRoutineID = pickedFromTheLibrary.id
-        ctx.insert(o); ctx.insert(extra)
-        Feedback.comment(ctx, target: .routine, id: commented.id, text: "Only commented", comment: "ok", dayKey: day)
-        try ctx.save()
-
-        let library = try #require(try JSONExport.snapshot(ctx).library)
-        #expect(library.quests.map(\.text).sorted()
-                == ["Drawn today", "In a micro group", "Only rated", "Only stamped"])
-        #expect(library.routines.map(\.text).sorted()
-                == ["A light version", "Only commented", "Only stamped", "Picked through +", "Scheduled"])
     }
 
     /// The same file, without the indentation: a third of what a pretty-printed one weighs.

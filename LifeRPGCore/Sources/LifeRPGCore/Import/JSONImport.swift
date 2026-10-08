@@ -10,20 +10,24 @@ import SwiftData
 /// into what is there — and runs `StoreAudit` before saving, rolling everything back if the file
 /// carried anything the app can't read.
 ///
-/// **Ids.** A reinstall reseeds the library from the CSVs with new UUIDs, so every reference the
-/// history holds into it (`templateID`, `routineID`, a rating's `targetID`, …) would point at
-/// nothing. The export's `library` carries each old id with its text, and text is already the
-/// seed's identity (`SeedImporter.mergeSeeds`), so old ids are re-pointed at the row with the same
-/// text. An id whose text the library no longer has is left as it was, dangling — never cleared,
-/// because a nil `routineID` would turn a scheduled occurrence into an ad-hoc one — and listed in
-/// the summary. The history rows' own ids are kept, since the ledger and the ratings refer to them.
+/// **The library.** From schema 9 the file carries the whole library (`fullLibrary`), and a restore
+/// replaces the store's library with it, every row under the id it had, so the history's references
+/// (`templateID`, `routineID`, a rating's `targetID`, …) resolve with nothing to re-point.
+///
+/// **Older files** (schema 3 to 8) only carry the ids and texts the history points at (`library`),
+/// the user's own rows (`userLibrary`) and what was changed on the seed rows (`libraryChanges`). A
+/// reinstall seeded the library with new UUIDs, so the old ids are re-pointed at the row with the
+/// same text. An id whose text the library no longer has is left as it was, dangling — never
+/// cleared, because a nil `routineID` would turn a scheduled occurrence into an ad-hoc one — and
+/// listed in the summary. The history rows' own ids are kept, since the ledger and the ratings
+/// refer to them.
 public enum JSONImport {
     public enum Failure: Error, Equatable, CustomStringConvertible {
         /// Not JSON, or not an export's shape.
         case unreadable
         /// Written by a newer build than this one.
         case newerExport(Int)
-        /// Written before import existed: no `library`, so history can't be re-pointed.
+        /// Written before import existed: no library of any kind, so history can't be re-pointed.
         case exportTooOld
         /// The file decoded, but carries values nothing can read back. Nothing was written.
         case audit([StoreAudit.Issue])
@@ -57,14 +61,19 @@ public enum JSONImport {
         public var rewards: Int
         /// What the balance will be once the backup is in.
         public var balance: Int
-        /// Library texts in the backup that this store doesn't have; their history stays but
-        /// points at nothing.
+        /// Schema 9 and later: the library rows the backup carries, and how many of them are deleted
+        /// (archived). The store's own library is replaced by these.
+        public var libraryQuests: Int
+        public var libraryRoutines: Int
+        public var libraryArchived: Int
+        /// Older files only: library texts in the backup that this store doesn't have; their history
+        /// stays but points at nothing.
         public var unmatchedLibrary: [String]
-        /// How many quests and routines of the user's own the backup carries; any this store lacks
-        /// are put back (never removed from it).
+        /// Older files only: how many quests and routines of the user's own the backup carries; any
+        /// this store lacks are put back (never removed from it).
         public var userQuests: Int
         public var userRoutines: Int
-        /// Seed rows the backup says the user turned off / on or re-priced.
+        /// Older files only: seed rows the backup says the user turned off / on or re-priced.
         public var libraryChanges: Int
     }
 
@@ -83,26 +92,27 @@ public enum JSONImport {
         if probe.schemaVersion > JSONExport.schemaVersion { throw Failure.newerExport(probe.schemaVersion) }
         if probe.schemaVersion < JSONExport.oldestReadableVersion { throw Failure.exportTooOld }
         guard let snapshot = try? JSONExport.decode(data) else { throw Failure.unreadable }
-        guard let library = snapshot.library else { throw Failure.exportTooOld }
-
-        let quests = Dictionary(try context.fetch(FetchDescriptor<QuestTemplate>()).map { ($0.text, $0.id) },
-                                uniquingKeysWith: { a, _ in a })
-        let routines = Dictionary(try context.fetch(FetchDescriptor<RoutineTask>()).map { ($0.text, $0.id) },
-                                  uniquingKeysWith: { a, _ in a })
-        // The user's own rows are put back under the id they had, so history needs no re-pointing
-        // for them; one this store already has (same text) is the row its id is re-pointed at.
-        let mine = snapshot.userLibrary ?? JSONExport.UserLibrary(quests: [], routines: [])
-        let myQuests = Set(mine.quests.map(\.text)), myRoutines = Set(mine.routines.map(\.text))
         var questIDs: [UUID: UUID] = [:], routineIDs: [UUID: UUID] = [:], unmatched: [String] = []
-        for q in library.quests {
-            if let id = quests[q.text] { questIDs[q.id] = id }
-            else if myQuests.contains(q.text) { questIDs[q.id] = q.id }
-            else { unmatched.append(q.text) }
-        }
-        for r in library.routines {
-            if let id = routines[r.text] { routineIDs[r.id] = id }
-            else if myRoutines.contains(r.text) { routineIDs[r.id] = r.id }
-            else { unmatched.append(r.text) }
+        let mine = snapshot.userLibrary ?? JSONExport.UserLibrary(quests: [], routines: [])
+        if snapshot.fullLibrary == nil {
+            guard let library = snapshot.library else { throw Failure.exportTooOld }
+            let quests = Dictionary(try context.fetch(FetchDescriptor<QuestTemplate>()).map { ($0.text, $0.id) },
+                                    uniquingKeysWith: { a, _ in a })
+            let routines = Dictionary(try context.fetch(FetchDescriptor<RoutineTask>()).map { ($0.text, $0.id) },
+                                      uniquingKeysWith: { a, _ in a })
+            // The user's own rows are put back under the id they had, so history needs no re-pointing
+            // for them; one this store already has (same text) is the row its id is re-pointed at.
+            let myQuests = Set(mine.quests.map(\.text)), myRoutines = Set(mine.routines.map(\.text))
+            for q in library.quests {
+                if let id = quests[q.text] { questIDs[q.id] = id }
+                else if myQuests.contains(q.text) { questIDs[q.id] = q.id }
+                else { unmatched.append(q.text) }
+            }
+            for r in library.routines {
+                if let id = routines[r.text] { routineIDs[r.id] = id }
+                else if myRoutines.contains(r.text) { routineIDs[r.id] = r.id }
+                else { unmatched.append(r.text) }
+            }
         }
 
         let days = snapshot.dailyContexts.map(\.dayKey)
@@ -118,6 +128,10 @@ public enum JSONImport {
             journalEntries: snapshot.journalEntries?.count ?? 0,
             rewards: snapshot.rewards?.count ?? 0,
             balance: Economy.balance(snapshot.ledger),
+            libraryQuests: snapshot.fullLibrary?.quests.count ?? 0,
+            libraryRoutines: snapshot.fullLibrary?.routines.count ?? 0,
+            libraryArchived: (snapshot.fullLibrary?.quests.filter(\.isArchived).count ?? 0)
+                + (snapshot.fullLibrary?.routines.filter(\.isArchived).count ?? 0),
             unmatchedLibrary: unmatched.sorted(),
             userQuests: mine.quests.count, userRoutines: mine.routines.count,
             libraryChanges: (snapshot.libraryChanges?.quests.count ?? 0) + (snapshot.libraryChanges?.routines.count ?? 0))
@@ -153,8 +167,12 @@ public enum JSONImport {
         if plan.snapshot.journalEntries != nil { try deleteAll(JournalEntry.self, in: context) }
 
         let s = plan.snapshot
-        try restoreUserLibrary(s.userLibrary, in: context)
-        try applyLibraryChanges(s.libraryChanges, in: context)
+        if let full = s.fullLibrary {
+            try restoreFullLibrary(full, in: context)
+        } else {
+            try restoreUserLibrary(s.userLibrary, in: context)
+            try applyLibraryChanges(s.libraryChanges, in: context)
+        }
         let quest = { (id: UUID) in plan.questIDs[id] ?? id }
         let routine = { (id: UUID) in plan.routineIDs[id] ?? id }
         let target = { (kind: String, id: UUID) in
@@ -246,19 +264,21 @@ public enum JSONImport {
             context.insert(row)
         }
 
-        // The stamps come from the backup too. A row the backup doesn't know was never served or
-        // done in the history now on the store, so whatever it says belongs to history just deleted.
-        let library = s.library ?? JSONExport.Library(quests: [], routines: [])
-        let questStamps = Dictionary(library.quests.compactMap { q in plan.questIDs[q.id].map { ($0, q) } },
-                                     uniquingKeysWith: { a, _ in a })
-        for t in try context.fetch(FetchDescriptor<QuestTemplate>()) {
-            t.lastServedDayKey = questStamps[t.id]?.lastServedDayKey
-            t.lastCompletedDayKey = questStamps[t.id]?.lastCompletedDayKey
-        }
-        let routineStamps = Dictionary(library.routines.compactMap { r in plan.routineIDs[r.id].map { ($0, r) } },
-                                       uniquingKeysWith: { a, _ in a })
-        for r in try context.fetch(FetchDescriptor<RoutineTask>()) {
-            r.lastCompletedDayKey = routineStamps[r.id]?.lastCompletedDayKey
+        // An older file's stamps come from the backup too. A row the backup doesn't know was never
+        // served or done in the history now on the store, so whatever it says belongs to history just
+        // deleted. (A schema 9 file restored the rows with their stamps.)
+        if s.fullLibrary == nil, let library = s.library {
+            let questStamps = Dictionary(library.quests.compactMap { q in plan.questIDs[q.id].map { ($0, q) } },
+                                         uniquingKeysWith: { a, _ in a })
+            for t in try context.fetch(FetchDescriptor<QuestTemplate>()) {
+                t.lastServedDayKey = questStamps[t.id]?.lastServedDayKey
+                t.lastCompletedDayKey = questStamps[t.id]?.lastCompletedDayKey
+            }
+            let routineStamps = Dictionary(library.routines.compactMap { r in plan.routineIDs[r.id].map { ($0, r) } },
+                                           uniquingKeysWith: { a, _ in a })
+            for r in try context.fetch(FetchDescriptor<RoutineTask>()) {
+                r.lastCompletedDayKey = routineStamps[r.id]?.lastCompletedDayKey
+            }
         }
 
         try Affinity.sync(context)
@@ -305,6 +325,36 @@ public enum JSONImport {
         for c in changes.routines {
             routines[c.text]?.isActive = c.isActive
             routines[c.text]?.basePoints = c.basePoints
+        }
+    }
+
+    /// Replaces the library with the backup's rows, each under its own id. `StoreAudit` then reads
+    /// the raw values, so a damaged file is refused rather than kept.
+    private static func restoreFullLibrary(_ full: JSONExport.FullLibrary, in context: ModelContext) throws {
+        try deleteAll(QuestTemplate.self, in: context)
+        try deleteAll(RoutineTask.self, in: context)
+        for q in full.quests {
+            let row = QuestTemplate()
+            row.id = q.id; row.text = q.text; row.difficultyRaw = q.difficulty
+            row.hiddenEligible = q.hiddenEligible; row.weekendOnly = q.weekendOnly
+            row.cooldownDaysOverride = q.cooldownDaysOverride; row.variants = q.variants
+            row.launchURLString = q.launchURL; row.autoVerifyRule = q.autoVerifyRule; row.affinity = q.affinity
+            row.lastServedDayKey = q.lastServedDayKey; row.lastCompletedDayKey = q.lastCompletedDayKey
+            row.isActive = q.isActive && !q.isArchived; row.isArchived = q.isArchived; row.originRaw = q.origin
+            row.starterKey = q.starterKey
+            context.insert(row)
+        }
+        for r in full.routines {
+            let row = RoutineTask()
+            row.id = r.id; row.text = r.text; row.difficultyRaw = r.difficulty; row.basePoints = r.basePoints
+            row.kindRaw = r.kind; row.spec = r.spec; row.anchorWeekKey = r.anchorWeekKey
+            row.weeklyTarget = r.weeklyTarget; row.flexibleWithinWeek = r.flexibleWithinWeek
+            row.countsForClear = r.countsForClear; row.downgradeIDs = r.downgradeIDs
+            row.launchURLString = r.launchURL; row.autoVerifyRule = r.autoVerifyRule
+            row.lastCompletedDayKey = r.lastCompletedDayKey
+            row.isActive = r.isActive && !r.isArchived; row.isArchived = r.isArchived; row.originRaw = r.origin
+            row.starterKey = r.starterKey
+            context.insert(row)
         }
     }
 

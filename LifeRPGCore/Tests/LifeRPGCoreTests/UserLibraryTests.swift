@@ -3,8 +3,10 @@ import SwiftData
 import Testing
 @testable import LifeRPGCore
 
-/// The library has two layers: the seed CSVs' rows, which a reinstall brings back on its own, and
-/// the rows the user saved, which exist nowhere else. The second layer travels in the backup.
+/// What a backup before schema 9 did for the library: the seed CSVs' rows came back on their own
+/// after a reinstall, and the rows the user saved (`userLibrary`) travelled in the file. Production
+/// no longer writes that (see `LibraryBackupTests`), but the files are still on the phone, so
+/// import reads them; these tests make such files with `LegacyBackup`.
 struct UserLibraryTests {
     private let tz = Fixtures.tokyo
     private let day = "2026-09-19", week = "2026-W38"
@@ -32,39 +34,6 @@ struct UserLibraryTests {
         #expect(RoutineTask().origin == .seed)
     }
 
-    // MARK: export
-
-    @Test func onlyTheUsersOwnRowsAreExportedInFull() throws {
-        let ctx = try Fixtures.context()
-        Fixtures.quest(ctx, "From the CSV")
-        let q = mineQuest(ctx)
-        let r = mineRoutine(ctx)
-        let seedRoutine = RoutineTask()
-        seedRoutine.text = "Also from the CSV"
-        ctx.insert(seedRoutine)
-        try ctx.save()
-
-        let mine = try #require(try JSONExport.snapshot(ctx).userLibrary)
-        #expect(mine.quests.map(\.text) == ["Call grandma"])
-        let quest = try #require(mine.quests.first)
-        #expect(quest.id == q.id && quest.difficulty == "hard" && quest.hiddenEligible && quest.weekendOnly)
-        #expect(quest.cooldownDaysOverride == 5 && quest.variants == ["a", "b"] && quest.isActive)
-        #expect(quest.launchURL == "https://example.com")
-
-        #expect(mine.routines.map(\.text) == ["Piano practice"])
-        let routine = try #require(mine.routines.first)
-        #expect(routine.id == r.id && routine.difficulty == "medium" && routine.basePoints == 21)
-        #expect(routine.kind == "weekly" && routine.spec == "MON,THU" && routine.weeklyTarget == 2)
-        #expect(routine.flexibleWithinWeek && routine.countsForClear)
-    }
-
-    @Test func aBackupWithNothingOfTheUsersCarriesNoSuchBlock() throws {
-        let ctx = try Fixtures.context()
-        Fixtures.quest(ctx, "From the CSV")
-        try ctx.save()
-        #expect(try JSONExport.snapshot(ctx).userLibrary == nil)
-    }
-
     // MARK: import
 
     /// A source store with the user's quest and routine, each used by history and rated, and a
@@ -87,7 +56,7 @@ struct UserLibraryTests {
         let target = try Fixtures.context()
         Fixtures.quest(target, "From the CSV")
         try target.save()
-        let plan = try JSONImport.plan(try JSONExport.data(source), against: target)
+        let plan = try JSONImport.plan(try LegacyBackup.data(source), against: target)
         try JSONImport.apply(plan, to: target)
         return (source, target, plan)
     }
@@ -134,7 +103,7 @@ struct UserLibraryTests {
         let existing = mineQuest(target)
         try target.save()
         #expect(existing.id != q.id)
-        let plan = try JSONImport.plan(try JSONExport.data(source), against: target)
+        let plan = try JSONImport.plan(try LegacyBackup.data(source), against: target)
         try JSONImport.apply(plan, to: target)
 
         #expect(try target.fetch(FetchDescriptor<QuestTemplate>()).filter { $0.text == "Call grandma" }.count == 1)
@@ -145,7 +114,7 @@ struct UserLibraryTests {
         let source = try Fixtures.context()
         Fixtures.quest(source, "From the CSV")
         try source.save()
-        var snapshot = try JSONExport.snapshot(source)
+        var snapshot = try JSONExport.decode(try LegacyBackup.data(source))
         snapshot.userLibrary = nil
         let target = try Fixtures.context()
         let plan = try JSONImport.plan(try JSONExport.encode(snapshot), against: target)

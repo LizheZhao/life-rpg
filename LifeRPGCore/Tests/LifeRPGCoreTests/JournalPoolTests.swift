@@ -40,7 +40,7 @@ struct JournalPoolTests {
 
     /// The draft is what the user edits; the code table has to be the same words.
     @Test func theTableMatchesTheDraftRowForRow() throws {
-        let doc = try Fixtures.csv("JOURNAL_PROMPTS.md")
+        let doc = try Fixtures.doc("JOURNAL_PROMPTS.md")
         var rows: [(id: String, en: String, zh: String)] = []
         for line in doc.split(separator: "\n") where line.hasPrefix("| ") {
             let cells = line.split(separator: "|", omittingEmptySubsequences: false)

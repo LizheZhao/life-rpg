@@ -51,15 +51,15 @@ struct DayServiceTests {
     private func seedRoutines(_ ctx: ModelContext) throws {
         // Header only on the side: the stock library supplies the quests.
         let sideHeader = try Fixtures.csv("side_quests.csv").split(whereSeparator: \.isNewline)[0] + "\n"
-        try SeedImporter.mergeSeeds(ctx, sideQuestsCSV: String(sideHeader),
+        try SeedImporter.seedIfEmpty(ctx, sideQuestsCSV: String(sideHeader),
                                     routinesCSV: Fixtures.csv("routine_quests.csv"))
     }
 
     /// `PLAN.md` §3: "Saturday with 5 gets only 1". The load is counted from the seed, not passed in.
     @Test func saturdayRoutinesShrinkTheSlotsToOne() throws {
         let ctx = try Fixtures.context()
+        try seedRoutines(ctx)                    // the seed only starts an empty library
         Fixtures.stockLibrary(ctx)
-        try seedRoutines(ctx)
         var rng = SeededRNG(seed: 4)
         let day = try DayService.ensureToday(ctx, now: Fixtures.date(saturday), in: tz, rng: &rng)
         #expect(day.routineLoad == 5)
@@ -70,8 +70,8 @@ struct DayServiceTests {
 
     @Test func fridayWithOneRoutineKeepsThreeSlots() throws {
         let ctx = try Fixtures.context()
+        try seedRoutines(ctx)                    // the seed only starts an empty library
         Fixtures.stockLibrary(ctx)
-        try seedRoutines(ctx)
         var rng = SeededRNG(seed: 4)
         let day = try DayService.ensureToday(ctx, now: Fixtures.date(friday), in: tz, rng: &rng)
         #expect(day.routineLoad == 1)
@@ -110,8 +110,8 @@ struct DayServiceTests {
     /// size Saturday's random draw.
     @Test func overdueRoutinesDontCountTowardLoad() throws {
         let ctx = try Fixtures.context()
+        try seedRoutines(ctx)                    // the seed only starts an empty library
         Fixtures.stockLibrary(ctx)
-        try seedRoutines(ctx)
         var rng = SeededRNG(seed: 1)
         try DayService.ensureToday(ctx, now: Fixtures.date(friday), in: tz, rng: &rng)
         let day = try DayService.ensureToday(ctx, now: Fixtures.date(saturday), in: tz, rng: &rng)

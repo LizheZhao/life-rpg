@@ -10,6 +10,8 @@ struct RootView: View {
     @Environment(\.modelContext) private var context
     @Environment(\.scenePhase) private var scenePhase
     @State private var tab = RootTab.today
+    @AppStorage(ProfileKeys.asked) private var askedName = false
+    @State private var askingName = false
     /// Set by Today, Rewards and Settings while their card is up, so the bar fades out under the dim.
     @State private var tabBarHidden = false
     @State private var today = Date().dayKey
@@ -50,15 +52,22 @@ struct RootView: View {
             SettingsView(seedStatus: seedStatus, today: today, sensorReport: sensorReport,
                          check: workoutCheck,
                          refresh: { await refresh(waitIfBusy: true) },
-                         onImported: { Task { await refresh() } },
+                         onImported: { Task { await refresh(); await NotificationService.reschedule(in: context) } },
                          hidesTabBar: $tabBarHidden)
                 .toolbar(.hidden, for: .tabBar)
                 .tag(RootTab.settings)
         }
         .overlay(alignment: .bottom) { FloatingTabBar(selection: $tab, hidden: tabBarHidden) }
-        .task { await refresh() }
+        .task {
+            await refresh()
+            await NotificationService.reschedule(in: context)
+            if !askedName { askingName = true }
+        }
+        .sheet(isPresented: $askingName) { NamePromptSheet() }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { Task { await refresh() } }
+            // Leaving is when "I wrote today" has to take effect; coming back picks up a new day.
+            if phase == .active || phase == .background { Task { await NotificationService.reschedule(in: context) } }
         }
         .onChange(of: dayOffset) { Task { await refresh() } }
         .alert("Today's body data changed", isPresented: Binding(

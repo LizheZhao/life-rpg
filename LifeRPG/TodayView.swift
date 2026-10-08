@@ -31,6 +31,7 @@ struct TodayView: View {
 
     /// What the one card is showing, or nil when it is down. Everything that needs an answer or an
     /// announcement goes through here, so two cards can never stack.
+    @AppStorage(ProfileKeys.name) private var userName = ""
     @State private var overlay: Overlay?
     /// Local on purpose: collapsed on every launch, however it was left.
     @State private var completedExpanded = false
@@ -303,7 +304,8 @@ struct TodayView: View {
     private var journalNow: Date { JournalClock.now(clock, timing: debugJournalTiming) }
 
     private var greeting: TodayGreeting {
-        TodayGreeting(dayKey: today, hour: LifeCalendar.gregorian().component(.hour, from: Date()), streak: streak)
+        TodayGreeting(dayKey: today, hour: LifeCalendar.gregorian().component(.hour, from: Date()), streak: streak,
+                      name: userName)
     }
 
     /// The page itself; the modifiers stay on `body`.
