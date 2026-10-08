@@ -15,10 +15,12 @@ struct NotificationPlanTests {
         return cal.date(from: DateComponents(year: parts[0], month: parts[1], day: parts[2], hour: hour, minute: minute))!
     }
 
-    private func plan(now: Date, journal: Bool = true, morning: Bool = true, morningHour: Int = 8,
+    private func plan(now: Date, journal: Bool = true, morning: Bool = true, morningMinute: Int = 8 * 60,
+                      eveningMinute: Int = 20 * 60,
                       written: Bool = false, counts: [String: Int] = [:], days: Int = 14) -> [PlannedNotification] {
         NotificationPlan.plan(now: now, timeZone: tz,
-                              settings: .init(journal: journal, morning: morning, morningHour: morningHour),
+                              settings: .init(journal: journal, morning: morning,
+                                              morningMinute: morningMinute, eveningMinute: eveningMinute),
                               todayWritten: written, routineCounts: counts, days: days)
     }
 
@@ -38,12 +40,25 @@ struct NotificationPlanTests {
         #expect(plan(now: at(wednesday, hour: 21), days: 2).map(\.id) == ["morning-2026-10-08", "journal-2026-10-08"])
     }
 
-    @Test func theFireTimesAreTheConfiguredHours() {
-        let items = plan(now: at(wednesday, hour: 6), morningHour: 7, days: 1)
-        let cal = LifeCalendar.gregorian(tz)
-        let hours = Dictionary(uniqueKeysWithValues: items.map { ($0.kind, cal.component(.hour, from: $0.fireDate)) })
-        #expect(hours[.morning] == 7)
-        #expect(hours[.journal] == JournalEntryToday.cardStartHour)
+    @Test func theFireTimesAreTheConfiguredTimes() {
+        let items = plan(now: at(wednesday, hour: 6), morningMinute: 7 * 60 + 30, eveningMinute: 21 * 60 + 45, days: 1)
+        let fires = Dictionary(uniqueKeysWithValues: items.map { ($0.kind, $0.fireDate) })
+        #expect(fires[.morning] == at(wednesday, hour: 7, minute: 30))
+        #expect(fires[.journal] == at(wednesday, hour: 21, minute: 45))
+    }
+
+    @Test func theDefaultsAreEightAndTwenty() {
+        let settings = NotificationPlan.Settings()
+        #expect(settings.morningMinute == 480)
+        #expect(settings.eveningMinute == 1200)
+    }
+
+    /// Morning from 05:00 to 11:59, evening from 12:00 to 23:59; anything outside is held to the edge.
+    @Test func timesOutsideTheirRangeAreHeldToTheEdge() {
+        #expect(NotificationPlan.Settings(morningMinute: 60).morningMinute == 300)
+        #expect(NotificationPlan.Settings(morningMinute: 13 * 60).morningMinute == 719)
+        #expect(NotificationPlan.Settings(eveningMinute: 9 * 60).eveningMinute == 720)
+        #expect(NotificationPlan.Settings(eveningMinute: 25 * 60).eveningMinute == 1439)
     }
 
     @Test func eachKindCanBeTurnedOff() {

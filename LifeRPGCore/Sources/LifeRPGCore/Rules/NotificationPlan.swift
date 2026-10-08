@@ -23,11 +23,29 @@ public enum NotificationPlan {
     public struct Settings: Equatable, Sendable {
         public var journal: Bool
         public var morning: Bool
-        public var morningHour: Int
+        /// Minutes after midnight, held to `morningRange`.
+        public var morningMinute: Int
+        /// Minutes after midnight, held to `eveningRange`.
+        public var eveningMinute: Int
 
-        public init(journal: Bool = false, morning: Bool = false, morningHour: Int = 8) {
-            self.journal = journal; self.morning = morning; self.morningHour = min(max(morningHour, 5), 11)
+        public init(journal: Bool = false, morning: Bool = false,
+                    morningMinute: Int = defaultMorningMinute, eveningMinute: Int = defaultEveningMinute) {
+            self.journal = journal; self.morning = morning
+            self.morningMinute = NotificationPlan.clamp(morningMinute, to: NotificationPlan.morningRange)
+            self.eveningMinute = NotificationPlan.clamp(eveningMinute, to: NotificationPlan.eveningRange)
         }
+    }
+
+    /// The morning note goes after the app day has started (05:00) and before noon.
+    public static let morningRange = (LifeCalendar.dayStartHour * 60)...(12 * 60 - 1)
+    /// The evening nudge stays on the same calendar date as the day it is about, so from noon to
+    /// 23:59: a time after midnight would fall on the next date while the app day is still the old one.
+    public static let eveningRange = (12 * 60)...(24 * 60 - 1)
+    public static let defaultMorningMinute = 8 * 60
+    public static let defaultEveningMinute = JournalEntryToday.cardStartHour * 60
+
+    static func clamp(_ minute: Int, to range: ClosedRange<Int>) -> Int {
+        min(max(minute, range.lowerBound), range.upperBound)
     }
 
     /// How many days ahead are queued. Two a day stay far under the 64 pending iOS keeps.
@@ -46,14 +64,14 @@ public enum NotificationPlan {
         for offset in 0..<max(days, 0) {
             guard let date = DayKey.adding(offset, to: firstDate, in: timeZone) else { continue }
 
-            if settings.morning, let fire = fireDate(date, hour: settings.morningHour, cal: cal, timeZone: timeZone), fire > now {
+            if settings.morning, let fire = fireDate(date, minute: settings.morningMinute, cal: cal, timeZone: timeZone), fire > now {
                 items.append(PlannedNotification(kind: .morning, id: "morning-\(date)", fireDate: fire,
                                                  title: "Today", body: morningBody(routines: routineCounts[date] ?? 0)))
             }
 
             let written = todayWritten && date == appDay
             if settings.journal, !written,
-               let fire = fireDate(date, hour: JournalEntryToday.cardStartHour, cal: cal, timeZone: timeZone), fire > now {
+               let fire = fireDate(date, minute: settings.eveningMinute, cal: cal, timeZone: timeZone), fire > now {
                 items.append(PlannedNotification(kind: .journal, id: "journal-\(date)", fireDate: fire,
                                                  title: "Write about today",
                                                  body: "A few lines is enough. Pull in a question if you want one."))
@@ -72,9 +90,9 @@ public enum NotificationPlan {
         }
     }
 
-    private static func fireDate(_ dayKey: String, hour: Int, cal: Calendar, timeZone: TimeZone) -> Date? {
+    private static func fireDate(_ dayKey: String, minute: Int, cal: Calendar, timeZone: TimeZone) -> Date? {
         guard let midnight = DayKey.date(dayKey, in: timeZone) else { return nil }
-        return cal.date(bySettingHour: hour, minute: 0, second: 0, of: midnight)
+        return cal.date(bySettingHour: minute / 60, minute: minute % 60, second: 0, of: midnight)
     }
 
     /// How many routines come due on each of `days` days from `start`: what the morning message says.

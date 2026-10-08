@@ -12,12 +12,27 @@ import UserNotifications
 enum NotificationService {
     static let journalKey = "notify.journal"
     static let morningKey = "notify.morning"
-    static let morningHourKey = "notify.morningHour"
+    static let morningMinuteKey = "notify.morningMinute"
+    static let eveningMinuteKey = "notify.eveningMinute"
+    /// Before the times took minutes the morning was stored as a whole hour; it is still read, so a
+    /// time set back then carries over until the user picks a new one.
+    private static let legacyMorningHourKey = "notify.morningHour"
 
     static var settings: NotificationPlan.Settings {
         let d = UserDefaults.standard
         return .init(journal: d.bool(forKey: journalKey), morning: d.bool(forKey: morningKey),
-                     morningHour: d.object(forKey: morningHourKey) as? Int ?? 8)
+                     morningMinute: morningMinute, eveningMinute: eveningMinute)
+    }
+
+    static var morningMinute: Int {
+        let d = UserDefaults.standard
+        if let minute = d.object(forKey: morningMinuteKey) as? Int { return minute }
+        if let hour = d.object(forKey: legacyMorningHourKey) as? Int { return hour * 60 }
+        return NotificationPlan.defaultMorningMinute
+    }
+
+    static var eveningMinute: Int {
+        UserDefaults.standard.object(forKey: eveningMinuteKey) as? Int ?? NotificationPlan.defaultEveningMinute
     }
 
     static func authorization() async -> UNAuthorizationStatus {
