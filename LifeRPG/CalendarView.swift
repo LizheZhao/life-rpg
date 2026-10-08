@@ -2,11 +2,11 @@ import LifeRPGCore
 import SwiftData
 import SwiftUI
 
-/// The month page (`PLAN.md` §9). Under each day number: up to three dots coloured by the tier of
-/// a random quest done (easiest first, `DayMarks.randomTiers`), a pencil when the day has journal
-/// writing (darker for a longer entry, `DayMarks.journalLevel`), a tick when every routine was done
-/// on the day, and a violet star for the hidden quest. A week whose epic was completed sits on a
-/// soft band in the epic's tint. Tap a day for its detail.
+/// The month page (`PLAN.md` §9). Each day number sits in a ring that fills with the share of the
+/// day's quests and routines done (`CalendarMarks.progress`) and turns violet once the hidden quest
+/// is done too. Each epic is a highlighter stroke behind the dates from the day it was drawn to the
+/// day it was finished (`CalendarMarks.epicSpans`): grey while unfinished, and a colour different
+/// from the epic before once it is done. Everything else is in the day sheet. Tap a day for it.
 struct CalendarView: View {
     let today: String
 
@@ -29,12 +29,20 @@ struct CalendarView: View {
     private var currentMonth: MonthKey { MonthKey(dayKey: today) ?? MonthKey(year: 2026, month: 1)! }
     private var shownMonth: MonthKey { month ?? currentMonth }
 
-    /// The epic week's band: the epic's own tint at low opacity.
-    private static let epicTint = QuestTint(.epic)
-    private static let epicBandOpacity = 0.14
+    /// Finished epics take these in turn, so two epics in a row never share a colour.
+    private static let highlighters: [Color] = [LR.Color.tintMedium, LR.Color.tintTrivial,
+                                                LR.Color.avatarPink, LR.Color.tintEasy]
+    private static let highlighterOpacity = 0.45
+    /// An unfinished epic: running or run out.
+    private static let unfinishedHighlighter = LR.Color.ink.opacity(0.09)
 
-    /// The pencil's ink at levels 1, 2 and 3: one step lighter than the next, the darkest at full ink.
-    private static let pencilOpacity: [Double] = [0.32, 0.62, 1]
+    private static let ringSize: CGFloat = 36
+    private static let ringWidth: CGFloat = 3.5
+
+    private static func highlighter(_ span: EpicSpan) -> Color {
+        guard let index = span.doneIndex else { return unfinishedHighlighter }
+        return highlighters[index % highlighters.count].opacity(highlighterOpacity)
+    }
 
     private let weekdays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 
@@ -43,13 +51,14 @@ struct CalendarView: View {
         let journalDays = JournalEntryHistory.days(from: journalEntries)
         let journalLevels = JournalMarks.levels(entryDays: journalDays)
         let marks = CalendarMarks.marks(quests: quests, occurrences: occurrences, journalLevels: journalLevels)
-        let epicWeeks = CalendarMarks.epicWeeks(quests)
+        let progress = CalendarMarks.progress(quests: quests, occurrences: occurrences)
+        let epics = CalendarMarks.epicSpans(quests)
         NavigationStack {
             ScrollView {
                 VStack(spacing: LR.Spacing.sectionGap) {
                     titleRow
                     header
-                    gridCard(marks: marks, epicWeeks: epicWeeks, journalDays: journalDays)
+                    gridCard(marks: marks, progress: progress, epics: epics, journalDays: journalDays)
                     legend
                     entriesLink(count: journalDays.count)
                 }
@@ -136,7 +145,7 @@ struct CalendarView: View {
 
     // MARK: grid
 
-    private func gridCard(marks: [String: DayMarks], epicWeeks: Set<String>,
+    private func gridCard(marks: [String: DayMarks], progress: [String: DayProgress], epics: [EpicSpan],
                           journalDays: [JournalEntryDay]) -> some View {
         let grid = MonthGrid(shownMonth)
         return VStack(spacing: 4) {
@@ -150,18 +159,12 @@ struct CalendarView: View {
             .accessibilityHidden(true)
             VStack(spacing: 2) {
                 ForEach(grid.weeks, id: \.weekKey) { week in
-                    // Judged by the row's own weekKey, so a week spanning two months is
-                    // highlighted in both.
-                    let epic = epicWeeks.contains(week.weekKey)
+                    // Cells touch, so a stroke reads as one line across the row and breaks at the
+                    // row's end like a highlighted sentence that wraps.
                     HStack(spacing: 0) {
                         ForEach(week.days, id: \.dayKey) { day in
-                            cell(day, marks[day.dayKey] ?? DayMarks(), epic: epic, journalDays: journalDays)
-                        }
-                    }
-                    .background {
-                        if epic {
-                            RoundedRectangle(cornerRadius: LR.Radius.pill + 6, style: .continuous)
-                                .fill(Self.epicTint.color.opacity(Self.epicBandOpacity))
+                            cell(day, marks[day.dayKey] ?? DayMarks(), progress: progress[day.dayKey],
+                                 epic: epics.first { $0.covers(day.dayKey) }, journalDays: journalDays)
                         }
                     }
                 }
@@ -189,47 +192,31 @@ struct CalendarView: View {
         selected = SelectedDay(id: dayKey)
     }
 
-    private func cell(_ day: MonthGrid.Day, _ marks: DayMarks, epic: Bool,
+    private func cell(_ day: MonthGrid.Day, _ marks: DayMarks, progress: DayProgress?, epic: EpicSpan?,
                       journalDays: [JournalEntryDay]) -> some View {
         let future = day.dayKey > today
         let isToday = day.dayKey == today
         return Button {
             openSheet(for: day.dayKey, journalDays: journalDays)
         } label: {
-            VStack(spacing: 3) {
+            ZStack {
+                if !future, let progress {
+                    ring(progress.fraction, cleared: marks.hiddenDone)
+                }
+                if isToday {
+                    Circle().fill(LR.Color.tabPill).frame(width: Self.ringSize - 12, height: Self.ringSize - 12)
+                }
                 Text("\(day.dayOfMonth)")
                     .lr(.bodyStrong)
                     .monospacedDigit()
                     .lineLimit(1)
                     .minimumScaleFactor(0.6)
-                    .foregroundStyle(LR.Color.ink)
-                    .frame(minWidth: 32, minHeight: 32)
-                    .background {
-                        if isToday { Capsule().strokeBorder(LR.Color.accent, lineWidth: 2) }
-                    }
-                HStack(spacing: 3) {
-                    ForEach(Array(marks.randomTiers.enumerated()), id: \.offset) { _, tier in
-                        Circle().fill(QuestTint(tier).color).frame(width: 6, height: 6)
-                    }
-                }
-                .frame(height: 6)
-                HStack(spacing: 3) {
-                    if marks.journalLevel > 0 { pencil(level: marks.journalLevel) }
-                    if marks.routinesCleared {
-                        Image(systemName: "checkmark")
-                            .font(.system(size: 8, weight: .heavy))
-                            .foregroundStyle(LR.Color.ink)
-                    }
-                    if marks.hiddenDone {
-                        Image(systemName: "star.fill")
-                            .font(.system(size: 9))
-                            .foregroundStyle(LR.Color.tintHidden)
-                    }
-                }
-                .frame(height: 10)
+                    .foregroundStyle(isToday ? LR.Color.accent : LR.Color.ink)
             }
-            .padding(.vertical, 4)
+            .frame(width: Self.ringSize, height: Self.ringSize)
+            .padding(.vertical, 6)
             .frame(maxWidth: .infinity)
+            .background { if let epic { stroke(epic, on: day.dayKey) } }
             .contentShape(Rectangle())
             .opacity(future ? 0.35 : day.inMonth ? 1 : 0.4)
         }
@@ -237,20 +224,45 @@ struct CalendarView: View {
         .disabled(future)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(PresentationText.shortDate(day.dayKey) + (isToday ? ", today" : ""))
-        .accessibilityValue(spokenMarks(marks, epic: epic, future: future))
+        .accessibilityValue(spokenMarks(marks, progress: progress, epic: epic, future: future))
     }
 
-    private func spokenMarks(_ marks: DayMarks, epic: Bool, future: Bool) -> String {
+    /// Open toward the top, filling clockwise; violet once the hidden quest is done as well.
+    private func ring(_ fraction: Double, cleared: Bool) -> some View {
+        ZStack {
+            Circle().stroke(LR.Color.divider, lineWidth: Self.ringWidth)
+            Circle()
+                .trim(from: 0, to: fraction)
+                .stroke(cleared ? LR.Color.tintHidden : LR.Color.trendDeep,
+                        style: StrokeStyle(lineWidth: Self.ringWidth, lineCap: .round))
+                .rotationEffect(.degrees(-90))
+        }
+        .padding(Self.ringWidth / 2)
+    }
+
+    /// The day's piece of an epic's stroke: rounded only where the epic starts and ends.
+    private func stroke(_ epic: EpicSpan, on dayKey: String) -> some View {
+        let r: CGFloat = 9
+        return UnevenRoundedRectangle(topLeadingRadius: epic.start == dayKey ? r : 0,
+                                      bottomLeadingRadius: epic.start == dayKey ? r : 0,
+                                      bottomTrailingRadius: epic.end == dayKey ? r : 0,
+                                      topTrailingRadius: epic.end == dayKey ? r : 0,
+                                      style: .continuous)
+            .fill(Self.highlighter(epic))
+            .frame(height: Self.ringSize - 4)
+            .padding(.leading, epic.start == dayKey ? 2 : 0)
+            .padding(.trailing, epic.end == dayKey ? 2 : 0)
+    }
+
+    private func spokenMarks(_ marks: DayMarks, progress: DayProgress?, epic: EpicSpan?, future: Bool) -> String {
         if future { return "" }
         var parts: [String] = []
-        if !marks.randomTiers.isEmpty {
-            parts.append("\(marks.randomsDone) quest\(marks.randomsDone == 1 ? "" : "s") done: "
-                + marks.randomTiers.map(\.rawValue).joined(separator: ", "))
-        }
-        if marks.journalLevel > 0 { parts.append("journal entry") }
-        if marks.routinesCleared { parts.append("routines cleared") }
+        if let progress { parts.append("\(progress.done) of \(progress.asked) done") }
         if marks.hiddenDone { parts.append("hidden quest done") }
-        if epic { parts.append("epic week") }
+        if marks.journalLevel > 0 { parts.append("journal entry") }
+        if let epic {
+            parts.append(epic.doneIndex == nil ? "epic running or not finished" : "epic finished by \(PresentationText.shortDate(epic.end))")
+        }
         return parts.isEmpty ? "nothing recorded" : parts.joined(separator: ", ")
     }
 
@@ -258,51 +270,25 @@ struct CalendarView: View {
 
     private var legend: some View {
         FlowRow(spacing: 6) {
-            ForEach([QuestTint.trivial, .easy, .medium, .hard], id: \.self) { tint in
-                LegendChip(text: tierName(tint)) {
-                    Circle().fill(tint.color).frame(width: 7, height: 7)
-                }
+            LegendChip(text: "Quests and routines done") {
+                Circle().trim(from: 0, to: 0.7)
+                    .stroke(LR.Color.trendDeep, style: StrokeStyle(lineWidth: 2, lineCap: .round))
+                    .rotationEffect(.degrees(-90)).frame(width: 10, height: 10)
             }
-            LegendChip(text: "Journal, darker is longer") {
-                pencil(level: 3)
+            LegendChip(text: "Hidden too") {
+                Circle().stroke(LR.Color.tintHidden, lineWidth: 2).frame(width: 10, height: 10)
             }
-            LegendChip(text: "Routines") {
-                Image(systemName: "checkmark").font(.system(size: 8, weight: .heavy))
-                    .foregroundStyle(LR.Color.ink)
-            }
-            LegendChip(text: "Hidden") {
-                Image(systemName: "star.fill").font(.system(size: 9)).foregroundStyle(LR.Color.tintHidden)
-            }
-            LegendChip(text: "Epic week") {
+            LegendChip(text: "Epic, grey until done") {
                 RoundedRectangle(cornerRadius: 3, style: .continuous)
-                    .fill(Self.epicTint.color.opacity(Self.epicBandOpacity * 2))
-                    .frame(width: 12, height: 9)
+                    .fill(Self.highlighters[0].opacity(Self.highlighterOpacity))
+                    .frame(width: 16, height: 9)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Legend: dots are quests done, coloured trivial, easy, medium or hard. "
-            + "A pencil is a journal entry, darker for a longer one. "
-            + "A tick is routines cleared, a star the hidden quest, a tinted row an epic week.")
-    }
-
-    /// `level` is 1 to 3 (`JournalMarks.levels`).
-    private func pencil(level: Int) -> some View {
-        Image(systemName: "pencil")
-            .font(.system(size: 10, weight: .heavy))
-            .foregroundStyle(LR.Color.ink.opacity(Self.pencilOpacity[level - 1]))
-    }
-
-    private func tierName(_ tint: QuestTint) -> String {
-        switch tint {
-        case .trivial: "Trivial"
-        case .easy: "Easy"
-        case .medium: "Medium"
-        case .hard: "Hard"
-        case .hidden: "Hidden"
-        case .routine: "Routines"
-        case .epic: "Epic week"
-        }
+        .accessibilityLabel("Legend: the ring around a day fills with the quests and routines done, "
+            + "and turns violet when the hidden quest is done too. "
+            + "A highlighter stroke runs from an epic's first day to the day it was finished, grey until it is.")
     }
 
     private func entriesLink(count: Int) -> some View {

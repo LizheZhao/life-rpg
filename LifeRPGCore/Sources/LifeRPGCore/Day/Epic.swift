@@ -11,8 +11,8 @@ import SwiftData
 /// week further, and the week it spills into gets no epic of its own. An epic that runs out
 /// unfinished simply stays in history with `completedAt == nil`.
 ///
-/// The row keeps the `dayKey` / `weekKey` of the day it was drawn. Which week it *counts for* on
-/// the calendar is the week it was completed in (`CalendarMarks.epicWeeks`), not its `weekKey`.
+/// The row keeps the `dayKey` / `weekKey` of the day it was drawn. The calendar draws it from that
+/// day to the day it was completed, or to its last day while unfinished (`CalendarMarks.epicSpans`).
 public enum Epic {
     /// Twice, three times from Lv 5 — `Perks.epicMaxExtensions`.
     public static func maxExtensions(level: Int) -> Int { Perks.epicMaxExtensions(level: level) }

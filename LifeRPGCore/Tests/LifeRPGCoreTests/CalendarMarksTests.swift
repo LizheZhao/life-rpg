@@ -3,7 +3,7 @@ import SwiftData
 import Testing
 @testable import LifeRPGCore
 
-/// The month page's dots, star and epic-week highlight (PLAN §9).
+/// The month page's marks, day rings and epic strokes (PLAN §9).
 struct CalendarMarksTests {
     private let day = "2026-09-17"
 
@@ -123,22 +123,52 @@ struct CalendarMarksTests {
         #expect(CalendarMarks.marks(quests: [quest(day, done: false)], occurrences: []).isEmpty)
     }
 
-    @Test func epicWeeksAreJudgedByWeekKey() {
-        let weeks = CalendarMarks.epicWeeks([
-            quest("2026-09-28", .epic, week: "2026-W40"),                 // Monday of W40, done
-            quest("2026-09-21", .epic, done: false, week: "2026-W39"),    // open: not highlighted
-            quest("2026-09-17", .hard, week: "2026-W38"),                 // not an epic
-        ], in: Fixtures.tokyo)
-        #expect(weeks == ["2026-W40"])
+    // MARK: the ring
+
+    @Test func theRingCountsRandomQuestsAndGatingRoutinesOfTheDay() {
+        let progress = CalendarMarks.progress(quests: [
+            quest(day, .easy), quest(day, .hard, done: false),
+            quest(day, hidden: true), quest(day, .epic), quest(day, replaced: true),
+        ], occurrences: [
+            occurrence(due: day, completed: day),
+            occurrence(due: day, completed: "2026-09-18"),           // late: does not close the ring
+            occurrence(due: day, countsForClear: false),
+        ])
+        #expect(progress[day] == DayProgress(asked: 4, done: 2))
+        #expect(progress[day]?.fraction == 0.5)
     }
 
-    /// Decided with the user: an extended epic lights up the week it was **completed** in.
-    /// Drawn Monday of W38, extended, finished Wednesday of W39 → W39, and W38 stays plain.
-    @Test func extendedEpicHighlightsTheWeekItWasCompleted() {
+    @Test func aDayWithNothingAskedHasNoRing() {
+        #expect(CalendarMarks.progress(quests: [quest(day, .epic)], occurrences: []).isEmpty)
+        #expect(DayProgress().fraction == 0)
+    }
+
+    // MARK: epic strokes
+
+    /// Finished: from the day it was drawn to the day it was done, numbered among the finished
+    /// ones so the page can alternate colours. Unfinished: to its last day, uncoloured.
+    @Test func epicSpansRunFromTheDrawToTheFinishOrTheLastDay() {
+        let first = quest("2026-09-14", .epic, done: false, week: "2026-W38")
+        first.completedAt = Fixtures.date("2026-09-17")
+        let open = quest("2026-09-21", .epic, done: false, week: "2026-W39")
+        let third = quest("2026-09-28", .epic, done: false, week: "2026-W40")
+        third.completedAt = Fixtures.date("2026-09-30")
+        let swapped = quest("2026-09-28", .epic, replaced: true, week: "2026-W40")
+        let spans = CalendarMarks.epicSpans([third, open, quest(day, .hard), swapped, first], in: Fixtures.tokyo)
+        #expect(spans == [
+            EpicSpan(start: "2026-09-14", end: "2026-09-17", doneIndex: 0),
+            EpicSpan(start: "2026-09-21", end: "2026-09-27", doneIndex: nil),
+            EpicSpan(start: "2026-09-28", end: "2026-09-30", doneIndex: 1),
+        ])
+    }
+
+    /// An extension pushes the unfinished stroke a week further, across the row break.
+    @Test func anExtendedEpicRunsIntoTheNextWeek() {
         let epic = quest("2026-09-14", .epic, done: false, week: "2026-W38")
         epic.extensionCount = 1
+        #expect(CalendarMarks.epicSpans([epic], in: Fixtures.tokyo) == [EpicSpan(start: "2026-09-14", end: "2026-09-27", doneIndex: nil)])
         epic.completedAt = Fixtures.date("2026-09-23")
-        #expect(CalendarMarks.epicWeeks([epic], in: Fixtures.tokyo) == ["2026-W39"])
+        #expect(CalendarMarks.epicSpans([epic], in: Fixtures.tokyo) == [EpicSpan(start: "2026-09-14", end: "2026-09-23", doneIndex: 0)])
     }
 
     /// The page passes its `@Query` arrays; the store gives the same answer from the same rows.

@@ -74,15 +74,69 @@ public enum CalendarMarks {
         return done <= o.dueDayKey
     }
 
-    /// Weeks in which an epic was completed, as `weekKey`s — a week can span two months, so the
-    /// page highlights a row by the week it belongs to, never by its position in the grid.
-    ///
-    /// **The week it was completed in, not the row's `weekKey`** (decided with the user). An
-    /// extended epic drawn in W38 and finished in W39 lights up W39, and W38 stays plain.
-    public static func epicWeeks(_ quests: [DailyQuest], in timeZone: TimeZone = .current) -> Set<String> {
-        Set(quests.compactMap { q in
-            guard q.slot == .epic, !q.replaced, let done = q.completedAt else { return nil }
-            return done.weekKey(in: timeZone)
-        })
+    /// How much of each day's asked work was done: the ring around the day number. Counted are the
+    /// day's random quests (the T group as one; hidden, epic and anything swapped or cancelled
+    /// away left out) and its clear-gating routines (`doneOnTime`, so a late make-up does not close
+    /// the ring). Days with nothing asked are left out.
+    public static func progress(quests: [DailyQuest], occurrences: [RoutineOccurrence]) -> [String: DayProgress] {
+        var out: [String: DayProgress] = [:]
+        for q in quests where !q.replaced && q.slot != .epic && !q.isHiddenSlot {
+            out[q.dayKey, default: DayProgress()].asked += 1
+            if q.completedAt != nil { out[q.dayKey, default: DayProgress()].done += 1 }
+        }
+        for o in occurrences where o.countsForClear && !o.isReplaced {
+            out[o.dueDayKey, default: DayProgress()].asked += 1
+            if doneOnTime(o) { out[o.dueDayKey, default: DayProgress()].done += 1 }
+        }
+        return out
     }
+
+    /// Every epic as a highlighter stroke under the dates, oldest first: from the day it was drawn
+    /// to the day it was finished, or, unfinished, to its last day (`Epic.lastDayKey`, extensions
+    /// included). Swapped-away rows are left out. Finished strokes carry their place among the
+    /// finished ones (`doneIndex`), so the page can give each one a different colour from the one
+    /// before; an unfinished stroke has none and is grey.
+    public static func epicSpans(_ quests: [DailyQuest], in timeZone: TimeZone = .current) -> [EpicSpan] {
+        var spans: [EpicSpan] = []
+        var doneCount = 0
+        for q in quests.filter({ $0.slot == .epic && !$0.replaced }).sorted(by: { $0.dayKey < $1.dayKey }) {
+            if let done = q.completedAt {
+                spans.append(EpicSpan(start: q.dayKey, end: max(q.dayKey, done.dayKey(in: timeZone)), doneIndex: doneCount))
+                doneCount += 1
+            } else if let last = Epic.lastDayKey(of: q, in: timeZone) {
+                spans.append(EpicSpan(start: q.dayKey, end: last, doneIndex: nil))
+            }
+        }
+        return spans
+    }
+}
+
+/// The ring around a day number: `done` of `asked`.
+public struct DayProgress: Equatable, Sendable {
+    public var asked: Int = 0
+    public var done: Int = 0
+
+    public init(asked: Int = 0, done: Int = 0) {
+        self.asked = asked
+        self.done = done
+    }
+
+    /// 0…1; 0 when nothing was asked.
+    public var fraction: Double { asked == 0 ? 0 : min(Double(done) / Double(asked), 1) }
+}
+
+/// One epic on the month page, from `start` to `end` inclusive.
+public struct EpicSpan: Equatable, Sendable {
+    public let start: String
+    public let end: String
+    /// Nil while unfinished; otherwise 0 for the first epic ever finished, 1 for the next, and so on.
+    public let doneIndex: Int?
+
+    public init(start: String, end: String, doneIndex: Int?) {
+        self.start = start
+        self.end = end
+        self.doneIndex = doneIndex
+    }
+
+    public func covers(_ dayKey: String) -> Bool { start <= dayKey && dayKey <= end }
 }
