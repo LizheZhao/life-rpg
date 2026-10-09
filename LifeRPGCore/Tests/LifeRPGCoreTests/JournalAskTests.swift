@@ -189,7 +189,7 @@ struct JournalAskTests {
     @Test func aSkippedRoutineGetsTheSkipRowsWithItsNameFilledIn() {
         let skipped = F.occurrence("Round two", due: "2026-09-17")
         #expect(anchors(F.signals(occurrences: [skipped])) == [
-            "Round two didn't happen. What got in the way?",
+            "“Round two” didn't happen. What got in the way?",
             "Was there a recent time this went more easily? What was different then?",
             "What would make it 10% easier tomorrow?",
         ])
@@ -201,8 +201,8 @@ struct JournalAskTests {
         let walk = F.quest("Morning run")
         let signals = F.signals(quests: [walk], ratings: [F.rating(of: walk.id, 2)])
         #expect(anchors(signals) == [
-            "You rated Morning run high. Which moment was the best part?",
-            "If you did Morning run again, what would you keep exactly the same?",
+            "You rated “Morning run” high. Which moment was the best part?",
+            "If you did “Morning run” again, what would you keep exactly the same?",
             "Who or what made it better?",
         ])
     }
@@ -589,7 +589,7 @@ struct JournalAskTests {
 
     @Test func aFirstAnswerRejectedForAnyOtherReasonIsNotAskedAgain() async {
         let cases: [(String, JournalAskRejection)] = [
-            ("", .empty), (String(repeating: "word ", count: 20) + "?", .tooLong),
+            ("", .empty),
             ("What happened? How did it feel?", .noQuestionMark), ("What about {quest}?", .placeholder),
             ("Why did the walk feel slow?", .voice),
         ]
@@ -879,8 +879,8 @@ struct JournalAskTests {
         #expect(result == .question(walkQuestion))
         #expect(wording.callCount == 2)
         let first = request(document: JournalDocument())
-        #expect(wording.prompts[1] == first.prompt + "\n\nThe question you just wrote, \"Did you enjoy cleaning the kitchen?\", "
-                + "can be answered yes or no. Ask an open question instead.")
+        #expect(wording.prompts[1] == first.prompt + "\n\nYour last question could be answered yes or no. "
+                + "Ask an open question that starts with What or How.")
         #expect(wording.instructions == [first.instructions, first.instructions])
     }
 
@@ -909,7 +909,9 @@ struct JournalAskTests {
         let closed = "Did you enjoy cleaning the kitchen?"
         let early = "What was it like to finish the run early?"
         let cases: [[String?]] = [[closed, closed], [closed, early], [early, closed], [early, early],
-                                  [album, closed], [closed, album], [closed, nil], [early, nil]]
+                                  [album, closed], [closed, album], [closed, nil], [early, nil],
+                                  [tooLong, tooLong], [tooLong, closed], [closed, tooLong], [album, tooLong],
+                                  [tooLong, album], [tooLong, nil]]
         for script in cases {
             let wording = FakeWording(script: script + [walkQuestion])
             let result = await resolve(wording, document: JournalDocument(), previous: [album])
@@ -918,10 +920,60 @@ struct JournalAskTests {
         }
     }
 
-    @Test func aRetryNamesTheQuestionAsItWouldHaveBeenShown() async {
+    @Test func aClosedRetryDoesNotShowTheModelTheQuestionItJustWrote() async {
         let wording = FakeWording(script: ["\"Did you enjoy it?\"\nand a second line", walkQuestion])
         _ = await resolve(wording, document: JournalDocument())
-        #expect(wording.prompts[1].hasSuffix("The question you just wrote, \"Did you enjoy it?\", can be answered yes or no. Ask an open question instead."))
+        #expect(wording.prompts[1].hasSuffix("Your last question could be answered yes or no. Ask an open question that starts with What or How."))
+        #expect(!wording.prompts[1].contains("enjoy it"))
+        #expect(!wording.prompts[1].contains("second line"))
+    }
+
+    // MARK: the retry on a long answer
+
+    private var tooLong: String { String(repeating: "word ", count: 20) + "?" }
+
+    @Test func aTooLongFirstAnswerIsAskedAgainWithItsOwnSentence() async {
+        let wording = FakeWording(script: [tooLong, walkQuestion])
+        let result = await resolve(wording, document: JournalDocument())
+        #expect(result == .question(walkQuestion))
+        #expect(wording.callCount == 2)
+        let first = request(document: JournalDocument())
+        #expect(wording.prompts[0] == first.prompt)
+        #expect(wording.prompts[1] == first.prompt + "\n\nYour last question was too long. Ask one short question, under 15 words.")
+        #expect(!wording.prompts[1].contains("word word"))
+        #expect(wording.instructions == [first.instructions, first.instructions])
+    }
+
+    @Test func aChineseTooLongRetryNamesTheCharacterLimit() {
+        #expect(JournalPromptBuilder.retryPrompt("", rejected: "x", reason: .tooLong, language: .zhHans)
+                .hasSuffix("你上一个问题太长了。请只问一个短问题，少于 25 个字。"))
+    }
+
+    @Test func aTooLongAnswerRejectedTwiceGivesTheDayQuestionAfterTwoCalls() async {
+        let hard = F.quest("Run 5 km")
+        hard.slot = .hard
+        let wording = FakeWording(script: [tooLong, tooLong, walkQuestion])
+        let result = await resolve(wording, document: JournalDocument(), signals: F.signals(quests: [hard]))
+        #expect(result == .fromDay("\u{201C}Run 5 km\u{201D} was a hard one. What was the toughest moment?",
+                                   toast: JournalAsk.dayFallbackToast(language: .en)))
+        #expect(wording.callCount == 2)
+    }
+
+    @Test(.timeLimit(.minutes(1)))
+    func aRetryAfterATooLongAnswerIsCutOffByTheRetryTimeout() async {
+        let wording = FakeWording(.script([.reply(tooLong), .hang]))
+        let result = await resolve(wording, document: JournalDocument(),
+                                   timeout: .seconds(60), retryTimeout: .milliseconds(50))
+        #expect(result == .fallback(.favoriteMoment, toast: toast))
+        #expect(wording.callCount == 2)
+        wording.release()
+    }
+
+    @Test func theRejectionsThatAreAskedAgainAreExactlyTheseFour() {
+        let reasons = Dictionary(uniqueKeysWithValues: JournalAskRejection.allCases.map { ($0, $0.retryReason) })
+        #expect(reasons == [.empty: nil, .tooLong: .tooLong, .noQuestionMark: nil, .placeholder: nil, .voice: nil,
+                            .closedQuestion: .closedQuestion, .unsupportedEarly: .unsupportedEarly,
+                            .notFresh: .notFresh])
     }
 
     @Test(.timeLimit(.minutes(1)))
@@ -942,6 +994,10 @@ struct JournalAskTests {
         #expect(await diagnosis(FakeWording(script: [early, early]))
                 == [JournalAskDiagnosis(.rejected(text: early, reason: .unsupportedEarly, nearest: nil), retried: true)])
         #expect(await diagnosis(FakeWording(script: [closed, walkQuestion]))
+                == [JournalAskDiagnosis(.answered, retried: true)])
+        #expect(await diagnosis(FakeWording(script: [tooLong, tooLong]))
+                == [JournalAskDiagnosis(.rejected(text: tooLong, reason: .tooLong, nearest: nil), retried: true)])
+        #expect(await diagnosis(FakeWording(script: [tooLong, walkQuestion]))
                 == [JournalAskDiagnosis(.answered, retried: true)])
         #expect(JournalAskDiagnosis(.rejected(text: closed, reason: .closedQuestion, nearest: nil), retried: true).summary
                 == "rejected (closedQuestion): Did you enjoy cleaning the kitchen?, on the second ask")

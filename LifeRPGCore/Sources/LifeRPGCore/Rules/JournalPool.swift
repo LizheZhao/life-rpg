@@ -53,10 +53,10 @@ public enum JournalPool {
               zh: "今天身体能给的比平时少。它想要什么？"),
 
         .init(id: "good.moment", kind: .good,
-              en: "You rated {quest} high. Which moment was the best part?",
+              en: "You rated “{quest}” high. Which moment was the best part?",
               zh: "你给「{quest}」打了高分。哪一刻最好？"),
         .init(id: "good.repeat", kind: .good,
-              en: "If you did {quest} again, what would you keep exactly the same?",
+              en: "If you did “{quest}” again, what would you keep exactly the same?",
               zh: "如果再做一次「{quest}」，你想原样保留什么？"),
         .init(id: "good.who", kind: .good,
               en: "Who or what made it better?",
@@ -64,7 +64,7 @@ public enum JournalPool {
 
 
         .init(id: "skip.block", kind: .skip,
-              en: "{quest} didn't happen. What got in the way?",
+              en: "“{quest}” didn't happen. What got in the way?",
               zh: "「{quest}」没做成。是什么挡了一下？"),
         .init(id: "skip.exception", kind: .skip,
               en: "Was there a recent time this went more easily? What was different then?",
@@ -76,16 +76,16 @@ public enum JournalPool {
 
 
         .init(id: "fact.early", kind: .fact,
-              en: "{quest} got done ahead of time. What did finishing it feel like?",
+              en: "“{quest}” got done ahead of time. What did finishing it feel like?",
               zh: "「{quest}」提前完成了。完成那一刻是什么感觉？"),
         .init(id: "fact.hard", kind: .fact,
-              en: "{quest} was a hard one. What was the toughest moment?",
+              en: "“{quest}” was a hard one. What was the toughest moment?",
               zh: "「{quest}」不轻松。最难的是哪一刻？"),
         .init(id: "fact.open", kind: .fact,
-              en: "{quest} is still open. What got in the way today?",
+              en: "“{quest}” is still open. What got in the way today?",
               zh: "「{quest}」还没做。今天是什么挡了一下？"),
         .init(id: "fact.done", kind: .fact,
-              en: "You finished {quest} today. What was it like?",
+              en: "You finished “{quest}” today. What was it like?",
               zh: "你今天完成了「{quest}」。当时是什么样的？"),
 
         .init(id: "safety", kind: .safety,

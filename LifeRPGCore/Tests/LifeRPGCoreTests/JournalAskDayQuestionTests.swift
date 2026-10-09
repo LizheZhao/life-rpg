@@ -27,27 +27,27 @@ struct JournalAskDayQuestionTests {
 
     @Test func aHardQuestDoneIsAskedAboutByName() {
         let signals = F.signals(quests: [F.quest("Read 20 pages"), hard("Run 5 km")])
-        #expect(dayQuestion(signals) == "Run 5 km was a hard one. What was the toughest moment?")
+        #expect(dayQuestion(signals) == "“Run 5 km” was a hard one. What was the toughest moment?")
         #expect(dayQuestion(signals, language: .zhHans) == "「Run 5 km」不轻松。最难的是哪一刻？")
     }
 
     @Test func somethingStillOpenIsAskedWithoutBlame() {
         let signals = F.signals(quests: [F.quest("Call the bank", done: false)])
-        #expect(dayQuestion(signals) == "Call the bank is still open. What got in the way today?")
+        #expect(dayQuestion(signals) == "“Call the bank” is still open. What got in the way today?")
     }
 
     @Test func withNothingSpecialTheLatestThingDoneIsAsked() {
         let signals = F.signals(quests: [F.quest("Walk", hour: 9), F.quest("Cook a meal", hour: 19)])
-        #expect(dayQuestion(signals) == "You finished Cook a meal today. What was it like?")
+        #expect(dayQuestion(signals) == "You finished “Cook a meal” today. What was it like?")
     }
 
     /// A question already in the entry, or in one of the last entries, is passed over for the next.
     @Test func aQuestionAlreadyAskedGivesWayToTheNextThing() {
         let signals = F.signals(quests: [F.quest("Walk", hour: 9), F.quest("Cook a meal", hour: 19)])
-        let asked = "You finished Cook a meal today. What was it like?"
+        let asked = "You finished “Cook a meal” today. What was it like?"
         #expect(dayQuestion(signals, document: E.doc(E.prompt(1, asked, source: .fixed)))
-                == "You finished Walk today. What was it like?")
-        #expect(dayQuestion(signals, previous: [asked]) == "You finished Walk today. What was it like?")
+                == "You finished “Walk” today. What was it like?")
+        #expect(dayQuestion(signals, previous: [asked]) == "You finished “Walk” today. What was it like?")
     }
 
     @Test func anEmptyDayHasNothingToAsk() {
@@ -56,7 +56,7 @@ struct JournalAskDayQuestionTests {
 
     @Test func aFailedModelOnADayWithFactsAsksAboutTheDay() async {
         let result = await resolve(F.signals(quests: [hard("Run 5 km")]))
-        #expect(result == .fromDay("Run 5 km was a hard one. What was the toughest moment?",
+        #expect(result == .fromDay("“Run 5 km” was a hard one. What was the toughest moment?",
                                    toast: "Couldn't reach the guide, here's one about your day"))
     }
 
@@ -66,14 +66,14 @@ struct JournalAskDayQuestionTests {
 
     @Test func aDayQuestionGoesInAsAFixedPromptWithNoChipKey() throws {
         let doc = E.doc(E.text(1, "Long day."))
-        let edit = try #require(JournalAsk.insert(.fromDay("You finished Walk today. What was it like?", toast: "t"),
+        let edit = try #require(JournalAsk.insert(.fromDay("You finished “Walk” today. What was it like?", toast: "t"),
                                                   into: doc, atBlock: E.id(1), offset: 9, language: .en))
         let prompts = edit.document.blocks.compactMap { block -> (String, PromptSource, JournalFixedKey?)? in
             if case .prompt(_, let q, _, let source, let key) = block { return (q, source, key) }
             return nil
         }
         #expect(prompts.count == 1)
-        #expect(prompts[0].0 == "You finished Walk today. What was it like?")
+        #expect(prompts[0].0 == "You finished “Walk” today. What was it like?")
         #expect(prompts[0].1 == .fixed)
         #expect(prompts[0].2 == nil)
         // It is not a model prompt, so it does not count toward the cap.

@@ -2,7 +2,7 @@
 
 Status: in Core as `JournalPool` (`LifeRPGCore/Sources/LifeRPGCore/Rules/JournalPool.swift`), and a test keeps the code rows identical to the tables below. Edit a row here and the test says what to change in code.
 
-**These rows are not shown to the user, and not shown to the model either.** An evaluation on the device model showed it copying any example it was given, word for word. The editor's "Ask me something" button sends the model the day's facts, what the user has written so far with an instruction to ask about one specific thing in it, and the questions already in the entry; the on-device model words one fresh question. The rows still do three jobs. `JournalAsk` picks up to three of them by the day (a low day gets the heavy rows, a routine given up on the skip rows, a quest rated 1 or more the good rows, otherwise the opening rows) and holds the answer against them, so a row coming back is rejected. They are the chip fallback and the day-question rows below. The prompt lists the questions already in the entry but not those of the last three entries: a small model copies from a list it is told to avoid, so those are only held against its answer. The facts carry no coins, and say "done before its day" or "N days before it was due" only where that is true. Core rejects wording that breaks a rule below or sits too close to an anchor row, to a question in the entry or to a recent question. Two rules are not in the instructions at all, because a small model copies what it is told and an instruction that named "early" made it call a plain hard quest early; Core holds them instead, after the voice rules and before the closeness check. A **closed question** (`closedQuestion`) is turned away: in English one that opens with did, do, does, is, are, was, were, am, have, has, had, can, could, will, would, should, shall, may or might or any "n't" form of them, or that ends in a tag (", did you?", ", didn't you?", ", right?", ", okay?"); in Chinese one that ends in 吗 before the question mark or holds 有没有, 是不是, 能不能, 会不会, 要不要, 好不好 or 对不对. An **unsupported early** (`unsupportedEarly`) is turned away: the whole words "early" or "ahead", "in advance" or "before its day" in English, 提前, 提早 or 早早 in Chinese, unless a fact says so (the week's epic finished today with days to spare, or a routine done before its day: `JournalSignals.hasEarlyFact`, carried as `JournalAskRequest.allowsEarly`). An answer rejected as too close to one of those questions (`notFresh`), as a closed question or as an unsupported early is asked for once more, with the prompt plus one hand-written sentence naming the rejected question and what to do instead (5 second limit; the sentences are pinned in `JournalPromptBuilderTests`). The model is called at most twice per tap. Any other rejection goes straight to the fallback. When the model is unavailable, off for the language or its wording is rejected after that, the editor inserts one question about a thing from the day, else a fixed prompt, in this order: favorite moment, grateful for, tomorrow, low energy felt like. Those four are the chips above the keyboard, and they are the only fixed prompts. **Chinese does not call the model for now** (`JournalAsk.modelLanguages` is `[.en]`): the on-device model's Chinese questions were yes/no questions, invented facts and restated facts, so a Chinese tap gets the day question or a chip until that is checked on a phone.
+**These rows are not shown to the user, and not shown to the model either.** An evaluation on the device model showed it copying any example it was given, word for word. The editor's "Ask me something" button sends the model the day's facts, what the user has written so far with an instruction to ask about one specific thing in it, and the questions already in the entry; the on-device model words one fresh question. The rows still do three jobs. `JournalAsk` picks up to three of them by the day (a low day gets the heavy rows, a routine given up on the skip rows, a quest rated 1 or more the good rows, otherwise the opening rows) and holds the answer against them, so a row coming back is rejected. They are the chip fallback and the day-question rows below. The prompt lists the questions already in the entry but not those of the last three entries: a small model copies from a list it is told to avoid, so those are only held against its answer. The facts carry no coins, and say "done before its day" or "N days before it was due" only where that is true. Core rejects wording that breaks a rule below or sits too close to an anchor row, to a question in the entry or to a recent question. Two rules are checked by Core after the voice rules and before the closeness check. The instructions say the one about "early" too: without it the questions stopped following the "finished early" facts (an instruction that named "early" once made the model call a plain hard quest early, which is why Core also rejects an "early" no fact supports). A **closed question** (`closedQuestion`) is turned away: in English one that opens with did, do, does, is, are, was, were, am, have, has, had, can, could, will, would, should, shall, may or might or any "n't" form of them, or that ends in a tag (", did you?", ", didn't you?", ", right?", ", okay?"); in Chinese one that ends in 吗 before the question mark or holds 有没有, 是不是, 能不能, 会不会, 要不要, 好不好 or 对不对. An **unsupported early** (`unsupportedEarly`) is turned away: the whole words "early" or "ahead", "in advance" or "before its day" in English, 提前, 提早 or 早早 in Chinese, unless a fact says so (the week's epic finished today with days to spare, or a routine done before its day: `JournalSignals.hasEarlyFact`, carried as `JournalAskRequest.allowsEarly`). An answer rejected as too close to one of those questions (`notFresh`), as a closed question, as an unsupported early or as too long (`tooLong`) is asked for once more, with the prompt plus one hand-written sentence saying what to do instead (5 second limit; the sentences are pinned in `JournalPromptBuilderTests`). The `notFresh` and unsupported-early sentences quote the rejected question; the closed-question and too-long sentences do not, because the model handed back the yes/no question it was shown. The model is called at most twice per tap. Any other rejection goes straight to the fallback. When the model is unavailable, off for the language or its wording is rejected after that, the editor inserts one question about a thing from the day, else a fixed prompt, in this order: favorite moment, grateful for, tomorrow, low energy felt like. Those four are the chips above the keyboard, and they are the only fixed prompts. **Chinese does not call the model for now** (`JournalAsk.modelLanguages` is `[.en]`): the on-device model's Chinese questions were yes/no questions, invented facts and restated facts, so a Chinese tap gets the day question or a chip until that is checked on a phone.
 
 Borrowed question shapes (this is a journaling aid, not therapy): open questions and scaling (motivational interviewing), self-compassion and separating feeling from fact (CBT-style), savoring (positive psychology), values questions (ACT), exceptions and small steps (solution-focused).
 
@@ -11,10 +11,10 @@ Rules for every prompt, written by hand and for the model:
 - One question at a time. No advice, no diagnosis.
 - Never start with "why". Use "what got in the way", "what was it like".
 - An open question: not one that can be answered yes or no (the instructions say so, and Core rejects the form). Do not restate the facts; just ask.
-- No coins, points or numbers from the facts. "Early" or "ahead" only when a fact says so (Core enforces this; the instructions do not mention it).
+- No coins, points or numbers from the facts. "Early" or "ahead" only when a fact says so (the instructions say so and Core enforces it).
 - No praise-or-guilt framing. The app already docks points; the voice must not pile on.
 - No contrast staging ("not X, but Y"), no closing one-liner that repeats the point, no triads for rhythm.
-- Placeholder: `{quest}` is the quest or routine text.
+- Placeholder: `{quest}` is the quest or routine text. The English rows put it in curly double quotes (“{quest}”) because quest names are imperative phrases that do not read as a noun otherwise; the Chinese rows use 「」.
 
 Language follows the system language (`zh-Hans` → Chinese, anything else → English). Each row carries both.
 
@@ -39,15 +39,15 @@ Language follows the system language (`zh-Hans` → Chinese, anything else → E
 
 | id | en | zh-Hans |
 |---|---|---|
-| good.moment | You rated {quest} high. Which moment was the best part? | 你给「{quest}」打了高分。哪一刻最好？ |
-| good.repeat | If you did {quest} again, what would you keep exactly the same? | 如果再做一次「{quest}」，你想原样保留什么？ |
+| good.moment | You rated “{quest}” high. Which moment was the best part? | 你给「{quest}」打了高分。哪一刻最好？ |
+| good.repeat | If you did “{quest}” again, what would you keep exactly the same? | 如果再做一次「{quest}」，你想原样保留什么？ |
 | good.who | Who or what made it better? | 是谁或是什么让它变得更好？ |
 
 ## Skipped or overdue — asked without blame
 
 | id | en | zh-Hans |
 |---|---|---|
-| skip.block | {quest} didn't happen. What got in the way? | 「{quest}」没做成。是什么挡了一下？ |
+| skip.block | “{quest}” didn't happen. What got in the way? | 「{quest}」没做成。是什么挡了一下？ |
 | skip.exception | Was there a recent time this went more easily? What was different then? | 最近有没有哪次做这件事比较顺？那次有什么不一样？ |
 | skip.small | What would make it 10% easier tomorrow? | 怎样能让它明天容易一成？ |
 
@@ -55,10 +55,10 @@ Language follows the system language (`zh-Hans` → Chinese, anything else → E
 
 | id | en | zh-Hans |
 |---|---|---|
-| fact.early | {quest} got done ahead of time. What did finishing it feel like? | 「{quest}」提前完成了。完成那一刻是什么感觉？ |
-| fact.hard | {quest} was a hard one. What was the toughest moment? | 「{quest}」不轻松。最难的是哪一刻？ |
-| fact.open | {quest} is still open. What got in the way today? | 「{quest}」还没做。今天是什么挡了一下？ |
-| fact.done | You finished {quest} today. What was it like? | 你今天完成了「{quest}」。当时是什么样的？ |
+| fact.early | “{quest}” got done ahead of time. What did finishing it feel like? | 「{quest}」提前完成了。完成那一刻是什么感觉？ |
+| fact.hard | “{quest}” was a hard one. What was the toughest moment? | 「{quest}」不轻松。最难的是哪一刻？ |
+| fact.open | “{quest}” is still open. What got in the way today? | 「{quest}」还没做。今天是什么挡了一下？ |
+| fact.done | You finished “{quest}” today. What was it like? | 你今天完成了「{quest}」。当时是什么样的？ |
 
 ## Safety line (shown instead of any follow-up when the answer hits a self-harm or hopelessness keyword)
 

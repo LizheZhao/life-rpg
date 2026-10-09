@@ -46,14 +46,15 @@ public enum JournalAskRejection: String, Error, Equatable, CaseIterable, Sendabl
     case unsupportedEarly
     case notFresh
 
-    /// The reason `JournalAsk.resolve` gives the model for asking again, for the three rejections it
+    /// The reason `JournalAsk.resolve` gives the model for asking again, for the four rejections it
     /// asks again about; nil for the rest.
     public var retryReason: JournalPromptBuilder.RetryReason? {
         switch self {
         case .notFresh: .notFresh
         case .closedQuestion: .closedQuestion
         case .unsupportedEarly: .unsupportedEarly
-        case .empty, .tooLong, .noQuestionMark, .placeholder, .voice: nil
+        case .tooLong: .tooLong
+        case .empty, .noQuestionMark, .placeholder, .voice: nil
         }
     }
 }
@@ -287,7 +288,7 @@ public enum JournalAsk {
     /// the model is not called, whether or not the writing would have been sent. A language outside
     /// `modelLanguages` skips the model. Otherwise the model is asked: a question it wrote that
     /// `accept` takes is the result. An answer that is `notFresh` (a copy of a question already
-    /// asked), a `closedQuestion` or an `unsupportedEarly` is asked for once more, with
+    /// asked), a `closedQuestion`, an `unsupportedEarly` or a `tooLong` is asked for once more, with
     /// `JournalPromptBuilder.retryPrompt` and `retryTimeout`; a second answer that `accept` takes is
     /// the result. Anything else (no model, a timeout, an error, nothing, a text rejected for
     /// another reason, a second answer that fails) is a question about one thing from the day

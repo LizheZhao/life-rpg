@@ -57,7 +57,7 @@ struct JournalPoolTests {
 
     @Test func rendersAFilledRowInEitherLanguage() {
         #expect(JournalPool.render(id: "good.moment", language: .en, fills: [.quest: "Morning run"])
-                == "You rated Morning run high. Which moment was the best part?")
+                == "You rated “Morning run” high. Which moment was the best part?")
         #expect(JournalPool.render(id: "good.moment", language: .zhHans, fills: [.quest: "晨跑"])
                 == "你给「晨跑」打了高分。哪一刻最好？")
         #expect(JournalPool.render(id: "open.keep", language: .en) == "What from today do you want to remember?")
@@ -77,6 +77,6 @@ struct JournalPoolTests {
 
     @Test func aFillThatLooksLikeAPlaceholderIsInsertedAsText() {
         #expect(JournalPool.render(id: "skip.block", language: .en, fills: [.quest: "{quest} run"])
-                == "{quest} run didn't happen. What got in the way?")
+                == "“{quest} run” didn't happen. What got in the way?")
     }
 }

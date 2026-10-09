@@ -34,15 +34,28 @@ struct JournalNoveltyTests {
     /// The frames a question is built from say nothing about what it asks, so they can not make two
     /// different questions alike. These are the pairs that scored 0.64, 0.60 and 0.60 over all words.
     @Test func theSameFrameAboutAnotherThingIsAnotherQuestion() {
-        #expect(similarity("You finished Walk today. What was it like?",
-                           "You finished Cook a meal today. What was it like?") == 2.0 / 5.0)
-        #expect(similarity("Run 5 km was a hard one. What was the toughest moment?",
-                           "Read 20 pages was a hard one. What was the toughest moment?") == 4.0 / 10.0)
-        #expect(JournalNovelty.isFresh("You finished Walk today. What was it like?",
-                                       avoiding: ["You finished Cook a meal today. What was it like?"], language: .en))
+        #expect(similarity("You finished “Walk” today. What was it like?",
+                           "You finished “Cook a meal” today. What was it like?") == 2.0 / 5.0)
+        #expect(similarity("“Run 5 km” was a hard one. What was the toughest moment?",
+                           "“Read 20 pages” was a hard one. What was the toughest moment?") == 4.0 / 10.0)
+        #expect(JournalNovelty.isFresh("You finished “Walk” today. What was it like?",
+                                       avoiding: ["You finished “Cook a meal” today. What was it like?"], language: .en))
         // A one-word subject in each is the closest it gets: finished, like, and the subject differs.
-        #expect(JournalNovelty.isFresh("You finished Walk today. What was it like?",
-                                       avoiding: ["You finished Run today. What was it like?"], language: .en))
+        #expect(JournalNovelty.isFresh("You finished “Walk” today. What was it like?",
+                                       avoiding: ["You finished “Run” today. What was it like?"], language: .en))
+    }
+
+    /// The day-question rows put the quest name in curly quotes; the model's reworded copy of one
+    /// has none, or straight ones. Punctuation is not a token, so they are the same question.
+    @Test func aQuotedQuestNameIsTheSameTokensAsABareOne() {
+        #expect(JournalNovelty.tokens("You finished “Walk” today. What was it like?", language: .en)
+                == JournalNovelty.tokens("You finished Walk today. What was it like?", language: .en))
+        #expect(JournalNovelty.tokens("You finished \"Walk\" today. What was it like?", language: .en)
+                == JournalNovelty.tokens("You finished Walk today. What was it like?", language: .en))
+        #expect(similarity("“Walk” got done ahead of time. What did finishing it feel like?",
+                           "Walk got done ahead of time. What did finishing it feel like?") == 1)
+        #expect(!JournalNovelty.isFresh("You finished Walk today. What was it like?",
+                                        avoiding: ["You finished “Walk” today. What was it like?"], language: .en))
     }
 
     /// The question that came back as a copy of one in the last entries, with its verb reworded.
