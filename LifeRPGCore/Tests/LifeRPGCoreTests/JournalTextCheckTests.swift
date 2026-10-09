@@ -43,12 +43,16 @@ struct JournalTextCheckTests {
         #expect(found("What happened?") == [])
     }
 
-    @Test func aQuestionThatOpensWithWhyIsCaught() {
-        #expect(found("Why did you skip it?") == [.startsWithWhy])
-        #expect(found("You skipped it. Why was that?") == [.startsWithWhy])
-        #expect(found("为什么没去？", .zhHans) == [.startsWithWhy])
-        // "why" inside a sentence is fine.
-        #expect(found("Tell me what you think about why it mattered.") == [])
+    @Test func aQuestionThatAsksWhyIsCaught() {
+        #expect(found("Why did you skip it?") == [.asksWhy])
+        #expect(found("You skipped it. Why was that?") == [.asksWhy])
+        #expect(found("为什么没去？", .zhHans) == [.asksWhy])
+        // Anywhere in the question, not only at its start: the model wrote this one.
+        #expect(found("What did you think of today, and why did you skip piano practice?") == [.asksWhy])
+        #expect(found("今天怎么样，为什么没练琴？", .zhHans) == [.asksWhy])
+        #expect(found("What was the walk like?") == [])
+        // Inside a sentence it still asks for a reason.
+        #expect(found("Tell me what you think about why it mattered.") == [.asksWhy])
     }
 
     @Test func markdownMarkersAreCaught() {

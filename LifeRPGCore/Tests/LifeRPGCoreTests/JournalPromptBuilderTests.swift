@@ -22,7 +22,7 @@ struct JournalPromptBuilderTests {
             - No praise or guilt.
             - Do not mention coins, points or numbers from the facts.
             - Never ask a question that is already listed, or one close to it.
-            - Never start with why.
+            - Never ask why.
             - Do not ask a question that can be answered yes or no.
             - Do not restate the facts; just ask.
             - No contrast staging such as "not X, but Y".
@@ -44,7 +44,7 @@ struct JournalPromptBuilderTests {
             - 不夸奖，也不让人内疚。
             - 不要提金币、分数或情况里的数字。
             - 已经列出的问题不要再问，相近的也不要。
-            - 不要以“为什么”开头。
+            - 不要问“为什么”。
             - 不要问可以用“是”或“不是”回答的问题。
             - 不要复述情况，直接提问。
             - 不要用“不是……而是……”这类对比句式。
@@ -88,7 +88,7 @@ struct JournalPromptBuilderTests {
             Write one question for the user's journal, about today.
 
             Facts about today:
-            - Day type: low.
+            - Energy: low.
             - Done: Walk; A 30 minute walk (light version).
             - Skipped: Round two.
             - Not done yet: Stretch; Water the plants.
@@ -131,7 +131,7 @@ struct JournalPromptBuilderTests {
             Write one question for the user's journal, about today.
 
             Facts about today:
-            - Day type: normal.
+            - Energy: normal.
             - Done: nothing.
             """)
     }
@@ -234,7 +234,7 @@ struct JournalPromptBuilderTests {
                                                       existing: [])
             let chinese = JournalPromptBuilder.prompt(language: .zhHans, signals: signals, writing: nil,
                                                       existing: [])
-            #expect(english.contains("- Day type: \(en).\n"), "\(tier)")
+            #expect(english.contains("- Energy: \(en).\n"), "\(tier)")
             #expect(chinese.contains("- 今天的精力：\(zh)。\n"), "\(tier)")
         }
     }

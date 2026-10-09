@@ -31,8 +31,8 @@ public enum JournalPromptBuilder {
              zh: "不要提金币、分数或情况里的数字。"),
         Rule(en: "Never ask a question that is already listed, or one close to it.",
              zh: "已经列出的问题不要再问，相近的也不要。"),
-        Rule(en: "Never start with why.",
-             zh: "不要以“为什么”开头。"),
+        Rule(en: "Never ask why.",
+             zh: "不要问“为什么”。"),
         Rule(en: "Do not ask a question that can be answered yes or no.",
              zh: "不要问可以用“是”或“不是”回答的问题。"),
         Rule(en: "Do not restate the facts; just ask.", zh: "不要复述情况，直接提问。"),
@@ -181,7 +181,8 @@ public enum JournalPromptBuilder {
             case .normal: "normal"
             case .high: "high"
             }
-            return "Day type: \(word)."
+            // "Energy", not "Day type": the model read "Day type: very low" as a day short of daylight.
+            return "Energy: \(word)."
         }
 
         /// "Walk", "A 30 minute walk (light version)", "Laundry (done before its day)". Only a fact

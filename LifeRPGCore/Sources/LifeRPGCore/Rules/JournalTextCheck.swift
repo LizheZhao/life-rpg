@@ -2,7 +2,7 @@ import Foundation
 
 /// The voice rules of `doc/JOURNAL_PROMPTS.md` turned into patterns, for text the on-device model
 /// wrote: the staged rhythms that make generated text recognisable (contrast, dramatic openers and
-/// closers, em dashes), more than one question, a question that opens with "why", a markdown
+/// closers, em dashes), more than one question, a question that asks "why" anywhere in it, a markdown
 /// marker. `JournalAsk.accept` adds the length, one-question, placeholder and novelty rules on top;
 /// a failure there means the caller falls back to a fixed prompt, except that a copy of a
 /// question already asked, a closed question and an unsupported "early" are asked for again, once
@@ -14,7 +14,7 @@ import Foundation
 public enum JournalTextCheck {
     public enum Violation: String, CaseIterable, Sendable {
         case contrastStaging, stagedOpener, stagedCloser, emDash
-        case manyQuestions, startsWithWhy, markdown
+        case manyQuestions, asksWhy, markdown
     }
 
     private struct Tell {
@@ -37,8 +37,9 @@ public enum JournalTextCheck {
         Tell(violation: .stagedCloser, pattern: #"(?i)\bthat(?:\s+is|['’]s)\s+the\s+real\b"#),
         Tell(violation: .stagedCloser, pattern: #"(?i)\bread\s+that\s+again\b"#),
         Tell(violation: .stagedCloser, pattern: #"(?i)\blet\s+that\s+sink\s+in\b"#),
-        // a sentence that opens with why
-        Tell(violation: .startsWithWhy, pattern: #"(?i)(?:^|[.!?]\s+)\s*why\b"#),
+        // why anywhere: "What did you think of today, and why did you skip …?" asks for a reason just
+        // the same as a question that opens with it
+        Tell(violation: .asksWhy, pattern: #"(?i)\bwhy\b"#),
     ]
 
     private static let chineseTells: [Tell] = [
@@ -46,7 +47,7 @@ public enum JournalTextCheck {
         Tell(violation: .contrastStaging, pattern: #"(?s)不只是.{0,30}?更是"#),
         Tell(violation: .stagedOpener, pattern: "说实话"),
         Tell(violation: .stagedCloser, pattern: "这正是"),
-        Tell(violation: .startsWithWhy, pattern: "(?:^|[。！？!?])\\s*为什么"),
+        Tell(violation: .asksWhy, pattern: "为什么"),
     ]
 
     /// Both languages: a long dash is the single most recognisable generated-text mark, and the
