@@ -178,15 +178,42 @@ struct JournalPromptBuilderTests {
         let english = JournalPromptBuilder.prompt(language: .en, signals: signals, writing: nil,
                                                   existing: [])
         #expect(english.hasSuffix("""
-            - Done: Deep clean the kitchen (hard); Laundry (done before its day).
+            - Done: Deep clean the kitchen (hard); Laundry (done before its day); Write up a technical topic (this week's epic).
             - This week's epic: Write up a technical topic. Finished today, 2 days before it was due.
             """))
         let chinese = JournalPromptBuilder.prompt(language: .zhHans, signals: signals, writing: nil,
                                                   existing: [])
         #expect(chinese.hasSuffix("""
-            - 做完的：Deep clean the kitchen（困难）；Laundry（提前做的）。
+            - 做完的：Deep clean the kitchen（困难）；Laundry（提前做的）；Write up a technical topic（本周的 Epic）。
             - 本周的 Epic：Write up a technical topic。今天完成了，比截止早 2 天。
             """))
+    }
+
+    /// An epic finished today is something done today: listing it apart under "Done: nothing" made
+    /// the model ask what the day was like with nothing finished.
+    @Test func anEpicFinishedTodayIsDoneEvenWhenNothingElseIs() {
+        let epic = F.quest("Write up a technical topic", on: "2026-09-14", hour: 9)
+        epic.slot = .epic
+        epic.completedAt = Fixtures.date("2026-09-18", hour: 20)
+        let signals = JournalSignals(dayKey: F.day, quests: [], occurrences: [], context: F.context(tier: .normal),
+                                     ratings: [], epic: epic, timeZone: Fixtures.tokyo)
+        let prompt = JournalPromptBuilder.prompt(language: .en, signals: signals, writing: nil, existing: [])
+        #expect(prompt.hasSuffix("""
+            - Done: Write up a technical topic (this week's epic).
+            - This week's epic: Write up a technical topic. Finished today, 2 days before it was due.
+            """))
+        #expect(!prompt.contains("nothing"))
+    }
+
+    /// One finished earlier in the week was not done today.
+    @Test func anEpicFinishedEarlierInTheWeekIsNotDoneToday() {
+        let epic = F.quest("Write up a technical topic", on: "2026-09-14", hour: 9)
+        epic.slot = .epic
+        epic.completedAt = Fixtures.date("2026-09-16", hour: 20)
+        let signals = JournalSignals(dayKey: F.day, quests: [], occurrences: [], context: F.context(tier: .normal),
+                                     ratings: [], epic: epic, timeZone: Fixtures.tokyo)
+        let prompt = JournalPromptBuilder.prompt(language: .en, signals: signals, writing: nil, existing: [])
+        #expect(prompt.contains("- Done: nothing.\n- This week's epic: Write up a technical topic. Already finished earlier this week."))
     }
 
     @Test func anOpenEpicIsNotLeftOpenAndSaysHowManyDaysAreLeft() {
@@ -248,7 +275,7 @@ struct JournalPromptBuilderTests {
                                                  reason: .unsupportedEarly, language: .en) == """
             THE PROMPT
 
-            The question you just wrote, "What was it like to finish the run early?", says something was early, but nothing in the facts was. Ask again without saying early or ahead.
+            Your last question said something was early, but nothing in the facts was. Ask again without saying early or ahead.
             """)
         #expect(JournalPromptBuilder.retryPrompt("THE PROMPT", rejected: "What was the part of the long walk that felt best?",
                                                  reason: .tooLong, language: .en) == """
@@ -274,7 +301,7 @@ struct JournalPromptBuilderTests {
                                                  reason: .unsupportedEarly, language: .zhHans) == """
             提示
 
-            你刚写的问题“提前完成是什么感觉？”说某件事是提前的，但上面的情况里没有提前完成的事。请重新问，不要提“提前”或“提早”。
+            你上一个问题说某件事是提前的，但上面的情况里没有提前完成的事。请重新问，不要提“提前”或“提早”。
             """)
         #expect(JournalPromptBuilder.retryPrompt("提示", rejected: "今天的散步里让你觉得最舒服的那一段是什么样的呢？",
                                                  reason: .tooLong, language: .zhHans) == """

@@ -85,9 +85,9 @@ public enum JournalPromptBuilder {
     }
 
     /// The prompt again after `rejected` was turned away for `reason`: the same prompt, then one
-    /// hand-written sentence saying what to do instead. `notFresh` and `unsupportedEarly` quote the
-    /// rejected question; `closedQuestion` and `tooLong` do not, because the model handed back the
-    /// question it was shown.
+    /// hand-written sentence saying what to do instead. Only `notFresh` quotes the rejected
+    /// question (it has to say which one was too close); the others do not, because the model
+    /// handed back the question it was shown.
     public static func retryPrompt(_ prompt: String, rejected: String, reason: RetryReason,
                                    language: JournalLanguage) -> String {
         let sentence: String
@@ -97,7 +97,7 @@ public enum JournalPromptBuilder {
         case (.en, .closedQuestion):
             sentence = "Your last question could be answered yes or no. Ask an open question that starts with What or How."
         case (.en, .unsupportedEarly):
-            sentence = "The question you just wrote, \"\(rejected)\", says something was early, but nothing in the facts was. Ask again without saying early or ahead."
+            sentence = "Your last question said something was early, but nothing in the facts was. Ask again without saying early or ahead."
         case (.zhHans, .notFresh):
             sentence = "你刚写的问题“\(rejected)”和已经问过的太接近了。请从上面的情况里换一件事来问。"
         case (.zhHans, .closedQuestion):
@@ -107,7 +107,7 @@ public enum JournalPromptBuilder {
         case (.zhHans, .tooLong):
             sentence = "你上一个问题太长了。请只问一个短问题，少于 \(JournalAsk.characterLimit) 个字。"
         case (.zhHans, .unsupportedEarly):
-            sentence = "你刚写的问题“\(rejected)”说某件事是提前的，但上面的情况里没有提前完成的事。请重新问，不要提“提前”或“提早”。"
+            sentence = "你上一个问题说某件事是提前的，但上面的情况里没有提前完成的事。请重新问，不要提“提前”或“提早”。"
         }
         return prompt + "\n\n" + sentence
     }
@@ -129,7 +129,10 @@ public enum JournalPromptBuilder {
 
     private static func facts(_ signals: JournalSignals, _ words: Words) -> [String] {
         var lines = [words.dayType(signals.tier)]
-        lines.append(words.list(words.done, signals.completed.map(words.done(_:)), none: words.nothing))
+        // An epic finished today was done today; left out of this line it read as "Done: nothing".
+        var done = signals.completed.map(words.done(_:))
+        if let epic = signals.epic, case .doneToday = epic.progress { done.append(words.epicDone(epic.text)) }
+        lines.append(words.list(words.done, done, none: words.nothing))
         if let epic = signals.epic { lines.append(words.epic(epic)) }
         if !signals.skipped.isEmpty {
             lines.append(words.list(words.skipped, signals.skipped.map(\.text)))
@@ -192,6 +195,11 @@ public enum JournalPromptBuilder {
             guard !notes.isEmpty else { return item.subject.text }
             return zh ? item.subject.text + "（" + notes.joined(separator: "，") + "）"
                       : item.subject.text + " (" + notes.joined(separator: ", ") + ")"
+        }
+
+        /// The week's epic in the list of what was done today.
+        func epicDone(_ text: String) -> String {
+            zh ? text + "（本周的 Epic）" : text + " (this week's epic)"
         }
 
         /// The week's epic and where it stands.

@@ -891,8 +891,8 @@ struct JournalAskTests {
         #expect(result == .question(walkQuestion))
         #expect(wording.callCount == 2)
         let first = request(document: JournalDocument())
-        #expect(wording.prompts[1] == first.prompt + "\n\nThe question you just wrote, \"What was it like to finish the run early?\", "
-                + "says something was early, but nothing in the facts was. Ask again without saying early or ahead.")
+        #expect(wording.prompts[1] == first.prompt + "\n\nYour last question said something was early, "
+                + "but nothing in the facts was. Ask again without saying early or ahead.")
     }
 
     @Test func anEarlyAnswerIsNotAskedAgainWhenAFactSaysEarly() async {
