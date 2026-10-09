@@ -334,6 +334,18 @@ struct JournalAskTests {
         #expect(accept("What was \"the best part\" of the walk?") == "What was \"the best part\" of the walk?")
     }
 
+    /// The model copied the entry's "Q: … / A: …" layout and handed back "Q: What did you learn today?".
+    @Test func aLeadingQuestionLabelIsStripped() {
+        #expect(accept("Q: What got in the way of the walk?") == "What got in the way of the walk?")
+        #expect(accept("q\u{FF1A}What got in the way of the walk?") == "What got in the way of the walk?")
+        #expect(accept("Question: What got in the way of the walk?") == "What got in the way of the walk?")
+        #expect(accept("Q: \"What got in the way of the walk?\"") == "What got in the way of the walk?")
+        #expect(accept("\u{95EE}\u{FF1A}\u{4ECA}\u{5929}\u{54EA}\u{4EF6}\u{4E8B}\u{4F60}\u{60F3}\u{7559}\u{4E0B}\u{6765}\u{FF1F}",
+                       language: .zhHans) == "\u{4ECA}\u{5929}\u{54EA}\u{4EF6}\u{4E8B}\u{4F60}\u{60F3}\u{7559}\u{4E0B}\u{6765}\u{FF1F}")
+        // A label only counts with its colon.
+        #expect(accept("Q What got in the way of the walk?") == "Q What got in the way of the walk?")
+    }
+
     @Test func twoQuestionsOrNoneOrADoubledMarkAreRejected() {
         #expect(accept("What happened? How did it feel?") == nil)
         #expect(accept("What happened today") == nil)

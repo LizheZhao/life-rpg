@@ -245,9 +245,15 @@ public enum JournalAsk {
         return .success(text)
     }
 
-    /// What `check` judges: the first line of `raw`, without surrounding quotes.
+    /// What `check` judges: the first line of `raw`, without a "Q:" label (the model copies the
+    /// entry's question-and-answer layout) and without surrounding quotes.
     private static func cleaned(_ raw: String) -> String {
-        unquoted(firstLine(of: raw))
+        unquoted(unlabelled(firstLine(of: raw)))
+    }
+
+    private static func unlabelled(_ line: String) -> String {
+        guard let range = line.range(of: #"^(?i:q|question|问)\s*[:：]\s*"#, options: .regularExpression) else { return line }
+        return String(line[range.upperBound...])
     }
 
     /// The question in `request.avoiding` that `raw` is closest to, for saying why a `notFresh`

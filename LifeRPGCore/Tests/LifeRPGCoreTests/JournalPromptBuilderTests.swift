@@ -16,13 +16,13 @@ struct JournalPromptBuilderTests {
             - Write it in the second person, speaking to "you".
             - Pick one specific thing to ask about. When the user has written something, take it from what they wrote; otherwise take it from the facts: something done, or something not done or skipped. A specific thing beats a general question about the day.
             - Only say something was finished early or ahead of time when a fact above says so. When a fact says that of something hard or the epic, you may ask what finishing it felt like.
-            - When something was not done or skipped, ask what got in the way, without blame.
+            - When a fact lists something as not done or skipped, ask what got in the way of it, without blame. Never ask that about something done, or something the user wrote they did.
             - Give no advice.
             - Make no diagnosis.
             - No praise or guilt.
             - Do not mention coins, points or numbers from the facts.
             - Never ask a question that is already listed, or one close to it.
-            - Never start with why; ask what got in the way, or what it was like.
+            - Never start with why.
             - Do not ask a question that can be answered yes or no.
             - Do not restate the facts; just ask.
             - No contrast staging such as "not X, but Y".
@@ -38,13 +38,13 @@ struct JournalPromptBuilderTests {
             - 用第二人称，直接对“你”说。
             - 挑一件具体的事来问。用户已经写了内容时，从用户写的内容里挑；否则从下面的情况里挑：做完的，或者没做、跳过的。具体的事比笼统地问这一天更好。
             - 只有上面的情况明确写了提前完成，才可以说“提前”或“早”。如果情况里写了困难的任务或 Epic 是提前完成的，可以问完成时是什么感觉。
-            - 如果有事没做或跳过了，问是什么挡住了，不带责备。
+            - 如果情况里列出某件事没做或跳过了，问是什么挡住了，不带责备。做完的事，或者用户写了自己做过的事，不要这样问。
             - 不给建议。
             - 不做诊断。
             - 不夸奖，也不让人内疚。
             - 不要提金币、分数或情况里的数字。
             - 已经列出的问题不要再问，相近的也不要。
-            - 不要以“为什么”开头；问是什么挡了一下，或者当时是什么样的。
+            - 不要以“为什么”开头。
             - 不要问可以用“是”或“不是”回答的问题。
             - 不要复述情况，直接提问。
             - 不要用“不是……而是……”这类对比句式。
