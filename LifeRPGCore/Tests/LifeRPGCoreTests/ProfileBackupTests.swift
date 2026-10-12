@@ -8,7 +8,7 @@ struct ProfileBackupTests {
     @Test func theNameIsWrittenCleaned() throws {
         let ctx = try Fixtures.context()
         let decoded = try JSONExport.decode(try JSONExport.data(ctx, profileName: "  Ryo \n Z "))
-        #expect(decoded.schemaVersion == 11)
+        #expect(decoded.schemaVersion == 12)
         #expect(decoded.profileName == "Ryo Z")
     }
 

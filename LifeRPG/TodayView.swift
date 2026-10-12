@@ -243,7 +243,9 @@ struct TodayView: View {
     /// Sunday night's settlement for this week, from the rows the queries hold: each row says what
     /// it owes itself, the Ahead header adds up only its own.
     private var weeklyBill: Overdue.Weekly? {
-        DayKey.weekKey(of: today).map { Overdue.weekly(routines, occurrences: occurrences, weekKey: $0) }
+        DayKey.weekKey(of: today).map {
+            Overdue.weekly(routines, occurrences: occurrences, weekKey: $0, recovery: RecoveryKeys.period())
+        }
     }
 
     private func routineState(_ o: RoutineOccurrence, _ placement: RoutineRowState.Placement) -> RoutineRowState {
@@ -275,7 +277,7 @@ struct TodayView: View {
 
     private var aheadState: AheadState {
         AheadState(routines: routines, occurrences: occurrences, flexible: flexibleIDs,
-                   today: today, tier: tier) { routineState($0, $1) }
+                   today: today, tier: tier, recovery: RecoveryKeys.period()) { routineState($0, $1) }
     }
 
     private var completedStack: CompletedStackState {
@@ -358,11 +360,20 @@ struct TodayView: View {
         }
     }
 
+    private var recoveryLabel: String {
+        guard let last = RecoveryKeys.period()?.lastDayKey, let date = DayKey.date(last) else { return "Recovery" }
+        return "Recovery · through " + date.formatted(.dateTime.month(.abbreviated).day())
+    }
+
     private var greetingBlock: some View {
         VStack(alignment: .leading, spacing: 0) {
             HandText(greeting.handLine, .hand).foregroundStyle(LR.Color.accent)
             Text(greeting.salutation).lr(.displayGreeting).foregroundStyle(LR.Color.ink)
             HandUnderlineText(lead: "let's", emphasis: greeting.emphasis)
+            if todayContext?.isRecovery == true {
+                PillLabel(text: recoveryLabel)
+                    .padding(.top, 8)
+            }
         }
         .padding(.vertical, 6)
     }

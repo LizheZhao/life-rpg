@@ -13,6 +13,8 @@ import SwiftData
     /// Which day of the current period this is, 1-based, or nil when there is no flow. Days 1–3
     /// hold the tier down to `low` (`PLAN.md` §5), which is what makes the routines downgrade.
     public var cycleDay: Int?
+    /// Planned as a recovery day (`Recovery`): judged without penalties once it ends.
+    public var isRecovery: Bool = false
     public var routineLoad: Int = 0
     public var randomSlots: Int = 3
 

@@ -19,11 +19,18 @@ import SwiftData
 /// actually asked for: an occurrence sitting on its downgrade version is charged against that
 /// version's points, because a walk is what was missed.
 ///
+/// A recovery day (`Recovery`) is judged without any charge, the daily ladder and Sunday's alike,
+/// but its rounds still end. It is one when its own record says so, or, for a day the app never
+/// opened, when it falls inside the stretch the user has set.
+///
 /// Idempotent: a penalty is keyed on (occurrence, day) in the ledger and a skip on the flag, so
 /// judging the same day twice changes nothing. Does not save; `ensureToday` saves once at the end.
 public enum Overdue {
     public static func settle(_ dayKey: String, in context: ModelContext,
-                              timeZone: TimeZone = .current, now: Date = Date()) throws {
+                              timeZone: TimeZone = .current, now: Date = Date(),
+                              recovery: RecoveryPeriod? = nil) throws {
+        let recovering = try DayService.dailyContext(for: dayKey, in: context)?.isRecovery == true
+            || recovery?.contains(dayKey) == true
         let routines = try context.fetch(FetchDescriptor<RoutineTask>())
         let flexible = Set(routines.filter(\.flexibleWithinWeek).map(\.id))
         let occurrences = try context.fetch(FetchDescriptor<RoutineOccurrence>())
@@ -33,7 +40,7 @@ public enum Overdue {
         guard let nextDay = DayKey.adding(1, to: dayKey, in: timeZone) else { return }
 
         func charge(_ o: RoutineOccurrence, _ points: Int, _ note: String) {
-            guard o.countsForClear, points > 0, charged.insert(o.id).inserted else { return }
+            guard !recovering, o.countsForClear, points > 0, charged.insert(o.id).inserted else { return }
             Economy.record(context, kind: .penalty, points: -points, dayKey: dayKey,
                            refID: o.id, note: "\(o.textSnapshot) — \(note)", now: now)
             o.penaltyApplied += points
@@ -57,7 +64,8 @@ public enum Overdue {
         // Flexible routines: once, on Sunday.
         guard DayKey.weekday(of: dayKey, in: timeZone) == .sunday,
               let week = DayKey.weekKey(of: dayKey, in: timeZone) else { return }
-        let settlement = weekly(routines, occurrences: occurrences, weekKey: week)
+        let settlement = weekly(routines, occurrences: occurrences, weekKey: week,
+                                recovery: recovery, in: timeZone)
         for c in settlement.charges { charge(c.occurrence, c.points, c.note) }
         settlement.closing.forEach(skip)
     }
@@ -89,9 +97,12 @@ public enum Overdue {
     /// The target is `weeklyTarget`, capped by how many sessions actually came due that week; done
     /// sessions include ad-hoc ones picked from the routine (`Schedule.doneThisWeek`). A session
     /// swapped for something else (`isReplaced`) is no longer asked of you and drops out of both
-    /// sides.
+    /// sides. A week whose Sunday falls inside `recovery` is closed without a charge.
     public static func weekly(_ routines: [RoutineTask], occurrences: [RoutineOccurrence],
-                              weekKey: String) -> Weekly {
+                              weekKey: String, recovery: RecoveryPeriod? = nil,
+                              in timeZone: TimeZone = .current) -> Weekly {
+        let sunday = DayKey.monday(ofWeek: weekKey, in: timeZone).flatMap { DayKey.adding(6, to: $0, in: timeZone) }
+        let waived = sunday.map { recovery?.contains($0) ?? false } ?? false
         var charges: [Weekly.Charge] = []
         var closing: [RoutineOccurrence] = []
         for routine in routines where routine.flexibleWithinWeek {
@@ -102,7 +113,7 @@ public enum Overdue {
             let done = Schedule.doneThisWeek(occurrences, routineID: routine.id, weekKey: weekKey)
             let shortfall = max(0, min(routine.weeklyTarget, thisWeek.count) - done)
             let open = thisWeek.filter(Schedule.isOpen)
-            for o in open.prefix(shortfall) {
+            for o in open.prefix(waived ? 0 : shortfall) {
                 charges.append(.init(occurrence: o,
                                      points: Scoring.flexibleShortfallPenalty(basePoints: o.effectiveBasePoints),
                                      note: "\(done)/\(routine.weeklyTarget) this week"))

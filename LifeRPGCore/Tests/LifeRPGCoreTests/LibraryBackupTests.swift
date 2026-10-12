@@ -62,10 +62,10 @@ struct LibraryBackupTests {
 
     // MARK: what is written
 
-    @Test func theBackupIsSchemaElevenAndCarriesTheWholeLibrary() throws {
+    @Test func theBackupIsSchemaTwelveAndCarriesTheWholeLibrary() throws {
         let ctx = try edited()
         let s = try JSONExport.snapshot(ctx)
-        #expect(JSONExport.schemaVersion == 11 && s.schemaVersion == 11)
+        #expect(JSONExport.schemaVersion == 12 && s.schemaVersion == 12)
         let full = try #require(s.fullLibrary)
         #expect(full.quests.count == (try ctx.fetchCount(FetchDescriptor<QuestTemplate>())))
         #expect(full.routines.count == (try ctx.fetchCount(FetchDescriptor<RoutineTask>())))
@@ -217,8 +217,8 @@ struct LibraryBackupTests {
     @Test func aNewerFileIsRefusedAndAnOlderOneStillReads() throws {
         let source = try seeded()
         var s = try JSONExport.snapshot(source)
-        s.schemaVersion = 12
-        #expect(throws: JSONImport.Failure.newerExport(12)) {
+        s.schemaVersion = 13
+        #expect(throws: JSONImport.Failure.newerExport(13)) {
             try JSONImport.plan(try JSONExport.encode(s), against: try seeded())
         }
         #expect(JSONExport.oldestReadableVersion == 3)

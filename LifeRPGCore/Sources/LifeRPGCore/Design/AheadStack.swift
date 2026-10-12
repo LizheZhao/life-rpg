@@ -75,7 +75,7 @@ public struct AheadState: Equatable, Sendable {
     ///   - flexible: the ids of the flexible routines, which the page already holds.
     ///   - routineState: the page's builder for a routine row.
     public init(routines: [RoutineTask], occurrences: [RoutineOccurrence], flexible: Set<UUID>,
-                today: String, tier: Tier, in timeZone: TimeZone = .current,
+                today: String, tier: Tier, recovery: RecoveryPeriod? = nil, in timeZone: TimeZone = .current,
                 routineState: (RoutineOccurrence, RoutineRowState.Placement) -> RoutineRowState) {
         let open = Schedule.openThisWeek(occurrences, flexible: flexible, on: today, in: timeZone)
         let done = Schedule.doneAhead(occurrences, on: today)
@@ -88,7 +88,7 @@ public struct AheadState: Equatable, Sendable {
         openCount = open.count + candidates.count
         doneCount = done.count
         let weekly = DayKey.weekKey(of: today, in: timeZone)
-            .map { Overdue.weekly(routines, occurrences: occurrences, weekKey: $0) }
+            .map { Overdue.weekly(routines, occurrences: occurrences, weekKey: $0, recovery: recovery, in: timeZone) }
         bill = open.map { weekly?.points(for: $0) ?? 0 }.reduce(0, +)
         billText = bill > 0 ? "−\(bill) Sun night" : nil
     }

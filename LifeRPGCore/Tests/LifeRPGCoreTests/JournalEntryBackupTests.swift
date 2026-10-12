@@ -52,7 +52,7 @@ struct JournalEntryBackupTests {
 
     @Test func theExportCarriesTheEntriesWithTheirBlocksAndTimes() throws {
         let snapshot = try JSONExport.snapshot(try source())
-        #expect(snapshot.schemaVersion == 11)
+        #expect(snapshot.schemaVersion == 12)
         let rows = try #require(snapshot.journalEntries)
         #expect(rows.map(\.dayKey) == [thursday, friday])
         #expect(rows[1].blocks == [F.text(1, "Rain all day."),

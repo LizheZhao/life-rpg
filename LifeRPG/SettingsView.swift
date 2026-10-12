@@ -27,6 +27,25 @@ struct SettingsView: View {
     @State private var path: [Page] = []
     @AppStorage(ProfileKeys.name) private var userName = ""
     @State private var editingName = false
+    @AppStorage(RecoveryKeys.first) private var recoveryFirst = ""
+    @AppStorage(RecoveryKeys.last) private var recoveryLast = ""
+
+    /// On: from today through two weeks out. Off: cleared; days already planned as recovery keep
+    /// their mark, so they are still judged without a charge.
+    private var recoveryOn: Binding<Bool> {
+        Binding(get: { !recoveryLast.isEmpty }, set: { on in
+            recoveryFirst = on ? today : ""
+            recoveryLast = on ? (DayKey.adding(13, to: today) ?? today) : ""
+            Task { await refresh() }
+        })
+    }
+
+    private var recoveryLastDate: Binding<Date> {
+        Binding(get: { DayKey.date(recoveryLast) ?? Date() }, set: { date in
+            recoveryLast = max(date.dayKey, today)
+            Task { await refresh() }
+        })
+    }
 
     var body: some View {
         NavigationStack(path: $path) {
@@ -52,6 +71,28 @@ struct SettingsView: View {
                     .accessibilityHint("Walks through how the app works")
                 } header: {
                     header("You")
+                }
+                .listRowBackground(LR.Color.surface)
+
+                Section {
+                    Toggle(isOn: recoveryOn) {
+                        Text("Recovery").lr(.bodyStrong).foregroundStyle(LR.Color.ink)
+                    }
+                    .tint(LR.Color.accent)
+                    .frame(minHeight: 44)
+                    .accessibilityHint("Only trivial and easy quests, no epic and no penalties until the last day")
+                    if !recoveryLast.isEmpty {
+                        DatePicker(selection: recoveryLastDate,
+                                   in: (DayKey.date(today) ?? Date())...,
+                                   displayedComponents: .date) {
+                            Text("Last day").lr(.bodyStrong).foregroundStyle(LR.Color.ink)
+                        }
+                    }
+                } header: {
+                    header("Recovery")
+                } footer: {
+                    Text("Each day draws only trivial and easy quests. Routines harder than easy switch to an easy light version, or wait until you're back. No new epic, and nothing is charged for what stays undone.")
+                        .lr(.caption).foregroundStyle(LR.Color.inkSecondary)
                 }
                 .listRowBackground(LR.Color.surface)
 
@@ -217,4 +258,17 @@ struct SettingsView: View {
     SettingsView(seedStatus: "Preview", today: Date().dayKey, sensorReport: "",
                  check: nil, refresh: {}, onImported: {})
         .modelContainer(for: LifeRPGSchema.models, inMemory: true)
+}
+
+
+/// The recovery stretch set in Settings (`Recovery`). Empty strings = off.
+enum RecoveryKeys {
+    static let first = "recovery.firstDayKey"
+    static let last = "recovery.lastDayKey"
+
+    static func period(_ defaults: UserDefaults = .standard) -> RecoveryPeriod? {
+        guard let first = defaults.string(forKey: first), !first.isEmpty,
+              let last = defaults.string(forKey: last), !last.isEmpty else { return nil }
+        return RecoveryPeriod(firstDayKey: first, lastDayKey: last)
+    }
 }

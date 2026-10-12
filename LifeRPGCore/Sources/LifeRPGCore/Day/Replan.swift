@@ -30,6 +30,11 @@ public enum Replan {
         public var newQuests: Int
         /// Open routines whose light-version decision would actually flip.
         public var adjustedRoutines: Int
+        /// Today's open routines a recovery day doesn't ask for, closed without a charge.
+        public var restedRoutines: Int = 0
+        /// Whether the day is, after the re-plan, a recovery day.
+        public var toRecovery: Bool = false
+        public var fromRecovery: Bool = false
     }
 
     /// Does this quest answer a slot of that difficulty? A `.trivial` slot is the T group.
@@ -71,13 +76,31 @@ public enum Replan {
         return offered != occurrence.usedDegraded
     }
 
+    enum RoutineMove { case keep, flip, rest }
+
+    /// What an open occurrence becomes under `inputs`. On a recovery day a routine due today that
+    /// is heavier than easy moves onto an easy light version, or is rested when it has none; one
+    /// carried from an earlier day is left to run out its round. Otherwise the low-tier rule.
+    static func move(_ occurrence: RoutineOccurrence, routine: RoutineTask?, inputs: DayInputs,
+                     on dayKey: String, in routines: [RoutineTask]) -> RoutineMove {
+        guard let routine else { return .keep }
+        if inputs.isRecovery(dayKey), occurrence.dueDayKey == dayKey, !Recovery.fits(routine) {
+            let light = Recovery.lightVersions(of: routine, in: routines)
+            if light.isEmpty { return .rest }
+            let onOne = occurrence.usedDegraded && light.contains { $0.id == occurrence.degradedRoutineID }
+            return onOne ? .keep : .flip
+        }
+        return wouldFlip(occurrence, routine: routine, tier: inputs.tier, in: routines) ? .flip : .keep
+    }
+
     /// What re-reading would change, or nil when it would change nothing visible — the day hasn't
     /// been generated yet, the tier came out the same, or the new tier asks for exactly what is
     /// already on the page. Reads only; safe to call on every foreground.
     public static func preview(_ context: ModelContext, on dayKey: String, inputs: DayInputs,
                                in timeZone: TimeZone = .current) throws -> Change? {
+        let toRecovery = inputs.isRecovery(dayKey)
         guard let day = try DayService.dailyContext(for: dayKey, in: context),
-              day.tier != inputs.tier else { return nil }
+              day.tier != inputs.tier || day.isRecovery != toRecovery else { return nil }
 
         let regular = try DayService.quests(on: dayKey, in: context)
             .filter { !$0.isHiddenSlot && !$0.replaced && $0.slot != .epic }
@@ -87,18 +110,23 @@ public enum Replan {
 
         let routines = try context.fetch(FetchDescriptor<RoutineTask>())
         let byID = Dictionary(routines.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
-        let flips = try DayService.occurrences(dueOn: dayKey, in: context)
+        let moves = try DayService.occurrences(dueOn: dayKey, in: context)
             .filter(Schedule.isOpen)
-            .filter { wouldFlip($0, routine: $0.routineID.flatMap { byID[$0] },
-                                tier: inputs.tier, in: routines) }
+            .map { move($0, routine: $0.routineID.flatMap { byID[$0] }, inputs: inputs,
+                        on: dayKey, in: routines) }
+        let flips = moves.filter { $0 == .flip }.count
+        let rested = moves.filter { $0 == .rest }.count
 
         // The tier moved but the page would look exactly the same — low and veryLow ask for the
-        // same thing on a squeezed day, and they score the same. Not worth a prompt.
-        guard !dropped.isEmpty || !toDraw.isEmpty || !flips.isEmpty else { return nil }
+        // same thing on a squeezed day, and they score the same. Not worth a prompt. Going into or
+        // out of recovery always is: it changes how the day is judged.
+        guard !dropped.isEmpty || !toDraw.isEmpty || flips > 0 || rested > 0
+                || day.isRecovery != toRecovery else { return nil }
 
         return Change(dayKey: dayKey, fromTier: day.tier, toTier: inputs.tier,
                       keptQuests: kept.count, droppedQuests: dropped.count,
-                      newQuests: toDraw.count, adjustedRoutines: flips.count)
+                      newQuests: toDraw.count, adjustedRoutines: flips,
+                      restedRoutines: rested, toRecovery: toRecovery, fromRecovery: day.isRecovery)
     }
 
     /// Applies what `preview` describes. Returns the change, or nil when there was nothing to do.
@@ -112,6 +140,7 @@ public enum Replan {
         day.tier = inputs.tier
         day.onCycle = inputs.onCycle
         day.cycleDay = inputs.cycleDay
+        day.isRecovery = change.toRecovery
         day.energy = inputs.energy
         day.readiness = inputs.readiness
         day.hrv = inputs.hrv
@@ -142,8 +171,20 @@ public enum Replan {
         let byID = Dictionary(routines.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
         for o in try DayService.occurrences(dueOn: dayKey, in: context) where Schedule.isOpen(o) {
             let routine = o.routineID.flatMap { byID[$0] }
-            guard let routine, wouldFlip(o, routine: routine, tier: inputs.tier, in: routines) else { continue }
-            if let light = Degrade.pick(for: routine, tier: inputs.tier, in: routines, rng: &rng) {
+            guard let routine else { continue }
+            let light: RoutineTask?
+            switch move(o, routine: routine, inputs: inputs, on: dayKey, in: routines) {
+            case .keep: continue
+            case .rest:
+                // Closed by hand, not by the settlement: no `skip` entry, so it isn't a miss.
+                o.skipped = true
+                continue
+            case .flip:
+                light = change.toRecovery && !Recovery.fits(routine)
+                    ? Recovery.lightVersions(of: routine, in: routines).randomElement(using: &rng)
+                    : Degrade.pick(for: routine, tier: inputs.tier, in: routines, rng: &rng)
+            }
+            if let light {
                 o.degradedTextSnapshot = light.text
                 o.degradedRoutineID = light.id
                 o.degradedBasePoints = light.basePoints

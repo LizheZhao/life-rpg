@@ -256,6 +256,17 @@ Determined by HealthKit `menstrualFlow` entries. Two weeks of them are read rath
 - **Days 1–3 are held down to tier `low`** (`Energy.cap`). That single line is the whole rule: a low day already means fewer and easier random slots, the 1.3× effort multiplier, and every routine that offers one swapped for its downgrade version — so there is no strength training on day 1, there is a walk. A measured `veryLow` stays `veryLow`; the cap never pushes a tier up.
 - **Day 4 onwards** is capped at normal, as before — being on a period is not the same as being weak.
 
+### Recovery
+
+Decided with the user (2026-10-12, after surgery): a stretch set by hand, not a full pause. Settings → Recovery turns it on from today through a last day (two weeks out by default, changeable). Inside it (`Recovery`, `RecoveryPeriod`):
+
+- The day is planned as `veryLow` whatever the body says, so the random slots are T, E, E.
+- A routine due that day that is harder than easy moves onto a light version that is easy or trivial, or, with none, is not scheduled at all: no occurrence, so it can't be overdue, doesn't gate the clear and doesn't count toward a flexible routine's weekly target.
+- No new epic is drawn; one already running stays.
+- A day inside it is judged without any charge: no overdue ladder, no Sunday shortfall when that Sunday is covered (the today page's `Sun night` bill follows the same rule). Rounds still end on day 4. A day is a recovery day when its `DailyContext.isRecovery` says so, or, for a day the app never opened, when it falls inside the stretch.
+- Turning it on or off for a day already on screen goes through the re-plan prompt. What is done stays; open slots the new table drops are replaced; a routine due today that is too heavy and has no easy light version is closed (`skipped`, without a `skip` ledger entry, so it reads as set aside, not missed).
+- The streak, reminders and the journal are unchanged.
+
 ### Auto-verification
 
 On the Calendar side, events written by the Shortcut are read, and anything past a duration threshold auto-verifies (`calendar_workout:30`). iOS 17+ needs Full Access to Calendar. Meditation goes through HealthKit's `mindfulSession`, allowing multiple sessions to accumulate in a day. Auto-verified quests are marked `sourceType = .healthKit` and need no manual tap.

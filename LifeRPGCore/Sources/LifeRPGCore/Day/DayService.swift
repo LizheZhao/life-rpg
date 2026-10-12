@@ -17,6 +17,11 @@ public struct DayInputs: Equatable, Sendable {
     public var hrv: Double?
     public var sleepHours: Double?
     public var restingHR: Double?
+    /// The recovery stretch the user has set, if any (`Recovery`). Kept whole rather than as a
+    /// flag for today: settling the days the app never saw needs to know which of them it covered.
+    public var recovery: RecoveryPeriod?
+
+    public func isRecovery(_ dayKey: String) -> Bool { recovery?.contains(dayKey) ?? false }
 
     /// True on any day inside a period, which is what the day's record and `PLAN.md` §5 call
     /// "on cycle".
@@ -94,7 +99,8 @@ public enum DayService {
                                    settle: ((String, ModelContext) throws -> Void)? = nil) throws -> DailyContext {
         let today = now.dayKey(in: timeZone)          // taken once; everything below uses the key
         // Nil = the real settlement (`Overdue.settle`); tests may pass their own.
-        let judge = settle ?? { try Overdue.settle($0, in: $1, timeZone: timeZone, now: now) }
+        let judge = settle ?? { try Overdue.settle($0, in: $1, timeZone: timeZone, now: now,
+                                                   recovery: inputs.recovery) }
         // Each ended day is auto-verified from its own evidence *before* it is judged, so a workout
         // logged on a day the app never saw still counts on that day rather than being docked.
         try catchUp(context, openedOn: today, in: timeZone, settle: { day, ctx in
@@ -106,9 +112,11 @@ public enum DayService {
 
         let weekKey = DayKey.weekKey(of: today, in: timeZone) ?? now.weekKey(in: timeZone)
 
+        let recovering = inputs.isRecovery(today)
+
         if let existing = try dailyContext(for: today, in: context) {
             // A day generated before epics existed (or before the library had any) still gets one.
-            if try Epic.ensure(context, on: today, weekKey: weekKey, in: timeZone, rng: &rng) != nil {
+            if !recovering, try Epic.ensure(context, on: today, weekKey: weekKey, in: timeZone, rng: &rng) != nil {
                 try context.save()
             }
             // Every foreground re-checks today: a workout that synced since the last one lands now.
@@ -122,10 +130,19 @@ public enum DayService {
         let due = Schedule.dueRoutines(routines,
                                        occurrences: try context.fetch(FetchDescriptor<RoutineOccurrence>()),
                                        on: today, in: timeZone)
+        var scheduled = 0
         for routine in due {
-            let light = Degrade.pick(for: routine, tier: inputs.tier, in: routines, rng: &rng)
+            var light = Degrade.pick(for: routine, tier: inputs.tier, in: routines, rng: &rng)
+            if recovering {
+                switch Recovery.plan(for: routine, in: routines, rng: &rng) {
+                case .asIs: break
+                case .light(let version): light = version
+                case .rest: continue
+                }
+            }
             context.insert(RoutineOccurrence(routine: routine, dueDayKey: today, weekKey: weekKey,
                                              downgrade: light))
+            scheduled += 1
         }
 
         let day = DailyContext()
@@ -133,13 +150,14 @@ public enum DayService {
         day.tier = inputs.tier
         day.onCycle = inputs.onCycle
         day.cycleDay = inputs.cycleDay
+        day.isRecovery = recovering
         day.energy = inputs.energy
         day.readiness = inputs.readiness
         day.hrv = inputs.hrv
         day.sleepHours = inputs.sleepHours
         day.restingHR = inputs.restingHR
-        day.routineLoad = due.count
-        day.randomSlots = Composition.slots(routineLoad: due.count)
+        day.routineLoad = scheduled
+        day.randomSlots = Composition.slots(routineLoad: scheduled)
         context.insert(day)
 
         // The morning's draw weighs every rating given so far (`Affinity`).
@@ -148,7 +166,9 @@ public enum DayService {
         try fill(context, plan: Composition.plan(tier: inputs.tier, slots: day.randomSlots),
                  on: today, weekKey: weekKey, excluding: &drawn, in: timeZone, rng: &rng)
         // Outside the composition table: the epic takes no slot and doesn't size anything.
-        try Epic.ensure(context, on: today, weekKey: weekKey, in: timeZone, rng: &rng)
+        if !recovering {
+            try Epic.ensure(context, on: today, weekKey: weekKey, in: timeZone, rng: &rng)
+        }
 
         try context.save()
         if let e = evidence[today] {

@@ -82,7 +82,8 @@ struct RootView: View {
             if phase == .active || phase == .background { Task { await NotificationService.reschedule(in: context) } }
         }
         .onChange(of: dayOffset) { Task { await refresh() } }
-        .alert("Today's body data changed", isPresented: Binding(
+        .alert(replan.map { $0.toRecovery != $0.fromRecovery } == true ? "Recovery" : "Today's body data changed",
+               isPresented: Binding(
             get: { replan != nil }, set: { if !$0 { replan = nil; replanInputs = nil } }
         ), presenting: replan) { change in
             Button("Re-plan what's open") { apply(change) }
@@ -107,7 +108,10 @@ struct RootView: View {
     }
 
     private func message(for change: Replan.Change) -> String {
-        var lines = ["Readings now say \(change.toTier.rawValue) rather than \(change.fromTier.rawValue)."]
+        var lines = change.toRecovery != change.fromRecovery
+            ? [change.toRecovery ? "Recovery starts today: only trivial and easy quests, and nothing is charged."
+                                 : "Recovery is over: today goes back to what your readings say."]
+            : ["Readings now say \(change.toTier.rawValue) rather than \(change.fromTier.rawValue)."]
         if change.keptQuests > 0 {
             lines.append("\(change.keptQuests) quest(s) stay as they are — everything finished, and anything open the new day still asks for.")
         }
@@ -119,6 +123,9 @@ struct RootView: View {
         }
         if change.adjustedRoutines > 0 {
             lines.append("\(change.adjustedRoutines) open routine(s) would swap to (or back from) a lighter version.")
+        }
+        if change.restedRoutines > 0 {
+            lines.append("\(change.restedRoutines) routine(s) too heavy for now would be set aside, without a charge.")
         }
         return lines.joined(separator: "\n")
     }
@@ -193,6 +200,10 @@ struct RootView: View {
             report.append("Workout filter not set — calendar auto-verify is off")
         }
 
+        inputs = Recovery.applied(RecoveryKeys.period(), to: inputs, on: todayKey)
+        let recoveryMoved = (try? DayService.dailyContext(for: todayKey, in: context))?.isRecovery
+            != inputs.isRecovery(todayKey)
+
         let verifiedBefore = (try? AutoVerify.verifiedItems(on: todayKey, in: context)) ?? []
         var rng = SystemRandomNumberGenerator()
         do {
@@ -202,7 +213,8 @@ struct RootView: View {
             generationError = nil
             // The day was already there and the body now says something else: offer to re-plan
             // what is still open. Nothing is changed until it is confirmed.
-            if dayExisted, readBody,
+            // Turning recovery on or off is the user's own word, so it re-plans with or without a reading.
+            if dayExisted, readBody || recoveryMoved,
                let change = try Replan.preview(context, on: todayKey, inputs: inputs) {
                 replan = change
                 replanInputs = inputs

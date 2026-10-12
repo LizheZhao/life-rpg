@@ -242,6 +242,15 @@ Decided with the user (2026-10): local notifications first (a widget is postpone
 
 - [x] `verify.sh up --fresh` hanging (the verification harness, not the app): the same command had hung three times for 10+ minutes, once leaving a stale `verify.sh` and a sleeping `xcodebuild` that blocked the next run; a clean run takes ~40 s, so it was intermittent and the cause was not found. The script now bounds every external call (`run_to`: kills the whole process group after a per-step limit and names the step, exit 124), takes a lock so two `up` runs cannot collide (a stale lock is taken over), prints a line per stage and keeps the build log. Checked: the helper alone (pass-through, exit codes, a hung command, its children, a command ignoring TERM, quiet mode), a normal `up --fresh`, a second `up` refused with exit 3, a stale lock taken over, `doctor` / `sql` / `ledger` / `shot` / `relaunch` / `day`, and a fake `xcodebuild` that never returns failing the whole `up` in 9 s with exit 124 and nothing left behind. Not reproduced: the original hang itself, so whether the root cause is a `simctl` or an `xcodebuild` step is still unknown; the limits make it a message instead of a stall.
 
+## Stage 5.9 — Recovery (after surgery)
+
+Decided with the user (2026-10-12): a recovery stretch, not a full pause (`PLAN.md` §5 "Recovery").
+
+- [x] `Recovery` / `RecoveryPeriod` (Core): tier held at `veryLow`, routines above easy lightened or rested, no new epic, no penalty on a recovery day or a covered Sunday (`Overdue.settle`, `Overdue.weekly`), re-plan on turning it on or off (`Replan.Change.restedRoutines` / `toRecovery`). `SchemaV11` adds `DailyContext.isRecovery` (defaulted false, lightweight); export `schemaVersion` 12. `RecoveryTests`.
+- [x] App: Settings → Recovery (switch and last day, `RecoveryKeys` in UserDefaults), `Recovery · through …` under the greeting, the re-plan prompt's recovery wording.
+- [x] Driven on the simulator: with the stretch set (through the app's defaults; the control tool can't flip a `Toggle`), relaunch showed the re-plan prompt; after it, today was `veryLow`, `isRecovery = 1`, the open M and H were replaced by a T group and an E, the medium routine was on its light version, and the Sunday bill was gone.
+- [ ] Device check: the V10 → V11 store upgrade keeping every row; the switch and the date picker by hand; a day judged inside the stretch costing nothing.
+
 ## Stage 6 — Backup and migration
 
 Done when: balance matches exactly

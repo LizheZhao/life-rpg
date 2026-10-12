@@ -21,8 +21,9 @@ public enum JSONExport {
     /// (`journalEntries`), 9 the whole library (`fullLibrary`: every row with its id, edits, stamps
     /// and archived mark, because the library in the store is the truth, not the starter file), 10
     /// the starter library's key on each library row (`starterKey`), 11 the name the person gave
-    /// the app (`profileName`); an older file simply lacks them.
-    public static let schemaVersion = 11
+    /// the app (`profileName`), 12 whether a day was a recovery day (`Context.isRecovery`); an
+    /// older file simply lacks them.
+    public static let schemaVersion = 12
 
     /// The oldest export import still reads. Anything between this and `schemaVersion` decodes into
     /// the current shape, the fields added since being optional.
@@ -261,6 +262,8 @@ public enum JSONExport {
         public var tier: String
         public var onCycle: Bool
         public var cycleDay: Int?
+        /// Absent before v12.
+        public var isRecovery: Bool?
         public var routineLoad: Int
         public var randomSlots: Int
     }
@@ -389,7 +392,7 @@ public enum JSONExport {
             dailyContexts: try context.fetch(FetchDescriptor<DailyContext>()).sorted { $0.dayKey < $1.dayKey }.map {
                 Context(dayKey: $0.dayKey, hrv: $0.hrv, sleepHours: $0.sleepHours, restingHR: $0.restingHR,
                         energy: $0.energy, readiness: $0.readiness, tier: $0.tierRaw, onCycle: $0.onCycle,
-                        cycleDay: $0.cycleDay, routineLoad: $0.routineLoad, randomSlots: $0.randomSlots)
+                        cycleDay: $0.cycleDay, isRecovery: $0.isRecovery, routineLoad: $0.routineLoad, randomSlots: $0.randomSlots)
             },
             ratings: ratings.sorted { $0.timestamp < $1.timestamp }.map {
                 Rating(id: $0.id, targetID: $0.targetID, questID: $0.questID,

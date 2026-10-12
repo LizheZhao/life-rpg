@@ -218,7 +218,7 @@ public enum JSONImport {
             let row = DailyContext()
             row.dayKey = c.dayKey; row.hrv = c.hrv; row.sleepHours = c.sleepHours; row.restingHR = c.restingHR
             row.energy = c.energy; row.readiness = c.readiness; row.tierRaw = c.tier; row.onCycle = c.onCycle
-            row.cycleDay = c.cycleDay; row.routineLoad = c.routineLoad; row.randomSlots = c.randomSlots
+            row.cycleDay = c.cycleDay; row.isRecovery = c.isRecovery ?? false; row.routineLoad = c.routineLoad; row.randomSlots = c.randomSlots
             context.insert(row)
         }
 

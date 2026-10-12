@@ -34,8 +34,11 @@ import SwiftData
 /// libraries (nil on every existing row, so nothing changes until `StarterUpdate.claim` stamps the
 /// rows that match the starter library); the export goes to 10 with the key on each `fullLibrary`
 /// row, and import still reads v3 to v9, whose rows simply have none.
-public enum SchemaV10: VersionedSchema {
-    public static var versionIdentifier = Schema.Version(10, 0, 0)
+/// V11 added `DailyContext.isRecovery`, defaulted to false, so every day already recorded stays an
+/// ordinary day; the export goes to 12 with the flag on each day, and import still reads v3 to v11,
+/// where a day without it decodes as an ordinary one.
+public enum SchemaV11: VersionedSchema {
+    public static var versionIdentifier = Schema.Version(11, 0, 0)
 
     public static var models: [any PersistentModel.Type] = [
         QuestTemplate.self,
@@ -53,13 +56,13 @@ public enum SchemaV10: VersionedSchema {
 }
 
 public enum LifeRPGMigrationPlan: SchemaMigrationPlan {
-    public static var schemas: [any VersionedSchema.Type] = [SchemaV10.self]
+    public static var schemas: [any VersionedSchema.Type] = [SchemaV11.self]
     public static var stages: [MigrationStage] = []
 }
 
 public enum LifeRPGSchema {
-    public static let current = Schema(versionedSchema: SchemaV10.self)
+    public static let current = Schema(versionedSchema: SchemaV11.self)
 
     /// For `#Preview` and tests that just need the model list.
-    public static let models = SchemaV10.models
+    public static let models = SchemaV11.models
 }
