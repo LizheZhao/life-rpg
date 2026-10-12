@@ -21,6 +21,7 @@ struct RewardsView: View {
     @State private var editing: Editing?
     @State private var confirming: Confirm?
     @State private var actionError: String?
+    @State private var showArchived = false
 
     private struct Editing: Identifiable {
         let id = UUID()
@@ -41,6 +42,8 @@ struct RewardsView: View {
 
     private var balance: Int { Economy.balance(ledger) }
     private var active: [Reward] { rewards.filter(\.isActive) }
+    /// Archived rewards stay in the store (a redemption may point at one); they are the inactive ones.
+    private var archived: [Reward] { rewards.filter { !$0.isActive } }
     private var completedDays: Set<String> { Streak.completedDayKeys(quests) }
     private var frozenDays: Set<String> { Streak.frozenDayKeys(ledger) }
     private var repairable: String? {
@@ -65,6 +68,7 @@ struct RewardsView: View {
                     goalSection
                     rewardsSection
                     redeemedSection
+                    archivedSection
                 }
                 .padding(.horizontal, 16)
                 .padding(.bottom, 8)
@@ -125,7 +129,7 @@ struct RewardsView: View {
         return VStack(alignment: .leading, spacing: 10) {
             SectionTitle(title: "Streak")
             RewardCard(doodle: .sparkle, title: "Missed \(day)",
-                       caption: "A freeze covers it, and the streak runs on as if it hadn't broken.",
+                       caption: "Keeps the streak alive.",
                        pills: [], blocked: blocked,
                        buttonTitle: "Freeze · \(cost == 0 ? "free" : "\(cost)")",
                        actions: [], goal: nil) { show(.freeze(day)) }
@@ -164,7 +168,7 @@ struct RewardsView: View {
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
                 .accessibilityAddTraits(.isHeader)
-            Text("Add a treat or a purchase you want. Its coin price follows from what it costs.")
+            Text("Add something you want.")
                 .lr(.caption).foregroundStyle(LR.Color.inkSecondary)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
@@ -203,6 +207,25 @@ struct RewardsView: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .lrCard(.surface, radius: LR.Radius.row)
+            }
+        }
+    }
+
+    @ViewBuilder private var archivedSection: some View {
+        let rows = archived
+        if !rows.isEmpty {
+            VStack(alignment: .leading, spacing: 10) {
+                LibrarySectionHeader(title: "Archived", tint: nil, count: rows.count, noun: "archived reward",
+                                     isOpen: showArchived) {
+                    Haptics.selection()
+                    withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) { showArchived.toggle() }
+                }
+                if showArchived {
+                    ForEach(rows) { reward in
+                        ArchivedRewardRow(reward: reward) { restore(reward) }
+                    }
+                    .transition(.opacity)
+                }
             }
         }
     }
@@ -263,7 +286,7 @@ struct RewardsView: View {
         let price = cost == 0 ? "Free" : "\(cost) coins"
         switch c {
         case .redeem: return price
-        case .freeze(let day): return "\(price). Covers \(day) so the streak doesn't break there."
+        case .freeze(let day): return "\(price). Covers \(day)."
         }
     }
 
@@ -298,12 +321,47 @@ struct RewardsView: View {
         do { try Redemption.archive(r, in: context) } catch { actionError = "\(error)" }
     }
 
+    private func restore(_ r: Reward) {
+        do {
+            try Redemption.restore(r, in: context)
+            Haptics.selection()
+            actionError = nil
+        } catch {
+            actionError = "\(error)"
+        }
+    }
+
     private func toggleGoal(_ r: Reward) {
         do {
             if r.isGoal { try SavingsGoal.unpin(r, in: context) } else { try SavingsGoal.pin(r, in: context) }
         } catch {
             actionError = "\(error)"
         }
+    }
+}
+
+/// An archived reward: dimmed, with the one thing that can be done to it.
+private struct ArchivedRewardRow: View {
+    let reward: Reward
+    let restore: () -> Void
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 12) {
+            Circle().fill(LR.Color.pillFill).frame(width: 52, height: 52)
+                .overlay { DoodleView(key: DoodleKey.forText(reward.name), size: 28, tint: LR.Color.iconNeutral) }
+                .opacity(0.4)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 6) {
+                Text(reward.name).lr(.bodyStrong).foregroundStyle(LR.Color.inkSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                PillLabel(text: "\(RewardPricing.coins(for: reward)) coins").monospacedDigit()
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            Button("Restore", action: restore).buttonStyle(PillButtonStyle())
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .lrCard(.surface, radius: LR.Radius.row)
     }
 }
 
@@ -504,7 +562,7 @@ private struct RewardEditor: View {
                         }
                     }
                     .modifier(FieldCard())
-                    Text("What it costs in real money; the coin price follows from it.")
+                    Text("Cost in real money.")
                         .lr(.caption).foregroundStyle(LR.Color.inkSecondary)
                         .fixedSize(horizontal: false, vertical: true)
                         .padding(.horizontal, 6)
@@ -515,7 +573,7 @@ private struct RewardEditor: View {
                         }
                         .tint(LR.Color.accent)
                         .frame(minHeight: 44)
-                        Text("Today's level card tracks one reward at a time. Pinning this one unpins the other.")
+                        Text("Replaces the current goal.")
                             .lr(.caption).foregroundStyle(LR.Color.inkSecondary)
                             .fixedSize(horizontal: false, vertical: true)
                     }
