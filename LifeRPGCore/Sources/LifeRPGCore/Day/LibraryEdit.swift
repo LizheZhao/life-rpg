@@ -93,6 +93,21 @@ public enum LibraryEdit {
         try context.save()
     }
 
+    /// Sets a quest's tier. Any of the five; an epic is one a week rather than a daily slot, so it
+    /// is saved without "hidden quest" or "weekends only", as `LibrarySave.saveQuest` does. Reaches
+    /// forward only: a `DailyQuest` already drawn snapshots its slot and points.
+    public static func setDifficulty(_ difficulty: Difficulty, forQuest id: UUID,
+                                     in context: ModelContext) throws {
+        guard let row = try context.fetch(FetchDescriptor<QuestTemplate>(predicate: #Predicate { $0.id == id })).first
+        else { throw Failure.notFound }
+        row.difficulty = difficulty
+        if !LibrarySave.allowsHiddenAndWeekend(difficulty) {
+            row.hiddenEligible = false
+            row.weekendOnly = false
+        }
+        try context.save()
+    }
+
     // MARK: when a routine comes due
 
     /// Whether a session of the routine is still open: due, not done, not skipped, not swapped for

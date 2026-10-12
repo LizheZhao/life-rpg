@@ -56,6 +56,64 @@ struct LibraryDifficultyTests {
         }
     }
 
+    // MARK: a quest's tier
+
+    private func quest(_ ctx: ModelContext, difficulty: Difficulty = .easy) -> QuestTemplate {
+        let q = QuestTemplate()
+        q.text = "Stretch"; q.difficulty = difficulty
+        ctx.insert(q)
+        return q
+    }
+
+    @Test func aQuestCanMoveToAnyOfTheFiveTiers() throws {
+        let ctx = try Fixtures.context()
+        let q = quest(ctx)
+        try ctx.save()
+        for d in [Difficulty.trivial, .medium, .hard, .epic, .easy] {
+            try LibraryEdit.setDifficulty(d, forQuest: q.id, in: ctx)
+            #expect(q.difficulty == d)
+        }
+    }
+
+    @Test func movingAQuestToEpicClearsHiddenAndWeekendOnly() throws {
+        let ctx = try Fixtures.context()
+        let q = quest(ctx, difficulty: .medium)
+        q.hiddenEligible = true; q.weekendOnly = true
+        try ctx.save()
+        try LibraryEdit.setDifficulty(.epic, forQuest: q.id, in: ctx)
+        #expect(q.difficulty == .epic)
+        #expect(!q.hiddenEligible && !q.weekendOnly)
+    }
+
+    @Test func movingAQuestBetweenOrdinaryTiersKeepsHiddenAndWeekendOnly() throws {
+        let ctx = try Fixtures.context()
+        let q = quest(ctx, difficulty: .medium)
+        q.hiddenEligible = true; q.weekendOnly = true
+        try ctx.save()
+        try LibraryEdit.setDifficulty(.hard, forQuest: q.id, in: ctx)
+        #expect(q.hiddenEligible && q.weekendOnly)
+    }
+
+    /// What is already on a page keeps its own tier: a `DailyQuest` snapshots it.
+    @Test func aQuestAlreadyDrawnKeepsItsTier() throws {
+        let ctx = try Fixtures.context()
+        let q = quest(ctx, difficulty: .easy)
+        let drawn = DailyQuest()
+        drawn.templateID = q.id; drawn.slot = .easy; drawn.textSnapshot = q.text
+        ctx.insert(drawn)
+        try ctx.save()
+        try LibraryEdit.setDifficulty(.hard, forQuest: q.id, in: ctx)
+        #expect(q.difficulty == .hard)
+        #expect(drawn.slot == .easy)
+    }
+
+    @Test func aQuestThatIsGoneIsAnError() throws {
+        let ctx = try Fixtures.context()
+        #expect(throws: LibraryEdit.Failure.notFound) {
+            try LibraryEdit.setDifficulty(.hard, forQuest: UUID(), in: ctx)
+        }
+    }
+
     // MARK: the backup
 
     private let sideCSV = """
