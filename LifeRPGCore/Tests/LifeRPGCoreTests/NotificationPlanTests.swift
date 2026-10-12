@@ -96,9 +96,9 @@ struct NotificationPlanTests {
     @Test func theMorningNamesHowManyRoutinesAreDue() {
         let items = plan(now: at(wednesday, hour: 6), counts: ["2026-10-07": 3, "2026-10-08": 1, "2026-10-09": 0], days: 3)
         let body = { (day: String) in items.first { $0.id == "morning-\(day)" }!.body }
-        #expect(body("2026-10-07").contains("3 routines"))
-        #expect(body("2026-10-08").contains("1 routine") && !body("2026-10-08").contains("1 routines"))
-        #expect(!body("2026-10-09").contains("0 routine"))
+        #expect(body("2026-10-07") == "3 routines due today.")
+        #expect(body("2026-10-08") == "1 routine due today.")
+        #expect(body("2026-10-09") == "Open the app to see what today asks.")
     }
 
     /// Quests are drawn when the app opens, not before, so the notification must not promise them yet.
@@ -111,7 +111,7 @@ struct NotificationPlanTests {
     @Test func theEveningInvitesWithoutPressure() {
         let item = plan(now: at(wednesday, hour: 6), morning: false, days: 1)[0]
         #expect(item.title == "Write about today")
-        #expect(!item.body.isEmpty && item.body.count < 100)
+        #expect(item.body == "A few lines is enough.")
     }
 
     // MARK: counting routines

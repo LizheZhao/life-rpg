@@ -74,7 +74,7 @@ public enum NotificationPlan {
                let fire = fireDate(date, minute: settings.eveningMinute, cal: cal, timeZone: timeZone), fire > now {
                 items.append(PlannedNotification(kind: .journal, id: "journal-\(date)", fireDate: fire,
                                                  title: "Write about today",
-                                                 body: "A few lines is enough. Pull in a question if you want one."))
+                                                 body: "A few lines is enough."))
             }
         }
         return items
@@ -85,8 +85,8 @@ public enum NotificationPlan {
     private static func morningBody(routines: Int) -> String {
         switch routines {
         case 0: "Open the app to see what today asks."
-        case 1: "1 routine is due today. Open the app to see today's quests."
-        default: "\(routines) routines are due today. Open the app to see today's quests."
+        case 1: "1 routine due today."
+        default: "\(routines) routines due today."
         }
     }
 

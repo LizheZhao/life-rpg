@@ -74,15 +74,15 @@ struct RoutineSchedulePresentationTests {
         #expect(p.group == .flexible)
         #expect(p.strip == .anyDay)
         #expect(p.summary == "3× a week · any day")
-        #expect(p.sentence == "3 times a week, on any day. It comes due on Monday, Tuesday and Wednesday, and doing it earlier or later that week counts.")
+        #expect(p.sentence == "3 times a week, any day.")
         #expect(p.weeklyTarget == 3)
     }
 
     @Test func flexibleOnceAndTwiceAreSpokenAsWords() {
         #expect(present(.weekly, "FRI", target: 1, flexible: true).sentence
-                == "Once a week, on any day. It comes due on Friday, and doing it earlier or later that week counts.")
+                == "Once a week, any day.")
         #expect(present(.weekly, "TUE,WED", target: 2, flexible: true).sentence
-                == "Twice a week, on any day. It comes due on Tuesday and Wednesday, and doing it earlier or later that week counts.")
+                == "Twice a week, any day.")
         #expect(present(.weekly, "FRI", target: 1, flexible: true).summary == "1× a week · any day")
     }
 
@@ -98,13 +98,13 @@ struct RoutineSchedulePresentationTests {
         #expect(p.strip == .none)
         #expect(p.weekdays == Array(repeating: false, count: 7))
         #expect(p.summary == "Every 3 days")
-        #expect(p.sentence == "Comes up every 3 days, counted from the last time you did it.")
+        #expect(p.sentence == "Every 3 days from the last time.")
     }
 
     @Test func everyDayAsAnInterval() {
         let p = present(.everyNDays, "1")
         #expect(p.summary == "Every day")
-        #expect(p.sentence == "Comes up every day, counted from the last time you did it.")
+        #expect(p.sentence == "Every day from the last time.")
     }
 
     // MARK: monthly and longer
@@ -142,14 +142,14 @@ struct RoutineSchedulePresentationTests {
         #expect(p.group == .monthly)
         #expect(p.strip == .none)
         #expect(p.summary == "Every 2nd Saturday")
-        #expect(p.sentence == "Comes up every 2nd Saturday. Until you first do it, it comes up every week.")
+        #expect(p.sentence == "Every 2nd Saturday.")
         #expect(p.anchorWeekKey == nil)
         #expect(p.usesAnchorWeek)
     }
 
     @Test func everyTwoWeeksWithAnAnchorSaysFromWhen() {
         let p = present(.everyNWeeksOnWeekday, "2:SAT", anchor: "2026-W38")
-        #expect(p.sentence == "Comes up every 2nd Saturday, counted from the week of 2026-W38.")
+        #expect(p.sentence == "Every 2nd Saturday.")
         #expect(p.anchorWeekKey == "2026-W38")
         #expect(present(.everyNWeeksOnWeekday, "3:MON").summary == "Every 3rd Monday")
         #expect(present(.everyNWeeksOnWeekday, "4:MON").summary == "Every 4th Monday")
@@ -176,7 +176,7 @@ struct RoutineSchedulePresentationTests {
         #expect(p.group == .lighterVersion)
         #expect(p.strip == .none)
         #expect(p.summary == "Lighter version")
-        #expect(p.sentence == "Offered instead of its original routine on low days. It is never scheduled on its own.")
+        #expect(p.sentence == "Stands in for the original on low days.")
         #expect(p.weeklyTarget == nil)
     }
 
@@ -184,7 +184,7 @@ struct RoutineSchedulePresentationTests {
         let p = present(.weekly, "TUES")
         #expect(p.group == .unscheduled)
         #expect(p.summary == "No schedule")
-        #expect(p.sentence == "Its schedule could not be read, so it never comes up.")
+        #expect(p.sentence == "No schedule.")
     }
 
     // MARK: grouping and order
@@ -296,18 +296,18 @@ struct RoutineSchedulePresentationTests {
     /// Each night a fixed routine is still undone costs its own deduction (`PLAN.md` § Overdue
     /// penalty: 50%, 75%, 100%, rounded half up), and they add up.
     @Test func aFixedRoutineSaysWhatEachNightCosts() {
-        #expect(note(10) == "Pays 10 each time. Left undone, it costs 5 at the end of the day, 8 the next day and 10 the day after (they add up), then it is dropped. A change applies from the next time it comes up.")
-        #expect(note(21).contains("costs 11 at the end of the day, 16 the next day and 21 the day after"))
-        #expect(note(38).contains("costs 19 at the end of the day, 29 the next day and 38 the day after"))
+        #expect(note(10) == "Pays 10. Skip it and it costs 5, then 8, then 10 on the next two days, then it's gone.")
+        #expect(note(21) == "Pays 21. Skip it and it costs 11, then 16, then 21 on the next two days, then it's gone.")
+        #expect(note(38) == "Pays 38. Skip it and it costs 19, then 29, then 38 on the next two days, then it's gone.")
     }
 
     @Test func aFlexibleRoutineSaysWhatASessionShortOfTheTargetCosts() {
-        #expect(note(10, flexible: true) == "Pays 10 each time. No daily charge; on Sunday every session you are short of the week's target costs 5. A change applies from the next time it comes up.")
-        #expect(note(21, flexible: true).contains("costs 11."))
+        #expect(note(10, flexible: true) == "Pays 10. Each session short of the week's target costs 5 on Sunday.")
+        #expect(note(21, flexible: true) == "Pays 21. Each session short of the week's target costs 11 on Sunday.")
     }
 
     @Test func aRoutineThatDoesNotGateTheDayIsNeverCharged() {
-        #expect(note(10, counts: false) == "Pays 10 each time. Never charged for leaving it undone; it is dropped after three days. A change applies from the next time it comes up.")
-        #expect(note(10, flexible: true, counts: false) == "Pays 10 each time. Never charged for leaving it undone; whatever is still open is dropped on Sunday. A change applies from the next time it comes up.")
+        #expect(note(10, counts: false) == "Pays 10. No penalty. Gone after three days.")
+        #expect(note(10, flexible: true, counts: false) == "Pays 10. No penalty. Gone on Sunday.")
     }
 }

@@ -131,6 +131,6 @@ struct EraseRecordsTests {
         let (ctx, _, _) = try usedStore()
         let text = try EraseRecords.preview(in: ctx).message
         #expect(text.contains("journal") && text.contains("Your library stays"))
-        #expect(text.contains("can't be undone"))
+        #expect(text.contains("Can't be undone"))
     }
 }

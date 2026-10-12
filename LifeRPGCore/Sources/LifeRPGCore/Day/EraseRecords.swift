@@ -33,7 +33,7 @@ public enum EraseRecords {
             add(rewards, "reward", "rewards")
             add(journalEntries + journalTurns, "journal entry", "journal entries")
             let list = gone.isEmpty ? "There is nothing to erase." : "This erases " + gone.joined(separator: ", ") + "."
-            return list + " Your library stays, with your edits. This can't be undone: output records to JSON first if you may want them back."
+            return list + " Your library stays. Can't be undone, so export first if unsure."
         }
     }
 
