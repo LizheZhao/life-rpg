@@ -261,6 +261,8 @@
 		000000000000000111000000 /* Debug configuration for PBXNativeTarget "LifeRPG" */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_ENTITLEMENTS = LifeRPG/LifeRPG.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
@@ -269,6 +271,7 @@
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
+				"INFOPLIST_FILE[sdk=*]" = "doc/launch-screen.plist";
 				INFOPLIST_KEY_LSApplicationCategoryType = "";
 				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "读取运动日历，自动确认运动任务完成";
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "读取睡眠、HRV、静息心率、正念和经期数据，用来调整每日任务难度";
@@ -305,6 +308,8 @@
 		000000000000000112000000 /* Release configuration for PBXNativeTarget "LifeRPG" */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_ENTITLEMENTS = LifeRPG/LifeRPG.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
@@ -313,6 +318,7 @@
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
+				"INFOPLIST_FILE[sdk=*]" = "doc/launch-screen.plist";
 				INFOPLIST_KEY_LSApplicationCategoryType = "";
 				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "读取运动日历，自动确认运动任务完成";
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "读取睡眠、HRV、静息心率、正念和经期数据，用来调整每日任务难度";

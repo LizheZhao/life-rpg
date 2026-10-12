@@ -4,7 +4,7 @@ import SwiftUI
 
 /// The month page (`PLAN.md` §9). Each day number sits in a ring that fills with the share of the
 /// day's quests and routines done (`CalendarMarks.progress`) and turns violet once the hidden quest
-/// is done too. Each epic is a highlighter stroke behind the dates from the day it was drawn to the
+/// is done too. Each epic is a rough, hand-drawn marker stroke behind the dates from the day it was drawn to the
 /// day it was finished (`CalendarMarks.epicSpans`): grey while unfinished, and a colour different
 /// from the epic before once it is done. Everything else is in the day sheet. Tap a day for it.
 struct CalendarView: View {
@@ -36,8 +36,11 @@ struct CalendarView: View {
     /// An unfinished epic: running or run out.
     private static let unfinishedHighlighter = LR.Color.ink.opacity(0.09)
 
-    private static let ringSize: CGFloat = 36
-    private static let ringWidth: CGFloat = 3.5
+    private static let ringSize: CGFloat = 34
+    private static let ringWidth: CGFloat = 2.5
+    /// The hand-drawn stroke: about half a ring tall, tilted a touch like a hand-held marker.
+    private static let strokeHeight: CGFloat = 20
+    private static let strokeTilt = Angle.degrees(-1.2)
 
     private static func highlighter(_ span: EpicSpan) -> Color {
         guard let index = span.doneIndex else { return unfinishedHighlighter }
@@ -167,6 +170,7 @@ struct CalendarView: View {
                                  epic: epics.first { $0.covers(day.dayKey) }, journalDays: journalDays)
                         }
                     }
+                    .background { strokes(epics, in: week) }
                 }
             }
             .id(shownMonth)
@@ -216,7 +220,6 @@ struct CalendarView: View {
             .frame(width: Self.ringSize, height: Self.ringSize)
             .padding(.vertical, 6)
             .frame(maxWidth: .infinity)
-            .background { if let epic { stroke(epic, on: day.dayKey) } }
             .contentShape(Rectangle())
             .opacity(future ? 0.35 : day.inMonth ? 1 : 0.4)
         }
@@ -240,18 +243,32 @@ struct CalendarView: View {
         .padding(Self.ringWidth / 2)
     }
 
-    /// The day's piece of an epic's stroke: rounded only where the epic starts and ends.
-    private func stroke(_ epic: EpicSpan, on dayKey: String) -> some View {
-        let r: CGFloat = 9
-        return UnevenRoundedRectangle(topLeadingRadius: epic.start == dayKey ? r : 0,
-                                      bottomLeadingRadius: epic.start == dayKey ? r : 0,
-                                      bottomTrailingRadius: epic.end == dayKey ? r : 0,
-                                      topTrailingRadius: epic.end == dayKey ? r : 0,
-                                      style: .continuous)
-            .fill(Self.highlighter(epic))
-            .frame(height: Self.ringSize - 4)
-            .padding(.leading, epic.start == dayKey ? 2 : 0)
-            .padding(.trailing, epic.end == dayKey ? 2 : 0)
+    /// Each epic's piece of this row, drawn as one rough marker stroke behind the numbers. A stroke
+    /// that started on an earlier row, or carries on to the next, simply runs to the row's edge.
+    private func strokes(_ epics: [EpicSpan], in week: MonthGrid.Week) -> some View {
+        GeometryReader { geo in
+            let column = geo.size.width / CGFloat(max(week.days.count, 1))
+            ForEach(Array(epics.enumerated()), id: \.offset) { _, epic in
+                let covered = week.days.indices.filter { epic.covers(week.days[$0].dayKey) }
+                if let first = covered.first, let last = covered.last {
+                    let starts = week.days[first].dayKey == epic.start
+                    let ends = week.days[last].dayKey == epic.end
+                    let x1 = CGFloat(first) * column + (starts ? 4 : 0)
+                    let x2 = CGFloat(last + 1) * column - (ends ? 4 : 0)
+                    HighlighterStroke(seed: Self.seed(week.weekKey + epic.start), starts: starts, ends: ends)
+                        .fill(Self.highlighter(epic))
+                        .frame(width: max(x2 - x1, 0), height: Self.strokeHeight)
+                        .rotationEffect(Self.strokeTilt)
+                        .position(x: (x1 + x2) / 2, y: geo.size.height / 2)
+                }
+            }
+        }
+        .accessibilityHidden(true)
+    }
+
+    /// The same wobble for the same row and epic on every launch (`hashValue` is reseeded per run).
+    private static func seed(_ text: String) -> Int {
+        text.unicodeScalars.reduce(0) { ($0 * 31 + Int($1.value)) % 9973 }
     }
 
     private func spokenMarks(_ marks: DayMarks, progress: DayProgress?, epic: EpicSpan?, future: Bool) -> String {
@@ -322,5 +339,30 @@ private struct LegendChip<Glyph: View>: View {
         .padding(.horizontal, 9)
         .padding(.vertical, 4)
         .background(RoundedRectangle(cornerRadius: LR.Radius.pill, style: .continuous).fill(LR.Color.pillFill))
+    }
+}
+
+/// A marker stroke with uneven edges: the top and bottom wander by a point every 14 pt, and an end
+/// where the epic really starts or stops is cut on a slant, the way a highlighter is lifted.
+private struct HighlighterStroke: Shape {
+    let seed: Int
+    let starts: Bool
+    let ends: Bool
+
+    func path(in rect: CGRect) -> Path {
+        let step: CGFloat = 14
+        func jitter(_ x: CGFloat, _ k: Int) -> CGFloat { CGFloat((Int(x) * k + seed) % 3) - 1 }
+        let (x1, x2, top, bottom) = (rect.minX, rect.maxX, rect.minY, rect.maxY)
+        var path = Path()
+        path.move(to: CGPoint(x: x1 + (starts ? 4 : 0), y: top + 1))
+        var x = x1 + 12
+        while x < x2 { path.addLine(to: CGPoint(x: x, y: top + jitter(x, 7))); x += step }
+        path.addLine(to: CGPoint(x: x2 - (ends ? 2 : 0), y: top + 2))
+        path.addLine(to: CGPoint(x: x2 + (ends ? 2 : 0), y: bottom - 1))
+        x = x2 - 12
+        while x > x1 { path.addLine(to: CGPoint(x: x, y: bottom + jitter(x, 5))); x -= step }
+        path.addLine(to: CGPoint(x: x1 - (starts ? 1 : 0), y: bottom))
+        path.closeSubpath()
+        return path
     }
 }

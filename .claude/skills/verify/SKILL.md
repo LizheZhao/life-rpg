@@ -21,7 +21,8 @@ Everything runs through `.claude/skills/verify/scripts/verify.sh` (below: `V`). 
 
 ```bash
 .claude/skills/verify/scripts/verify.sh up            # create sim if missing, boot, build, install, launch (~20s warm)
-.claude/skills/verify/scripts/verify.sh up --fresh    # same, but wipes the app's data first (new seed, new grant, new day)
+.claude/skills/verify/scripts/verify.sh up --fresh    # same, but wipes the app's data first (new seed, new grant, new day) and marks the intro seen
+.claude/skills/verify/scripts/verify.sh up --fresh --intro   # wipes the data and lands on the first-launch intro (no day drawn until it is finished)
 ```
 
 Ready when it prints `ready: <udid>` and `V doctor` shows `build: up to date` and a non-empty `rows:` line.
@@ -56,7 +57,7 @@ Stable points on iPhone 17 Pro Max (440×956 pt):
 | Sheet `Done` (a pushed page's sheet, e.g. the Levels sheet) | 220, 890 |
 | Close a bottom sheet with no button (the Calendar day sheet) | swipe down from about 220, 300 to 220, 900 |
 
-Settings is the fifth tab. It lists Library, Workout detection, Reminders (two switches), Output records to JSON, Tables (CSV), Restore from JSON…, a Journal section (Apple Journal status, the `Send my writing with the question request` toggle, the Shortcut set-up text), Design gallery and Debug; Library, Workout detection, Design and Debug are pushed onto the Settings stack, so the floating bar stays visible on them. At the default text size, with Settings scrolled to the top, the rows sit at about y = 247 (Library), 381 (Workout detection), 514 / 588 / 662 (the three Data rows), 795 (Design gallery); Debug is behind the floating bar there; scrolled to the bottom Design gallery sits at about 590 and Debug at 723. The Settings tab keeps whatever page was pushed when you switch tabs and come back (a relaunch resets it), so check which page you are on. The bar hides while the keyboard is up, and a tap issued right after an alert, sheet, card or file panel closes is swallowed.
+Settings is the fifth tab. Its sections are You (`Your name`, `Show the intro again`), Library, Auto-verify (Workout detection), Reminders and journal (Reminders, Journal), Data (Output records to JSON, Tables (CSV), Restore from JSON…, Erase all records…), Design (Design gallery) and Developer (Debug); every row but the Data ones pushes a page onto the Settings stack, so the floating bar stays visible on them. At the default text size, with Settings scrolled to the top (measured 2026-10-09), the rows sit at about y = 248 (`Your name`), 321 (`Show the intro again`), 454 (Library), 587 (Workout detection), 720 (Reminders), 794 (Journal); the Data rows are behind the floating bar there. Scrolled to the bottom (two swipes from 760 to 100): Output records to JSON 234, Tables (CSV) 308, Restore from JSON… 382, Erase all records… 456, Design gallery 590, Debug 723. The Settings tab keeps whatever page was pushed when you switch tabs and come back (a relaunch resets it), so check which page you are on. The bar hides while the keyboard is up, and a tap issued right after an alert, sheet, card or file panel closes is swallowed.
 
 Everything else moves with content: find it from a screenshot. Time travel is scripted rather than tapped: `V day <N>`.
 

@@ -20,8 +20,9 @@ public enum JSONExport {
     /// (`userLibrary`), 6 the journal, 7 `Turn.writingSeconds`, 8 the day documents
     /// (`journalEntries`), 9 the whole library (`fullLibrary`: every row with its id, edits, stamps
     /// and archived mark, because the library in the store is the truth, not the starter file), 10
-    /// the starter library's key on each library row (`starterKey`); an older file simply lacks them.
-    public static let schemaVersion = 10
+    /// the starter library's key on each library row (`starterKey`), 11 the name the person gave
+    /// the app (`profileName`); an older file simply lacks them.
+    public static let schemaVersion = 11
 
     /// The oldest export import still reads. Anything between this and `schemaVersion` decodes into
     /// the current shape, the fields added since being optional.
@@ -57,6 +58,9 @@ public enum JSONExport {
         /// always written, empty or not, so import can tell "no entries in this backup" (an older
         /// file, whose entries are rebuilt from its turns) from "a backup with none".
         public var journalEntries: [JournalEntryRow]?
+        /// The name from the greeting, cleaned. It lives in `UserDefaults`, not the store, so the
+        /// app passes it in; nil when none was given and in a file written before schema 11.
+        public var profileName: String?
     }
 
     public struct LibraryChanges: Codable, Equatable, Sendable {
@@ -323,7 +327,8 @@ public enum JSONExport {
         public var writingSeconds: Int?
     }
 
-    public static func snapshot(_ context: ModelContext, now: Date = Date()) throws -> Snapshot {
+    public static func snapshot(_ context: ModelContext, now: Date = Date(),
+                                profileName: String? = nil) throws -> Snapshot {
         let quests = try context.fetch(FetchDescriptor<DailyQuest>())
         let occurrences = try context.fetch(FetchDescriptor<RoutineOccurrence>())
         let ratings = try context.fetch(FetchDescriptor<QuestRating>())
@@ -418,11 +423,12 @@ public enum JSONExport {
             journalEntries: try JournalEntries.all(in: context).sorted { ($0.dayKey, $0.createdAt) < ($1.dayKey, $1.createdAt) }.map {
                 JournalEntryRow(dayKey: $0.dayKey, blocks: $0.blocks, createdAt: $0.createdAt,
                                 updatedAt: $0.updatedAt, doneAt: $0.doneAt)
-            })
+            },
+            profileName: UserProfile.cleanName(profileName))
     }
 
-    public static func data(_ context: ModelContext, now: Date = Date()) throws -> Data {
-        try encode(snapshot(context, now: now))
+    public static func data(_ context: ModelContext, now: Date = Date(), profileName: String? = nil) throws -> Data {
+        try encode(snapshot(context, now: now, profileName: profileName))
     }
 
     public static func encode(_ snapshot: Snapshot) throws -> Data {

@@ -25,6 +25,13 @@ final class HealthService {
         try await store.requestAuthorization(toShare: [], read: readTypes)
     }
 
+    /// Whether the person has already answered the Health sheet. HealthKit never says what was
+    /// allowed for reading, only that there is nothing left to ask.
+    func hasAsked() async -> Bool {
+        guard Self.isAvailable else { return false }
+        return (try? await store.statusForAuthorizationRequest(toShare: [], read: readTypes)) == .unnecessary
+    }
+
     /// Everything that goes into a day's tier: the reading, the baseline it is judged against,
     /// and the result. `inputs` is what generation uses; the debug page shows the whole thing.
     /// How far back flow entries are read, in days — long enough to find the start of a round.

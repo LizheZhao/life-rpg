@@ -106,21 +106,16 @@ struct RemindersView: View {
         Text(title).lr(.heading).foregroundStyle(LR.Color.sectionTitle).textCase(nil)
     }
 
-    private func switchJournal(_ on: Bool) { change(on) { journal = $0 } }
-    private func switchMorning(_ on: Bool) { change(on) { morning = $0 } }
+    private func switchJournal(_ on: Bool) { change(NotificationService.journalKey, on) { journal = $0 } }
+    private func switchMorning(_ on: Bool) { change(NotificationService.morningKey, on) { morning = $0 } }
 
     /// Switching off needs no permission. Switching on asks; a refusal leaves the switch off.
-    private func change(_ on: Bool, apply: @escaping (Bool) -> Void) {
-        guard on else {
-            apply(false)
-            Task { await NotificationService.reschedule(in: context); await refreshDenied() }
-            return
-        }
+    private func change(_ key: String, _ on: Bool, apply: @escaping (Bool) -> Void) {
+        if !on { apply(false) }
         Task {
-            let allowed = await NotificationService.requestAuthorization()
-            apply(allowed)
-            denied = !allowed
-            await NotificationService.reschedule(in: context)
+            let now = await NotificationService.set(key, on: on, in: context)
+            apply(now)
+            if on { denied = !now } else { await refreshDenied() }
         }
     }
 

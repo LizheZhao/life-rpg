@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Driver for LifeRPG verification on a dedicated iOS Simulator. Usage: verify.sh <command> [args]
-#   up [--fresh]   create/boot the sim, build, install, launch (--fresh wipes the app's data first)
+#   up [--fresh [--intro]]  create/boot the sim, build, install, launch (--fresh wipes the app's data
+#                  first and marks the first-launch intro seen; add --intro to land on the intro instead)
 #   udid           print the dedicated sim's UDID (pass it as `device` to the simulator control tool)
 #   doctor         read-only health check; run it first whenever something looks off
 #   sql "<query>"  read-only query against the app's SwiftData store
@@ -84,6 +85,13 @@ set_offset() {
   /usr/libexec/PlistBuddy -c "Set :debugDayOffset $1" "$f" >/dev/null 2>&1 \
     || /usr/libexec/PlistBuddy -c "Add :debugDayOffset integer $1" "$f" >/dev/null
 }
+# The intro's flag (`onboarding.done`), written like the offset: into the container plist, app stopped.
+mark_intro_seen() {
+  local f; f="$(prefs)"
+  [ -f "$f" ] || { mkdir -p "$(dirname "$f")"; /usr/libexec/PlistBuddy -c "Save" "$f" >/dev/null 2>&1 || true; }
+  /usr/libexec/PlistBuddy -c "Set :onboarding.done true" "$f" >/dev/null 2>&1 \
+    || /usr/libexec/PlistBuddy -c "Add :onboarding.done bool true" "$f" >/dev/null
+}
 need_sim() { [ -n "$(udid)" ] || { echo "no $NAME simulator — run: verify.sh up" >&2; exit 1; }; }
 
 # Day generation runs after launch and can take 10s+ on a freshly booted sim; ready means today's quests exist.
@@ -113,7 +121,9 @@ cmd_up() {
   (cd "$ROOT" && run_to 1200 "xcodebuild" xcodebuild -scheme LifeRPG -destination "platform=iOS Simulator,id=$u" \
       -derivedDataPath "$DERIVED" build 2>&1 | tee "$ROOT/build/verify-build.log" | tail -3)
   [ -d "$APP" ] || { echo "build produced no app at $APP" >&2; exit 1; }
-  if [ "${1:-}" = "--fresh" ]; then
+  local fresh="" intro=""
+  for a in "$@"; do case "$a" in --fresh) fresh=1;; --intro) intro=1;; esac; done
+  if [ -n "$fresh" ]; then
     say "removing the installed app (fresh)"
     local rc=0
     RUN_TO_QUIET=1 run_to 90 "uninstall app" xcrun simctl uninstall "$u" "$BUNDLE" >/dev/null || rc=$?
@@ -123,8 +133,19 @@ cmd_up() {
   RUN_TO_QUIET=1 run_to 30 "terminate app" xcrun simctl terminate "$u" "$BUNDLE" || true
   say "installing"
   run_to 120 "install app" xcrun simctl install "$u" "$APP"
+  # A fresh store has no history, so the app would open on the intro and draw no day until it is
+  # finished. Recipes start past it unless --intro asks for it.
+  if [ -n "$fresh" ] && [ -z "$intro" ]; then
+    mark_intro_seen
+    RUN_TO_QUIET=1 run_to 30 "restart cfprefsd" xcrun simctl spawn "$u" launchctl kickstart -k system/com.apple.cfprefsd.xpc.daemon >/dev/null || true
+    sleep 1
+  fi
   say "launching"
   run_to 60 "launch app" xcrun simctl launch "$u" "$BUNDLE"
+  if [ -n "$intro" ]; then
+    echo "ready (intro showing, no day drawn until it is finished): $u"
+    return 0
+  fi
   say "waiting for today to be generated"
   wait_for_day
   echo "ready: $u"

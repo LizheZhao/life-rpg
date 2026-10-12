@@ -21,7 +21,8 @@ final class DataTransfer {
     var eraseCounts: EraseRecords.Result?
 
     func prepareJSONExport(_ context: ModelContext) {
-        export { .json(try JSONExport.data(context), name: JSONExport.filename()) }
+        let name = UserDefaults.standard.string(forKey: ProfileKeys.name)
+        export { .json(try JSONExport.data(context, profileName: name), name: JSONExport.filename()) }
     }
 
     func prepareCSVExport(_ context: ModelContext) {
@@ -51,12 +52,15 @@ final class DataTransfer {
     }
 
     /// Erases, gives the opening balance again (a fresh start is a first launch for the economy) and
-    /// forgets which days were handed to Apple Journal; the caller then draws today again.
+    /// forgets which days were handed to Apple Journal and that the intro was seen; the caller then
+    /// draws today again.
     func performErase(_ context: ModelContext, onDone: () -> Void) {
         do {
             try EraseRecords.erase(in: context)
             try Economy.grantStartingBalanceIfNeeded(context, dayKey: Date().dayKey)
             UserDefaults.standard.removeObject(forKey: JournalSentLog.key)
+            // A clean store is someone starting out: the intro comes back.
+            UserDefaults.standard.set(false, forKey: OnboardingKeys.done)
             error = nil
             onDone()
         } catch {
@@ -67,6 +71,12 @@ final class DataTransfer {
     func performImport(_ plan: JSONImport.Plan, _ context: ModelContext, onImported: () -> Void) {
         do {
             try JSONImport.apply(plan, to: context)
+            let defaults = UserDefaults.standard
+            if let name = UserProfile.restoredName(fromBackup: plan.snapshot.profileName,
+                                                   local: defaults.string(forKey: ProfileKeys.name)) {
+                defaults.set(name, forKey: ProfileKeys.name)
+                defaults.set(true, forKey: ProfileKeys.asked)
+            }
             error = nil
             onImported()
         } catch {

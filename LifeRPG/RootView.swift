@@ -12,6 +12,8 @@ struct RootView: View {
     @State private var tab = RootTab.today
     @AppStorage(ProfileKeys.asked) private var askedName = false
     @State private var askingName = false
+    @AppStorage(OnboardingKeys.done) private var introDone = false
+    @State private var showingIntro = false
     /// Set by Today, Rewards and Settings while their card is up, so the bar fades out under the dim.
     @State private var tabBarHidden = false
     @State private var today = Date().dayKey
@@ -53,19 +55,29 @@ struct RootView: View {
                          check: workoutCheck,
                          refresh: { await refresh(waitIfBusy: true) },
                          onImported: { Task { await refresh(); await NotificationService.reschedule(in: context) } },
-                         hidesTabBar: $tabBarHidden)
+                         hidesTabBar: $tabBarHidden,
+                         showIntro: { showingIntro = true })
                 .toolbar(.hidden, for: .tabBar)
                 .tag(RootTab.settings)
         }
         .overlay(alignment: .bottom) { FloatingTabBar(selection: $tab, hidden: tabBarHidden) }
         .task {
-            await refresh()
-            await NotificationService.reschedule(in: context)
-            if !askedName { askingName = true }
+            // The intro comes before the first draw, so a Health connection made there already
+            // shapes today. A store with history (a restore, a phone in use) never shows it.
+            if needsIntro() { showingIntro = true } else { await start() }
         }
         .sheet(isPresented: $askingName) { NamePromptSheet() }
+        .fullScreenCover(isPresented: $showingIntro, onDismiss: { Task { await start() } }) {
+            OnboardingView {
+                introDone = true
+                askedName = true
+                showingIntro = false
+            }
+        }
+        // Erasing every record clears the flag: the intro comes back at once.
+        .onChange(of: introDone) { _, done in if !done, needsIntro() { showingIntro = true } }
         .onChange(of: scenePhase) { _, phase in
-            if phase == .active { Task { await refresh() } }
+            if phase == .active, !showingIntro { Task { await refresh() } }
             // Leaving is when "I wrote today" has to take effect; coming back picks up a new day.
             if phase == .active || phase == .background { Task { await NotificationService.reschedule(in: context) } }
         }
@@ -78,6 +90,20 @@ struct RootView: View {
         } message: { change in
             Text(message(for: change))
         }
+    }
+
+    /// Whether the intro is due; a store that already has history marks it seen instead.
+    private func needsIntro() -> Bool {
+        guard !introDone else { return false }
+        if (try? Onboarding.shouldShow(introDone: false, in: context)) ?? false { return true }
+        introDone = true
+        return false
+    }
+
+    private func start() async {
+        await refresh()
+        await NotificationService.reschedule(in: context)
+        if !askedName { askingName = true }
     }
 
     private func message(for change: Replan.Change) -> String {

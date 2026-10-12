@@ -15,6 +15,8 @@ struct SettingsView: View {
     let onImported: () -> Void
     /// Set while the restore confirmation card is up, so the floating tab bar fades out under the dim.
     var hidesTabBar: Binding<Bool> = .constant(false)
+    /// Plays the first-launch intro again.
+    var showIntro: () -> Void = {}
 
     /// The pages the rows push. A row is a button with a chevron of its own: the system disclosure
     /// indicator cannot be coloured, and the chevron is `iconNeutral`.
@@ -44,6 +46,10 @@ struct SettingsView: View {
                         .contentShape(Rectangle())
                     }
                     .accessibilityHint("Changes the name the greeting uses")
+                    Button(action: showIntro) {
+                        row("Show the intro again", systemImage: "sparkles", tint: .hidden, pushes: true)
+                    }
+                    .accessibilityHint("Walks through how the app works")
                 } header: {
                     header("You")
                 }
@@ -165,7 +171,7 @@ struct SettingsView: View {
             }
         }
         .dataTransfer(transfer, hidesTabBar: hidesTabBar, onImported: onImported)
-        .sheet(isPresented: $editingName) { NamePromptSheet(title: "Your name", caption: "Used for the greeting on Today. It stays on this phone and isn't in a backup.") }
+        .sheet(isPresented: $editingName) { NamePromptSheet(title: "Your name", caption: "Used for the greeting on Today.") }
         .reservingTabBarSpace()
     }
 

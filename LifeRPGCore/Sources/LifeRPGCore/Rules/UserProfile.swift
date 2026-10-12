@@ -1,7 +1,7 @@
 import Foundation
 
-/// The name a person gives the app. It is kept on the phone (not in the store or the backup) and
-/// only ever shown back to them, in the greeting.
+/// The name a person gives the app. It is kept on the phone (`UserDefaults`, not the store) and
+/// only ever shown back to them, in the greeting. The backup carries it (schema 11).
 public enum UserProfile {
     public static let maxLength = 30
 
@@ -13,5 +13,12 @@ public enum UserProfile {
         guard !words.isEmpty else { return nil }
         let joined = words.joined(separator: " ")
         return String(joined.prefix(maxLength)).trimmingCharacters(in: .whitespaces)
+    }
+
+    /// What a restore writes as the name: the backup's, but only onto a phone that has none. A name
+    /// already here is the person's latest answer and is never overwritten. Nil means leave it.
+    public static func restoredName(fromBackup backup: String?, local: String?) -> String? {
+        guard cleanName(local) == nil else { return nil }
+        return cleanName(backup)
     }
 }

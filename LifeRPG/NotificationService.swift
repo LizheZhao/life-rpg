@@ -49,6 +49,16 @@ enum NotificationService {
         }
     }
 
+    /// Switches one reminder (`journalKey` or `morningKey`). Switching off needs no permission;
+    /// switching on asks, and a refusal leaves it off. Returns whether the reminder is now on.
+    @discardableResult
+    static func set(_ key: String, on: Bool, in context: ModelContext) async -> Bool {
+        let allowed = on ? await requestAuthorization() : false
+        UserDefaults.standard.set(allowed, forKey: key)
+        await reschedule(in: context)
+        return allowed
+    }
+
     /// Replaces this app's pending reminders with the plan for right now.
     static func reschedule(in context: ModelContext) async {
         let center = UNUserNotificationCenter.current()

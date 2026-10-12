@@ -162,7 +162,7 @@ enum ReelClock {
 /// The box the number lives in. `?` while asking, blurred numbers scrolling through a band of the
 /// item's tint while rolling, the landed number with its decorative neighbours once it stops.
 /// The strip's numbers are `PayoutReel` frames: discarded, never the payout.
-private struct ReelBox: View {
+struct ReelBox: View {
     let stage: MomentStage
     let tint: QuestTint?
     let awarded: Int?
