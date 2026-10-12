@@ -7,7 +7,7 @@ import SwiftUI
 ///
 /// A keystroke changes the text of the typed block in memory (`JournalDocument.settingText`) and
 /// starts a 500 ms wait; the store is written when the wait ends, when the app leaves the
-/// foreground, and at Close and Done. Every rule about what an edit does is a Core operation
+/// foreground, and when the page closes. Every rule about what an edit does is a Core operation
 /// (`JournalDocument+Editing`, `JournalEntries`, `JournalSaveState`); this class only holds the
 /// result, the cursor, and the timer.
 ///
@@ -217,15 +217,16 @@ final class JournalEditorModel {
         }
     }
 
-    /// Writes a change that is still waiting: as the app leaves the foreground, and at Close, which
-    /// leaves the status as it was.
+    /// Writes a change that is still waiting, as the app leaves the foreground. It leaves the status
+    /// as it was: the page is still open.
     func flush() {
         guard pendingSave else { return }
         write()
     }
 
-    /// Done: the document is written, the entry is marked done, and the page may close. False when
-    /// the store refused, so the page stays open with the words still on it.
+    /// Closing: the document is written, an entry with writing in it is marked done, and the page
+    /// may close. A document with nothing in it has no row, so nothing is marked. False when the
+    /// store refused, so the page stays open with the words still on it. Safe to call again.
     @discardableResult
     func done() -> Bool {
         write()

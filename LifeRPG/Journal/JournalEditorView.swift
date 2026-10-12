@@ -2,9 +2,10 @@ import LifeRPGCore
 import SwiftData
 import SwiftUI
 
-/// One day's journal, full screen: Close and Done around the save state, the date in script, the
-/// blocks, and the chip bar over the keyboard. Every entry point opens this same page. Nothing in
-/// it ever locks: Done only marks the entry, and reopening shows the same blocks, editable.
+/// One day's journal, full screen: the save state and Done in the header, the date in script, the
+/// blocks, and the question bar over the keyboard. Every entry point opens this same page. Nothing
+/// in it ever locks: leaving, by Done or any other way, saves and marks an entry that has writing
+/// in it, and reopening shows the same blocks, editable.
 struct JournalEditorView: View {
     let dayKey: String
     /// The app's day, which decides whether the date line names the moment. The simulator's time
@@ -63,7 +64,7 @@ private struct JournalEditorPage: View {
         .onChange(of: scenePhase) { _, phase in
             if phase != .active { model.flush() }
         }
-        .onDisappear { model.flush() }
+        .onDisappear { model.done() }
         .task { model.prewarm() }
     }
 
@@ -71,15 +72,6 @@ private struct JournalEditorPage: View {
 
     private var header: some View {
         HStack {
-            Button { model.flush(); dismiss() } label: {
-                Text("Close").lr(.bodyStrong).foregroundStyle(LR.Color.ink)
-                    .padding(.horizontal, 18)
-                    .frame(minHeight: 44)
-                    .background(Capsule().fill(LR.Color.surface).shadow(color: .black.opacity(0.08), radius: 1.5, y: 1))
-                    .contentShape(Capsule())
-            }
-            .buttonStyle(PressableCardStyle())
-            Spacer(minLength: 8)
             TimelineView(.periodic(from: .now, by: 1)) { timeline in
                 let label = model.saveLabel(at: timeline.date)
                 HStack(spacing: 8) {
@@ -115,8 +107,8 @@ private struct JournalEditorPage: View {
 }
 
 /// A prompt: its question in small purple text over the answer, with a purple rule down the left.
-/// The reader draws the same thing with a `Text` for the answer. The question is read-only; a long
-/// press on it offers `Remove question` when `remove` is set.
+/// The reader draws the same thing with a `Text` for the answer. The question is read-only; when
+/// `remove` is set a small `x` beside it removes the question, and a long press offers the same.
 struct JournalPromptLayout<Answer: View>: View {
     let question: String
     var remove: (() -> Void)?
@@ -126,17 +118,31 @@ struct JournalPromptLayout<Answer: View>: View {
         HStack(alignment: .top, spacing: 14) {
             Rectangle().fill(LR.Color.promptRule).frame(width: 3)
             VStack(alignment: .leading, spacing: 6) {
-                Text(question).lr(.promptQuestion).foregroundStyle(LR.Color.promptInk)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .contentShape(Rectangle())
-                    .contextMenu {
-                        if let remove {
-                            Button(role: .destructive, action: remove) {
-                                Label("Remove question", systemImage: "text.badge.minus")
+                HStack(alignment: .top, spacing: 4) {
+                    Text(question).lr(.promptQuestion).foregroundStyle(LR.Color.promptInk)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .contentShape(Rectangle())
+                        .contextMenu {
+                            if let remove {
+                                Button(role: .destructive, action: remove) {
+                                    Label("Remove question", systemImage: "text.badge.minus")
+                                }
                             }
                         }
+                        .accessibilityAddTraits(.isHeader)
+                    if let remove {
+                        Button(action: remove) {
+                            Image(systemName: "xmark")
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundStyle(LR.Color.promptInk.opacity(0.7))
+                                .frame(width: 32, height: 24)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Remove question")
                     }
-                    .accessibilityAddTraits(.isHeader)
+                }
                 answer
             }
         }
