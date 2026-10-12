@@ -119,8 +119,8 @@ struct AdHocView: View {
     /// What the one confirmation (the bar) is about to do. It replaces the alert that used to follow.
     private var confirmNote: String {
         let kept = savesToLibrary ? " · saved to your library" : ""
-        return isAdding ? "\(sourceText) · final, it stays on today's page\(kept)"
-                        : "\(slotText) → \(sourceText) · final, it can't be brought back\(kept)"
+        return isAdding ? (savesToLibrary ? "Saved to your library" : "")
+                        : "\(slotText) → \(sourceText) · can't be undone\(kept)"
     }
 
     var body: some View {
@@ -131,7 +131,7 @@ struct AdHocView: View {
                     PillSegmentedControl(options: [("From library", Tab.library), ("Custom", Tab.custom)],
                                          selection: $tab, accessibilityLabel: "Source")
                     if isAdding {
-                        Text("Extra work on top of today. It replaces nothing, doesn't block the hidden quest and costs nothing if left undone. Done, it pays like any routine.")
+                        Text("Extra work. No penalty if you skip it.")
                             .lr(.caption).foregroundStyle(LR.Color.inkSecondary)
                             .fixedSize(horizontal: false, vertical: true)
                             .padding(.horizontal, 6)
@@ -172,7 +172,7 @@ struct AdHocView: View {
                 Button("Complete") { markDone(o) }
                 Button("Cancel", role: .cancel) {}
             } message: { o in
-                Text("\(o.displayText)\n\nThe one already on today's page — it counts for that routine as usual. This is final — completion cannot be undone.")
+                Text("\(o.displayText)\n\nThis can't be undone.")
             }
         }
     }
@@ -185,7 +185,7 @@ struct AdHocView: View {
                 doodle: slot.isTrivialGroup ? .sparkle : DoodleKey.forText(slot.textSnapshot),
                 title: slotText,
                 pill: slot.isTrivialGroup ? "micro-actions" : slot.slot.rawValue,
-                note: "The replaced quest no longer counts toward today's clear. The new routine does, and like any routine it loses points each day it stays undone.")
+                note: "Replaces the quest. It loses points each day it stays undone.")
         }
         if let o = replacedRoutine {
             ReplacesCard(
@@ -193,8 +193,8 @@ struct AdHocView: View {
                 title: slotText,
                 pill: "worth \(minimumBase)",
                 note: o.dueDayKey < today
-                    ? "Free, for something worth at least \(minimumBase). It stops being charged; deductions already made stay. The new one takes its place in the overdue count and doesn't start a fresh round."
-                    : "Free, for something worth at least \(minimumBase). The new one takes its place: it gates today's clear and loses points each day it stays undone.")
+                    ? "Free swap for something worth \(minimumBase) or more. Overdue carries over."
+                    : "Free swap for something worth \(minimumBase) or more. It loses points each day it stays undone.")
         }
     }
 
@@ -208,7 +208,7 @@ struct AdHocView: View {
         }
         if candidates.isEmpty {
             RecordRowView(title: minimumBase > 0
-                          ? "No routine that isn't already on today's page is worth \(minimumBase) or more."
+                          ? "Nothing else is worth \(minimumBase) or more."
                           : "Every active routine is already on today's page.", secondary: true) { EmptyView() }
         } else if shownCandidates.isEmpty {
             RecordRowView(title: "Nothing matches \"\(query.trimmingCharacters(in: .whitespacesAndNewlines))\"",
@@ -226,8 +226,8 @@ struct AdHocView: View {
             ForEach(shownOnPage, id: \.occurrence.id) { entry in
                 onPageRow(entry.routine, entry.occurrence).modifier(RowCard())
             }
-            Text(isAdding ? "Did one of these? Mark it done here, since adding it again wouldn't count for the routine."
-                          : "These are already on today's page, so they can't be picked here.")
+            Text(isAdding ? "Did one of these? Mark it done here."
+                          : "Tick them on Today.")
                 .lr(.caption).foregroundStyle(LR.Color.inkSecondary)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.horizontal, 6)
@@ -272,7 +272,7 @@ struct AdHocView: View {
         SectionTitle(title: "Difficulty")
         difficultyChoices
         if let base = AdHoc.basePoints(for: difficulty) {
-            Text("Pays \(pays(base)), the middle of the \(difficulty.rawValue) range.")
+            Text("Pays \(pays(base)).")
                 .lr(.caption).foregroundStyle(LR.Color.inkSecondary)
                 .padding(.horizontal, 6)
         }
@@ -326,7 +326,7 @@ struct AdHocView: View {
                 if index > 0 { Rectangle().fill(LR.Color.divider).frame(height: 1) }
                 similarRow(r)
             }
-            Text("A custom task counts toward no routine's weekly target. If it's one of these, use that instead.")
+            Text("Doesn't count toward a weekly target.")
                 .lr(.caption).foregroundStyle(LR.Color.inkSecondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -449,7 +449,7 @@ struct EpicReplaceView: View {
                 VStack(alignment: .leading, spacing: LR.Spacing.sectionGap) {
                     ReplacesCard(
                         doodle: .flag, title: epic.textSnapshot, pill: "epic",
-                        note: "Free. The new epic keeps the deadline (\(Epic.lastDayKey(of: epic) ?? "Sunday")) and pays an ordinary epic roll, \(Difficulty.epic.range.lowerBound)–\(Difficulty.epic.range.upperBound).")
+                        note: "Free. Keeps the deadline (\(Epic.lastDayKey(of: epic) ?? "Sunday")).")
                     PillSegmentedControl(options: [("From library", Tab.library), ("Custom", Tab.custom)],
                                          selection: $tab, accessibilityLabel: "Source")
                     SectionTitle(title: "Epic")
@@ -489,7 +489,7 @@ struct EpicReplaceView: View {
             .scrollDismissesKeyboard(.interactively)
             .safeAreaInset(edge: .bottom) {
                 ConfirmBar(title: "Replace", enabled: pick != nil,
-                           note: "\(epic.textSnapshot) → \(pickText) · final, the old epic can't be brought back") {
+                           note: "\(epic.textSnapshot) → \(pickText) · can't be undone") {
                     commit()
                 }
             }
@@ -712,7 +712,7 @@ private struct AddActionsBar: View {
 
     var body: some View {
         VStack(spacing: 8) {
-            if enabled {
+            if enabled, !note.isEmpty {
                 Text(note).lr(.caption).foregroundStyle(LR.Color.inkSecondary)
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
