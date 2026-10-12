@@ -27,6 +27,8 @@ struct RootView: View {
     /// A re-read that disagrees with the day already on screen, waiting to be confirmed.
     @State private var replan: Replan.Change?
     @State private var replanInputs: DayInputs?
+    /// Changes the user left alone today (`Replan.Declined`), so a foreground does not ask again.
+    @AppStorage("declinedReplans") private var declinedReplans = ""
     @State private var health = HealthService()
     @State private var calendar = CalendarService()
     #if targetEnvironment(simulator)
@@ -87,9 +89,12 @@ struct RootView: View {
             get: { replan != nil }, set: { if !$0 { replan = nil; replanInputs = nil } }
         ), presenting: replan) { change in
             Button("Re-plan what's open") { apply(change) }
-            Button("Leave it", role: .cancel) {}
+            Button("Leave it", role: .cancel) {
+                declinedReplans = Replan.encodeDeclined(
+                    Replan.remembering(change, in: Replan.decodeDeclined(declinedReplans)))
+            }
         } message: { change in
-            Text(message(for: change))
+            Text(change.message)
         }
     }
 
@@ -105,29 +110,6 @@ struct RootView: View {
         await refresh()
         await NotificationService.reschedule(in: context)
         if !askedName { askingName = true }
-    }
-
-    private func message(for change: Replan.Change) -> String {
-        var lines = change.toRecovery != change.fromRecovery
-            ? [change.toRecovery ? "Recovery starts today: only trivial and easy quests, and nothing is charged."
-                                 : "Recovery is over: today goes back to what your readings say."]
-            : ["Readings now say \(change.toTier.rawValue) rather than \(change.fromTier.rawValue)."]
-        if change.keptQuests > 0 {
-            lines.append("\(change.keptQuests) quest(s) stay as they are — everything finished, and anything open the new day still asks for.")
-        }
-        if change.droppedQuests > 0 {
-            lines.append("\(change.droppedQuests) open slot(s) the new day no longer has would be dropped.")
-        }
-        if change.newQuests > 0 {
-            lines.append("\(change.newQuests) new slot(s) would be drawn.")
-        }
-        if change.adjustedRoutines > 0 {
-            lines.append("\(change.adjustedRoutines) open routine(s) would swap to (or back from) a lighter version.")
-        }
-        if change.restedRoutines > 0 {
-            lines.append("\(change.restedRoutines) routine(s) too heavy for now would be set aside, without a charge.")
-        }
-        return lines.joined(separator: "\n")
     }
 
     private func apply(_ change: Replan.Change) {
@@ -215,7 +197,8 @@ struct RootView: View {
             // what is still open. Nothing is changed until it is confirmed.
             // Turning recovery on or off is the user's own word, so it re-plans with or without a reading.
             if dayExisted, readBody || recoveryMoved,
-               let change = try Replan.preview(context, on: todayKey, inputs: inputs) {
+               let change = try Replan.preview(context, on: todayKey, inputs: inputs),
+               Replan.shouldOffer(change, declined: Replan.decodeDeclined(declinedReplans)) {
                 replan = change
                 replanInputs = inputs
             }

@@ -29,6 +29,65 @@ struct ReplanTests {
         #expect(try replan(ctx, to: DayInputs(tier: .normal)) == nil)
     }
 
+    // MARK: "Leave it" is remembered
+
+    private func change(_ day: String, to tier: Tier, recovery: Bool = false) -> Replan.Change {
+        Replan.Change(dayKey: day, fromTier: .normal, toTier: tier, keptQuests: 0, droppedQuests: 1,
+                      newQuests: 1, adjustedRoutines: 0, toRecovery: recovery)
+    }
+
+    @Test func aRefusedChangeIsNotOfferedAgainThatDay() {
+        let low = change(fri, to: .low)
+        #expect(Replan.shouldOffer(low, declined: []))
+        let declined = Replan.remembering(low, in: [])
+        #expect(!Replan.shouldOffer(low, declined: declined))
+    }
+
+    @Test func aDifferentTierOrANewDayIsOfferedAgain() {
+        let declined = Replan.remembering(change(fri, to: .low), in: [])
+        #expect(Replan.shouldOffer(change(fri, to: .veryLow), declined: declined))
+        #expect(Replan.shouldOffer(change("2026-09-19", to: .low), declined: declined))
+        #expect(Replan.shouldOffer(change(fri, to: .low, recovery: true), declined: declined))
+    }
+
+    @Test func refusalsFromEarlierDaysAreForgotten() {
+        let yesterday = Replan.remembering(change("2026-09-17", to: .low), in: [])
+        let today = Replan.remembering(change(fri, to: .low), in: yesterday)
+        #expect(today == [Replan.Declined(change(fri, to: .low))])
+        let both = Replan.remembering(change(fri, to: .veryLow), in: today)
+        #expect(both.count == 2)
+        #expect(Replan.remembering(change(fri, to: .low), in: both).count == 2)
+    }
+
+    @Test func refusalsSurviveBeingStoredAsText() {
+        let declined = Replan.remembering(change(fri, to: .low, recovery: true), in: [])
+        let text = Replan.encodeDeclined(declined)
+        #expect(Replan.decodeDeclined(text) == declined)
+        #expect(Replan.decodeDeclined("") == [])
+        #expect(Replan.decodeDeclined("not json") == [])
+    }
+
+    @Test func theAlertBodyIsCountsOnly() {
+        var c = change(fri, to: .low)
+        c.keptQuests = 1; c.droppedQuests = 2; c.newQuests = 1; c.adjustedRoutines = 1; c.restedRoutines = 3
+        #expect(c.message == """
+            Readings now say low, not normal.
+            1 quest stays.
+            2 quests would be dropped.
+            1 new quest would be drawn.
+            1 routine would switch version.
+            3 routines set aside.
+            """)
+    }
+
+    @Test func theAlertBodyForRecovery() {
+        var c = change(fri, to: .low, recovery: true)
+        c.droppedQuests = 0; c.newQuests = 0; c.keptQuests = 4
+        #expect(c.message == "Recovery starts today. Easy quests only.\n4 quests stay.")
+        c.toRecovery = false; c.fromRecovery = true
+        #expect(c.message.hasPrefix("Recovery is over. Today follows your readings again."))
+    }
+
     @Test func aDayThatWasNeverGeneratedHasNothingToReplan() throws {
         let ctx = try Fixtures.context()
         #expect(try Replan.preview(ctx, on: fri, inputs: DayInputs(tier: .low), in: tz) == nil)
