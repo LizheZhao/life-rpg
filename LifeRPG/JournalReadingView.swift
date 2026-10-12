@@ -113,7 +113,7 @@ struct JournalReadingPage: View {
         switch JournalSend.sentState(text: day.plainText(), lastSentFingerprint: entry.fingerprint) {
         case .notSent: return nil
         case .sent: return "Sent to Apple Journal, \(JournalSentLog.timeText(entry.sentAt))"
-        case .editedSince: return "Edited since it was sent; the copy in Apple Journal is the earlier version"
+        case .editedSince: return "Edited since sending"
         }
     }
 

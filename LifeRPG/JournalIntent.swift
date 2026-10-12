@@ -10,7 +10,7 @@ import SwiftData
 struct GetJournalTextToSendIntent: AppIntent {
     static let title: LocalizedStringResource = "Get Journal Text to Send"
     static let description = IntentDescription(
-        "Returns the journal of the day that has just ended, with each question above your answer. Returns empty text when there is nothing new to send, so run it once a night and only create an entry when the text has a value.")
+        "Last night's journal, ready for Apple Journal. Empty if there's nothing to send.")
     static let openAppWhenRun = false
 
     enum Failure: Error, CustomLocalizedStringResourceConvertible {

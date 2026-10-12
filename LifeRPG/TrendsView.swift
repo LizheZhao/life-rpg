@@ -428,7 +428,7 @@ struct TrendsView: View {
                 }
                 if let percent = energy.lowDayPercent {
                     // The percent is its own run: the page's fonts are fixed-weight, so markdown bold is lost.
-                    Text("On low days you still finished \(Text("\(percent)%").font(emphasisFont)) of what a normal day gets. The light versions are doing their job.")
+                    Text("On low days you still finished \(Text("\(percent)%").font(emphasisFont)) of a normal day.")
                         .lr(.chipLabel).lineSpacing(3).foregroundStyle(LR.Color.ink)
                         .fixedSize(horizontal: false, vertical: true)
                         .padding(.vertical, 12).padding(.horizontal, 14)
@@ -439,7 +439,7 @@ struct TrendsView: View {
             }
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(energy.lowDayPercent.map { "Low energy days. On low days you still finished \($0) percent of what a normal day gets." }
+        .accessibilityLabel(energy.lowDayPercent.map { "Low energy days. On low days you still finished \($0) percent of a normal day." }
                             ?? "Low energy days")
     }
 
