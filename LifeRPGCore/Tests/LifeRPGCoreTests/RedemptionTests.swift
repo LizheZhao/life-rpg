@@ -231,6 +231,42 @@ struct RedemptionTests {
         #expect(Redemption.blocked(redeeming: meal, balance: 5000) == .notAvailable)
     }
 
+    // MARK: archiving a reward, and bringing it back
+
+    @Test func anArchivedRewardComesBackActiveAndRedeemableButNoLongerTheGoal() throws {
+        let ctx = try Fixtures.context()
+        let meal = Reward()
+        meal.name = "A nice meal"
+        meal.estimatedCost = 100
+        ctx.insert(meal)
+        Economy.record(ctx, kind: .adjust, points: 1500, dayKey: friday)
+        try SavingsGoal.pin(meal, in: ctx)
+
+        try Redemption.archive(meal, in: ctx)
+        #expect(!meal.isActive)
+        #expect(!meal.isGoal)
+        #expect(Redemption.blocked(redeeming: meal, balance: 1500) == .notAvailable)
+
+        try Redemption.restore(meal, in: ctx)
+        #expect(meal.isActive)
+        #expect(!meal.isGoal)
+        #expect(meal.estimatedCost == 100)
+        #expect(Redemption.blocked(redeeming: meal, balance: 1500) == nil)
+        #expect(SavingsGoal.goal([meal]) == nil)
+    }
+
+    @Test func restoringARewardThatIsAlreadyActiveChangesNothing() throws {
+        let ctx = try Fixtures.context()
+        let meal = Reward()
+        meal.name = "A nice meal"
+        meal.estimatedCost = 100
+        ctx.insert(meal)
+        try SavingsGoal.pin(meal, in: ctx)
+        try Redemption.restore(meal, in: ctx)
+        #expect(meal.isActive)
+        #expect(meal.isGoal)
+    }
+
     // MARK: how far off a blocked purchase is
 
     @Test func shortfallIsHowManyCoinsAreMissingAndNothingElse() {

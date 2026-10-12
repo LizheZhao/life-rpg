@@ -181,4 +181,18 @@ public enum Redemption {
             throw error
         }
     }
+
+    /// Brings an archived reward back, listed and redeemable. It does not come back as the savings
+    /// goal: archiving cleared the pin and nothing remembers it, so pinning again is one tap.
+    /// An active reward is left as it is.
+    public static func restore(_ reward: Reward, in context: ModelContext) throws {
+        guard !reward.isActive else { return }
+        reward.isActive = true
+        do {
+            try context.save()
+        } catch {
+            reward.isActive = false
+            throw error
+        }
+    }
 }
