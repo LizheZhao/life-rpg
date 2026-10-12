@@ -20,7 +20,7 @@ struct SettingsView: View {
 
     /// The pages the rows push. A row is a button with a chevron of its own: the system disclosure
     /// indicator cannot be coloured, and the chevron is `iconNeutral`.
-    private enum Page: Hashable { case library, workoutDetection, reminders, journal, design, debug }
+    private enum Page: Hashable { case library, workoutDetection, journalReminders, design, debug }
 
     @Environment(\.modelContext) private var context
     @State private var transfer = DataTransfer()
@@ -80,7 +80,6 @@ struct SettingsView: View {
                     }
                     .tint(LR.Color.accent)
                     .frame(minHeight: 44)
-                    .accessibilityHint("Only trivial and easy quests, no epic and no penalties until the last day")
                     if !recoveryLast.isEmpty {
                         DatePicker(selection: recoveryLastDate,
                                    in: (DayKey.date(today) ?? Date())...,
@@ -91,7 +90,7 @@ struct SettingsView: View {
                 } header: {
                     header("Recovery")
                 } footer: {
-                    Text("Each day draws only trivial and easy quests. Routines harder than easy switch to an easy light version, or wait until you're back. No new epic, and nothing is charged for what stays undone.")
+                    Text("Easy days only. Heavy routines go light or wait. No epic, no penalties.")
                         .lr(.caption).foregroundStyle(LR.Color.inkSecondary)
                 }
                 .listRowBackground(LR.Color.surface)
@@ -117,16 +116,12 @@ struct SettingsView: View {
                 .listRowBackground(LR.Color.surface)
 
                 Section {
-                    Button { path.append(.reminders) } label: {
-                        row("Reminders", systemImage: "bell", tint: .medium, pushes: true)
+                    Button { path.append(.journalReminders) } label: {
+                        row("Journal & reminders", systemImage: "bell", tint: .medium, pushes: true)
                     }
-                    .accessibilityHint("Opens the morning and evening reminders and their times")
-                    Button { path.append(.journal) } label: {
-                        row("Journal", systemImage: "book.closed", tint: .hidden, pushes: true)
-                    }
-                    .accessibilityHint("Opens Apple Journal sending and what Ask me something may send")
+                    .accessibilityHint("Opens the reminders, Apple Journal sending and Ask me something")
                 } header: {
-                    header("Reminders and journal")
+                    header("Journal & reminders")
                 }
                 .listRowBackground(LR.Color.surface)
 
@@ -197,10 +192,8 @@ struct SettingsView: View {
                     LibraryView(today: today)
                 case .workoutDetection:
                     WorkoutDetectionView(check: check, refresh: refresh)
-                case .reminders:
-                    RemindersView()
-                case .journal:
-                    JournalSettingsView()
+                case .journalReminders:
+                    JournalRemindersView()
                 case .design:
                     DesignGalleryView()
                         .navigationTitle("Design")

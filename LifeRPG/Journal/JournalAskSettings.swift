@@ -6,7 +6,7 @@ enum JournalAskSettings {
     static let sendWritingKey = "journalSendWriting"
     static let sendWritingDefault = true
 
-    static let sendWritingCaption = "On, the question request includes what you have written in this entry. Off, it includes only today's quests and the questions already in the entry. The writing is only ever used when you tap the button."
+    static let sendWritingCaption = "Lets the question see what you've written so far. Off: it only sees today's quests."
 
     static func includeWriting(_ defaults: UserDefaults = .standard) -> Bool {
         defaults.object(forKey: sendWritingKey) as? Bool ?? sendWritingDefault
