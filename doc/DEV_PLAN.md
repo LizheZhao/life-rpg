@@ -2,7 +2,7 @@
 
 Stages follow `PLAN.md` §11; this file only tracks concrete checkable tasks, updated as development progresses. Design intent, formulas, and data model definitions stay authoritative in `PLAN.md` — not repeated here.
 
-Current status (2026-09-27): **code done through Stage 5**, and most of Stage 6. Stages 3, 3.5, 4 and 5 stay open only on their device checks, which need real daily use on the phone. Stage 5 landed with the epic (incl. extension and free replace), paid reroll, Rewards tab, Library tab and rating-driven `affinity`, followed by the review follow-ups (05:00 day end, routine replace, library ad-hoc counting toward the weekly target, Sunday bill on the today page). Stage 6: JSON export / restore with confirmation and `StoreAudit`, BOM stripping done; **the web-prototype importer is next**, waiting on a sample save file. Stage 5.5 (streak milestones, level perks, savings goal) code done, 451 Core tests.
+Current status (2026-10-12): **the code is done through Stage 5.10**; what is open is almost all device checks, which need the current build on the phone and a week of daily use. Before installing it, export a backup on the phone and check the store upgrade (the store has gone V8 → V11 with no hand-written migration stage, only SwiftData's lightweight inference; Stages 5.6, 5.9 and 6 carry the checks). Code still to write: the web-prototype importer (waiting on a sample save file), and the optional Stage 7. The UI revamp's own device checklist is `doc/UI_DEVICE_CHECKLIST.md`. Core test count: see `CLAUDE.md` (the counts in the stages below are history, as each stood when it closed).
 
 History, kept because later stages build on its contracts — Stage 1 as it stood when it closed: `ensureToday`, catch-up, sampling, scoring,
 streak, the ledger, the today page, the payout reveal and the exports were in; 162 Core tests. Two inputs were stubs then,
@@ -44,7 +44,7 @@ Done when: DB has data and the app runs
 - [x] `swift build` / `swift test` run successfully (15 tests)
 - [x] `SchemaV1: VersionedSchema` + empty `LifeRPGMigrationPlan`; startup failure shows `StartupErrorView` instead of crashing, store untouched
 - [x] `SeedImporter.mergeSeeds`: additive merge keyed on `text` (edits and soft-deletes in the app always win) — **replaced in Stage 5.6 by `seedIfEmpty`: the CSVs seed an empty store once**
-- [x] Xcode project `LifeRPG.xcodeproj` created, links local package, bundles `doc/*.csv` (symlinks in `LifeRPG/Seed/`), seeds on first launch
+- [x] Xcode project `LifeRPG.xcodeproj` created, links local package, bundles `doc/*.csv` (symlinks in `LifeRPG/Seed/`), seeds on first launch — **since Stage 5.7 the bundle carries `doc/starter_library.json` instead; the CSVs are test fixtures**
 
 ## Stage 1 — Today page MVP
 
@@ -78,11 +78,7 @@ Done when: ready for daily use
 
 Done when: Saturday no longer stacks up to ten tasks
 
-**This is the next thing to build, and the gap it closes is bigger than it looks.** `routineLoad`
-is hard-coded to 0, so `Composition.slots` always returns 3 — every day gets the full three random
-quests. On a Sunday with four routines due it should be two, and on a heavy Saturday one. Until
-scheduling exists the app hands out more random work than the design intends, on exactly the days
-that already have the most routine work.
+Closed: before this stage `routineLoad` was hard-coded to 0, so every day got the full three random quests, even a Saturday with five routines due.
 
 - [x] Frequency **spec parsing + validation**: weekly / everyNDays / monthly / nthWeekdayOfMonth / everyNWeeksOnWeekday + tests — `Core/Rules/FrequencySpec.swift`, called from `SeedParser` so `TUES` or `1:SATURDAY` throws with a line number
 - [x] `auto_verify` rule parsing + validation (`mindful:N` / `calendar_workout:N` / `calendar_workout_weekly:N`) — `Core/Rules/AutoVerifyRule.swift`, same import gate
@@ -93,7 +89,7 @@ that already have the most routine work.
   - Overdue routines do **not** count toward the day's load; only routines due that day do
 - [x] `ensureToday` inserts today's `RoutineOccurrence`s (text / points / `countsForClear` snapshotted) and counts `routineLoad` from them. `DayInputs.routineLoad` was removed so the load can't be computed in two places
 - [x] Routine completion — `Completion.completeRoutine`: `round(base × m)` on the due day, `round(base × 0.5 × m)` on day 2–3, refused before the due day and from day 4; rolls back on a failed save like `complete`. Today page shows routines (overdue pinned on top, "day N of 3 · half pay") with a confirmed Done button
-- [x] **Backlog section** on the today page: skipped and never done, newest first, read-only, with what it cost — `Schedule.backlog`. *Moved:* it is now the Calendar's collapsible "Did not finish" card for the month on show, and the day detail marks such a routine with a ring-and-cross (`RoutineStatus.missed`); a routine you paid to cancel stays `skipped` (dash) and is not in it. Told apart by the settlement's `skip` ledger entry, no schema change — `Schedule.missed(_:ledger:in:)`.
+- [x] **Backlog section** on the today page: skipped and never done, newest first, read-only, with what it cost — `Schedule.backlog`. *Moved, then removed:* it became the Calendar's "Did not finish" card, which was dropped in the calendar redesign (the day sheet marks a replaced item with a dash and a skipped, cancelled or missed one with a cross, `RecordMark`); `Schedule.missed` was deleted with it.
 - [x] Overdue penalty + tests — `Core/Day/Overdue.swift`, run by catch-up for every ended day (`ensureToday` uses it by default). 50% / 75% / 100% of base, stacking, no daily cap, day-4 auto-skip with a 0-point `skip` entry dated day 4; `countsForClear = false` never charged. Idempotent per (occurrence, day) via the ledger. Today page marks overdue rows "Overdue −50%" in red
 - [x] **Design call — settled** — the overdue penalty is **not** scaled by readiness or tier: fixed on base
 - [x] Late make-up on day 2–3: half of base × multiplier, skips that day's deduction (falls out: it is no longer open when that day is judged), not counted for full-clear + tests
@@ -155,11 +151,11 @@ Done when: any past day can be reviewed
 
 Code done: `Core/Rules/CalendarMarks.swift`, `Core/Time/MonthGrid.swift`, `Core/Day/DayRecord.swift` (`CalendarMarksTests`, `MonthGridTests`, `DayRecordTests`, 317 Core tests); app pages `CalendarView`, `DayDetailView`, `RatingSummaryView`, a Calendar tab in `RootView`. Checked on the simulator. No `@Model` change.
 
-- [x] Month view: green dots (random quests done, 0–3; hidden / epic / replaced don't count, the T group counts once), blue dot, star (hidden). **Blue dot decided with the user:** every `countsForClear` routine due that day done **on the day** — done ahead counts, a late make-up or a skip does not, and a day with no gating routine shows no blue dot. Deliberately stricter than `hiddenUnlocked`, which treats a skip as cleared
+- [x] *(Replaced in Stage 5.10 by a progress ring per day and an epic stroke, `CalendarMarks.progress` / `epicSpans`.)* Month view: green dots (random quests done, 0–3; hidden / epic / replaced don't count, the T group counts once), blue dot, star (hidden). **Blue dot decided with the user:** every `countsForClear` routine due that day done **on the day** — done ahead counts, a late make-up or a skip does not, and a day with no gating routine shows no blue dot. Deliberately stricter than `hiddenUnlocked`, which treats a skip as cleared
 - [x] Epic-completed week highlight, judged by `weekKey` (not row index) — `CalendarMarks.epicWeeks`. Monday-start grid so each row is one ISO week and carries its `weekKey`. Nothing lights up until Stage 5 generates epics
 - [x] Custom `LazyVGrid` (not `UICalendarView`)
 - [x] Day detail sheet: quest/routine status, points, completion time, auto-verify/degraded markers, that day's redemptions and penalties, `DailyContext`. Late make-ups and done-ahead routines also appear on the day the work happened ("Done this day for another day")
-- [x] Day detail shows the ratings given that day, hung on the completion that prompted them via `QuestRating.questID`. **Design call decided:** rerolled-away rows are shown too, so Stage 5's reroll **must** keep them (see Stage 5). The display itself waits for the `rerolledAway` field
+- [x] Day detail shows the ratings given that day, hung on the completion that prompted them via `QuestRating.questID`. **Design call decided:** rerolled-away rows are shown too, so Stage 5's reroll **must** keep them (see Stage 5). Shown since Stage 5 as `ReplacedReason.rerolled` (no separate field)
 - [x] Summary view over the rating log — now the Library's "Rated best" order (all-time mean per row, `Feedback.standings` / `Feedback.ranked`; Trends → Ratings opens the Library sorted that way); `RatingSummaryView` and `Feedback.topRated` are gone — still unchecked against real ratings
 - [ ] Device check: open a few real past days on the phone and compare against what happened
 
@@ -238,7 +234,7 @@ Decided with the user (2026-10): local notifications first (a widget is postpone
 - [x] `NotificationService` + Settings → Journal & reminders (`JournalRemindersView`, pushed from Settings, which also holds the Apple Journal and Ask me something settings; first built as `RemindersView`: two switches off by default, a time picker for each (morning 05:00–11:59, evening 12:00–23:59, `NotificationPlan.Settings.morningMinute` / `eveningMinute`), a refused permission puts the switch back and offers `Open iOS Settings`) + Debug → Reminders (the queue, `Rebuild the queue`, `Test in 5 s`). The queue is rebuilt on foreground, on background and on a setting change.
 - [x] Driven on the simulator: the system permission prompt appears and `Allow` works (via Debug's test button); with both reminders on, the queue held `journal-<today>` at 8:00 PM and a morning and an evening reminder for each of the next days (the morning one already past was not queued); after writing today's entry, leaving the app and returning, `journal-<today>` was gone and the rest stayed.
 - [ ] Not verified: that a reminder is actually delivered and what it looks like on the lock screen (a test fired while the app was in front, where iOS shows nothing); the switches by tap (the control tool cannot flip a `Toggle`; the state was set through the app's defaults); the denied-permission path; that a reminder survives the phone being restarted. Device check: switch both on, leave the app, see the 20:00 one arrive, then write and see it not.
-- [ ] Not built: tapping a reminder to open the journal editor; a widget.
+Later, not built: tapping a reminder to open the journal editor; a widget.
 
 - [x] `verify.sh up --fresh` hanging (the verification harness, not the app): the same command had hung three times for 10+ minutes, once leaving a stale `verify.sh` and a sleeping `xcodebuild` that blocked the next run; a clean run takes ~40 s, so it was intermittent and the cause was not found. The script now bounds every external call (`run_to`: kills the whole process group after a per-step limit and names the step, exit 124), takes a lock so two `up` runs cannot collide (a stale lock is taken over), prints a line per stage and keeps the build log. Checked: the helper alone (pass-through, exit codes, a hung command, its children, a command ignoring TERM, quiet mode), a normal `up --fresh`, a second `up` refused with exit 3, a stale lock taken over, `doctor` / `sql` / `ledger` / `shot` / `relaunch` / `day`, and a fake `xcodebuild` that never returns failing the whole `up` in 9 s with exit 124 and nothing left behind. Not reproduced: the original hang itself, so whether the root cause is a `simctl` or an `xcodebuild` step is still unknown; the limits make it a message instead of a stall.
 
@@ -250,6 +246,18 @@ Decided with the user (2026-10-12): a recovery stretch, not a full pause (`PLAN.
 - [x] App: Settings → Recovery (switch and last day, `RecoveryKeys` in UserDefaults), `Recovery · through …` under the greeting, the re-plan prompt's recovery wording.
 - [x] Driven on the simulator: with the stretch set (through the app's defaults; the control tool can't flip a `Toggle`), relaunch showed the re-plan prompt; after it, today was `veryLow`, `isRecovery = 1`, the open M and H were replaced by a T group and an E, the medium routine was on its light version, and the Sunday bill was gone.
 - [ ] Device check: the V10 → V11 store upgrade keeping every row; the switch and the date picker by hand; a day judged inside the stretch costing nothing.
+
+## Stage 5.10 — Journal, Ask me something, calendar and Trends
+
+Built 2026-10-04 → 10-08 from `doc/JOURNAL_UX_SPEC.md` (copied from the user's spec). `CLAUDE.md` carries the current shape in detail.
+
+- [x] One `JournalEntry` per app day (`SchemaV8`, `blocksJSON` of text and prompt blocks), `JournalDocument` editing rules, a one-time copy of the old two-mode `JournalTurn` rows (`JournalMigration`, guarded by a flag), export `schemaVersion` 8 with `journalEntries`
+- [x] Editor (`LifeRPG/Journal/`): one `UITextView` per block, 500 ms autosave, four fixed questions, reader with previous / next, the all-entries list with search, the Today evening card and book button
+- [x] Apple Journal hand-off: the 05:00 Personal Automation runs `Get Journal Text to Send`, which returns the day that has just ended once (`JournalSend`, `JournalSentLog`); Settings explains the Shortcut
+- [x] Calendar redesign: a progress ring per day, the epic as a stroke from the day it was drawn, the day sheet with a night card; Trends tab from one `TrendsPage` value (locked until 7 days have an entry)
+- [x] Ask me something with the on-device model (Foundation Models, English only; Chinese uses the day question): the prompt carries the day's facts and the writing, never the earlier entries' questions or example rows; Core rejects a copy (`JournalNovelty`, content words only), a yes/no question, an unsupported "early", one too long, a "why", and strips a "Q:" label; one retry with a reason-specific sentence; then a question about the day (`dayQuestion`), then a fixed one. The Debug page's `Last ask` says what happened
+- [x] Simulator evaluation (Debug → Ask evaluation, `JournalAskEvaluation`): 15 made-up days × 4 through `JournalAsk.resolve` with the Mac's model; reports in `build/`. The last run before this entry: 86–87 of 88 English taps ended on the model's question (about 1 in 5 after one retry), no yes/no or unsupported early left, the question names something from the day about 4 times in 5
+- [ ] Device check: the V8 store upgrade kept every row and the migrated turn days; the 05:00 automation runs unattended with the phone locked and creates exactly one Apple Journal entry; the App Intent appears in Shortcuts; Ask me something on the phone (model availability, wording, how long a tap takes, the `Last ask` line after a fallback); Chinese IME in the editor; the Trends page on real weeks of entries
 
 ## Stage 6 — Backup and migration
 
