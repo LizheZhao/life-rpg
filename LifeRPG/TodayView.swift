@@ -570,7 +570,12 @@ struct TodayView: View {
             page
             .navigationTitle("Today")
             .sheet(isPresented: $adding) {
-                AdHocView(today: today, tier: tier, target: .add)
+                AdHocView(today: today, tier: tier, target: .add) { occurrence, points in
+                    // Recorded as already done: the same card a tap on the row would have led to.
+                    Haptics.impact(.medium)
+                    show(reveal(points, forRoutine: occurrence,
+                                header: MomentHeader(routineState(occurrence, .today))))
+                }
             }
             .sheet(item: $replacing) { slot in
                 AdHocView(today: today, tier: tier, target: .slot(slot))

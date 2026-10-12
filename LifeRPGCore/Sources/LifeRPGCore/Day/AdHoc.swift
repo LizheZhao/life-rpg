@@ -196,6 +196,25 @@ public enum AdHoc {
         return occurrence
     }
 
+    /// Adds an extra and completes it on `dayKey` in one step, for something that is already done.
+    /// Pays what `Completion.completeRoutine` pays. If the completion fails the extra is taken off
+    /// the page again, so a failure leaves neither a row nor a payment.
+    @discardableResult
+    public static func addAndComplete(_ source: Source, on dayKey: String, tier: Tier,
+                                      in context: ModelContext, now: Date = Date(),
+                                      timeZone: TimeZone = .current) throws -> (RoutineOccurrence, Int) {
+        let occurrence = try add(source, on: dayKey, in: context, timeZone: timeZone)
+        do {
+            let points = try Completion.completeRoutine(occurrence, on: dayKey, tier: tier, in: context,
+                                                        now: now, timeZone: timeZone)
+            return (occurrence, points)
+        } catch {
+            context.delete(occurrence)
+            try? context.save()
+            throw error
+        }
+    }
+
     /// Whether `o` is an extra added with `+`: it replaces nothing, never gates the day and is
     /// never charged. A routine's own occurrence, a swapped slot and what stood in for a swapped
     /// routine are not.

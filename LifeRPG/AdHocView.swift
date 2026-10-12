@@ -19,6 +19,9 @@ struct AdHocView: View {
     let today: String
     let tier: Tier
     let target: Target
+    /// Called after `Add & done` has written the extra and its payout, so the Today page can show
+    /// the same reward card a normal completion shows.
+    var onCompleted: (RoutineOccurrence, Int) -> Void = { _, _ in }
 
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
@@ -37,6 +40,7 @@ struct AdHocView: View {
     @State private var difficulty: Difficulty = .easy
     /// The doodle picked by hand; nil follows what the typed text suggests.
     @State private var pickedDoodle: DoodleKey?
+    @State private var changingIcon = false
     /// "Save to library" under a custom task: whether to, and as what (`LibrarySave.Draft`).
     @State private var saving = false
     @State private var draft = LibrarySave.Draft()
@@ -143,8 +147,13 @@ struct AdHocView: View {
             }
             .scrollDismissesKeyboard(.interactively)
             .safeAreaInset(edge: .bottom) {
-                ConfirmBar(title: actionTitle, enabled: source != nil && !(savesToLibrary && draft.problem != nil),
-                           note: confirmNote) { commit() }
+                let enabled = source != nil && !(savesToLibrary && draft.problem != nil)
+                if isAdding {
+                    AddActionsBar(enabled: enabled, note: confirmNote,
+                                  add: { commit() }, addAndDone: { commit(andComplete: true) })
+                } else {
+                    ConfirmBar(title: actionTitle, enabled: enabled, note: confirmNote) { commit() }
+                }
             }
             .background(LR.Color.canvas.ignoresSafeArea())
             .navigationTitle(isAdding ? "Add for today" : "Replace")
@@ -270,8 +279,10 @@ struct AdHocView: View {
 
         SaveToLibraryCard(isOn: $saving, draft: $draft, difficulty: difficulty)
 
-        SectionTitle(title: "Doodle", count: pickedDoodle == nil ? "suggested" : "picked")
-        DoodlePicker(selection: doodle) { pickedDoodle = $0 }
+        ChangeIconRow(expanded: $changingIcon, selection: doodle) {
+            pickedDoodle = $0
+            changingIcon = false
+        }
 
         if !similar.isEmpty { similarCard }
     }
@@ -360,7 +371,7 @@ struct AdHocView: View {
     /// Typed on the Custom tab and asked to be kept.
     private var savesToLibrary: Bool { tab == .custom && saving }
 
-    private func commit() {
+    private func commit(andComplete: Bool = false) {
         guard var source else { return }
         do {
             // The library row first: a saved routine is what goes onto today's page, so it counts
@@ -375,6 +386,9 @@ struct AdHocView: View {
             case .slot(let slot): try AdHoc.replace(slot, with: source, in: context)
             case .routine(let o, let flexible):
                 try AdHoc.replaceRoutine(o, flexible: flexible, with: source, on: today, in: context)
+            case .add where andComplete:
+                let (occurrence, points) = try AdHoc.addAndComplete(source, on: today, tier: tier, in: context)
+                onCompleted(occurrence, points)
             case .add: try AdHoc.add(source, on: today, in: context)
             }
             dismiss()
@@ -685,5 +699,88 @@ private struct DoodlePicker: View {
         .lrCard(.surface, radius: LR.Radius.row)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Doodle")
+    }
+}
+
+/// The two ways to put a task on today's page: `Add` leaves it open, `Add & done` records it as
+/// finished and goes straight to the reward card. Stacked when the labels no longer fit side by side.
+private struct AddActionsBar: View {
+    let enabled: Bool
+    let note: String
+    let add: () -> Void
+    let addAndDone: () -> Void
+
+    var body: some View {
+        VStack(spacing: 8) {
+            if enabled {
+                Text(note).lr(.caption).foregroundStyle(LR.Color.inkSecondary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, 8)
+            }
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 10) { buttons }
+                VStack(spacing: 8) { buttons }
+            }
+            .disabled(!enabled)
+            .opacity(enabled ? 1 : 0.35)
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 10)
+        .padding(.bottom, 8)
+        .background(LR.Color.canvas)
+    }
+
+    @ViewBuilder private var buttons: some View {
+        Button(action: add) {
+            Text("Add").lr(.bodyStrong).foregroundStyle(LR.Color.ink)
+                .lineLimit(1).fixedSize(horizontal: true, vertical: false)
+                .frame(maxWidth: .infinity, minHeight: 52)
+                .overlay(Capsule().strokeBorder(LR.Color.ink, lineWidth: 1.5))
+                .contentShape(Capsule())
+        }
+        .buttonStyle(PressableCardStyle())
+        Button(action: addAndDone) {
+            Text("Add & done").lr(.bodyStrong).foregroundStyle(LR.Color.onFill)
+                .lineLimit(1).fixedSize(horizontal: true, vertical: false)
+                .frame(maxWidth: .infinity, minHeight: 52)
+                .background(Capsule().fill(LR.Color.fill))
+                .contentShape(Capsule())
+        }
+        .buttonStyle(PressableCardStyle())
+    }
+}
+
+/// One row that opens the doodle grid, so the Custom tab is not a wall of 36 drawings. The doodle
+/// keeps following the typed text until one is picked.
+private struct ChangeIconRow: View {
+    @Binding var expanded: Bool
+    let selection: DoodleKey
+    let onPick: (DoodleKey) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: LR.Spacing.sectionGap) {
+            Button {
+                Haptics.selection()
+                withAnimation(.snappy) { expanded.toggle() }
+            } label: {
+                HStack(spacing: 12) {
+                    DoodleDisc(key: selection, size: 40)
+                    Text("Change icon").lr(.bodyStrong).foregroundStyle(LR.Color.ink)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(LR.Color.inkSecondary)
+                        .rotationEffect(.degrees(expanded ? 180 : 0))
+                        .accessibilityHidden(true)
+                }
+                .frame(minHeight: 44)
+                .modifier(RowCard())
+                .contentShape(RoundedRectangle(cornerRadius: LR.Radius.row, style: .continuous))
+            }
+            .buttonStyle(PressableCardStyle())
+            .accessibilityValue(expanded ? "expanded" : "collapsed")
+            if expanded { DoodlePicker(selection: selection, onPick: onPick) }
+        }
     }
 }

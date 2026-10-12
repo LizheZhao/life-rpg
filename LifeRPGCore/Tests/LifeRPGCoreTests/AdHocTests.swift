@@ -246,6 +246,44 @@ struct AdHocTests {
         }
     }
 
+    /// Recording something already done: it goes on the page and is paid in one step.
+    @Test func addAndCompleteAddsAnExtraAndPaysIt() throws {
+        let (ctx, quests) = try generated()
+        let (o, points) = try AdHoc.addAndComplete(.custom(text: "Fix the bike", difficulty: .hard),
+                                                   on: fri, tier: .normal, in: ctx, timeZone: tz)
+        #expect(points == 38)
+        #expect(o.awardedPoints == 38)
+        #expect(o.completedDayKey == fri)
+        #expect(!o.countsForClear)
+        #expect(o.replacesQuestID == nil)
+        #expect(quests.allSatisfy { !$0.replaced })
+        #expect(try Economy.balance(ctx) == 38)
+        #expect(try ctx.fetch(FetchDescriptor<LedgerEntry>()).count == 1)
+    }
+
+    @Test func addAndCompleteFromTheLibraryPaysTheRoutineAndBlocksAddingItAgain() throws {
+        let (ctx, _) = try generated()
+        let r = routine(ctx, "Deep clean")
+        let (o, points) = try AdHoc.addAndComplete(.routine(r), on: fri, tier: .normal, in: ctx, timeZone: tz)
+        #expect(points == 30)
+        #expect(o.adHocSourceRoutineID == r.id)
+        #expect(try Economy.balance(ctx) == 30)
+        #expect(throws: AdHoc.Failure.alreadyOnToday) {
+            try AdHoc.addAndComplete(.routine(r), on: fri, tier: .normal, in: ctx, timeZone: tz)
+        }
+        #expect(try ctx.fetch(FetchDescriptor<LedgerEntry>()).count == 1)
+    }
+
+    @Test func addAndCompleteWithNoTextLeavesNothingBehind() throws {
+        let (ctx, _) = try generated()
+        #expect(throws: AdHoc.Failure.emptyText) {
+            try AdHoc.addAndComplete(.custom(text: "  ", difficulty: .easy), on: fri, tier: .normal,
+                                     in: ctx, timeZone: tz)
+        }
+        #expect(try ctx.fetch(FetchDescriptor<RoutineOccurrence>()).isEmpty)
+        #expect(try ctx.fetch(FetchDescriptor<LedgerEntry>()).isEmpty)
+    }
+
     // MARK: the library tab
 
     /// Active routines not already on today's page — neither scheduled today nor already added.
