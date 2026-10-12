@@ -9,6 +9,9 @@
 #   day <N>        set the debug time-travel offset to N days, relaunch (0 = real date)
 #   shot <name>    screenshot into build/verify-evidence/<name>.png
 #   relaunch       terminate and launch the app again (re-runs the foreground refresh)
+#   pref <key> [bool|integer|string <value> | --delete]
+#                  print one of the app's preferences, or set / delete it in the app's own container
+#                  plist and relaunch (what a SwiftUI Toggle or DatePicker would have written)
 #   down           terminate the app; shut the sim down if `up` booted it
 #   destroy        delete the dedicated sim (evidence and derived data are kept)
 set -euo pipefail
@@ -192,6 +195,23 @@ cmd_day() {
   echo "offset=$1; latest generated day $(sqlite3 -readonly -cmd '.timeout 3000' "$(store)" 'select max(ZDAYKEY) from ZDAILYCONTEXT')"
 }
 
+cmd_pref() {
+  need_sim; local u f key="${1:-}"; u="$(udid)"; f="$(prefs)"
+  [ -n "$key" ] || { echo "usage: verify.sh pref <key> [bool|integer|string <value> | --delete]" >&2; exit 2; }
+  if [ $# -eq 1 ]; then { [ -f "$f" ] && /usr/libexec/PlistBuddy -c "Print :$key" "$f" 2>/dev/null; } || echo "(not set)"; return; fi
+  RUN_TO_QUIET=1 run_to 30 "terminate app" xcrun simctl terminate "$u" "$BUNDLE" || true
+  [ -f "$f" ] || { mkdir -p "$(dirname "$f")"; /usr/libexec/PlistBuddy -c "Save" "$f" >/dev/null 2>&1 || true; }
+  /usr/libexec/PlistBuddy -c "Delete :$key" "$f" >/dev/null 2>&1 || true
+  if [ "$2" != "--delete" ]; then
+    case "$2" in bool|integer|string) ;; *) echo "type must be bool, integer or string" >&2; exit 2;; esac
+    /usr/libexec/PlistBuddy -c "Add :$key $2 ${3:-}" "$f" >/dev/null
+  fi
+  RUN_TO_QUIET=1 run_to 30 "restart cfprefsd" xcrun simctl spawn "$u" launchctl kickstart -k system/com.apple.cfprefsd.xpc.daemon >/dev/null || true
+  sleep 1
+  run_to 60 "launch app" xcrun simctl launch "$u" "$BUNDLE" >/dev/null; sleep 2
+  echo "$key = $({ /usr/libexec/PlistBuddy -c "Print :$key" "$f" 2>/dev/null; } || echo "(not set)")"
+}
+
 cmd_shot() { need_sim; mkdir -p "$EVIDENCE"; run_to 30 "screenshot" xcrun simctl io "$(udid)" screenshot "$EVIDENCE/$1.png" >/dev/null 2>&1; echo "$EVIDENCE/$1.png"; }
 cmd_relaunch() { need_sim; local u; u="$(udid)"; RUN_TO_QUIET=1 run_to 30 "terminate app" xcrun simctl terminate "$u" "$BUNDLE" || true; run_to 60 "launch app" xcrun simctl launch "$u" "$BUNDLE" >/dev/null; sleep 2; }
 
@@ -206,6 +226,6 @@ cmd_destroy() { cmd_down; [ -z "$(udid)" ] || { RUN_TO_QUIET=1 run_to 90 "shut t
 c="${1:-}"; shift || true
 case "$c" in
   up) cmd_up "$@";; udid) udid;; doctor) cmd_doctor;; sql) cmd_sql "$@";; ledger) cmd_ledger;; day) cmd_day "$@";;
-  shot) cmd_shot "$@";; relaunch) cmd_relaunch;; down) cmd_down;; destroy) cmd_destroy;;
+  shot) cmd_shot "$@";; relaunch) cmd_relaunch;; pref) cmd_pref "$@";; down) cmd_down;; destroy) cmd_destroy;;
   *) sed -n "2,12p" "${BASH_SOURCE[0]}"; exit 2;;
 esac

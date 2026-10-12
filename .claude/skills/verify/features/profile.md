@@ -7,7 +7,7 @@ On a fresh install the name is the first page of the first-launch intro ([onboar
 - `prof-ask` the fallback sheet (after `V up --fresh`, or a restore onto a phone that skipped the intro with a backup that has no name): `What should we call you?` with no caption (since 2026-10-09), a `Your name` field (focused, words capitalised, no autocorrect), `Continue` (disabled until something is typed) and `Skip`. Asked once whatever the answer (`profile.asked`); swiping the sheet away counts as skipping.
 - `prof-greeting` Today reads `Good morning, <name>,` (afternoon, evening by the clock); with no name it is `Good morning,`. The name is cleaned: whitespace collapsed, 30 characters.
 - `prof-settings` Settings → `You` → `Your name` (the value, or `Not set`) opens the same sheet (`Your name`, `Used for the greeting on Today.`, `Not now`).
-- `prof-erase` `Erase all records…` (trash icon, under `Restore from JSON…`) opens the centered card `Erase all records?`: `This erases N quest and routine records, N coin entries, N ratings and notes, N rewards, N journal entries. Your library stays, with your edits. This can't be undone: output records to JSON first if you may want them back.` with `Erase everything` and `Not yet`.
+- `prof-erase` `Erase all records…` (trash icon, under `Restore from JSON…`) opens the centered card `Erase all records?`: `This erases N quest and routine records, N coin entries, N ratings and notes, N rewards, N journal entries. Your library stays, with your edits. This can't be undone: output records to JSON first if you may want them back.` with `Erase everything` and `Not yet`. A count of 1 reads in the singular (`1 quest or routine record`, `1 rating or note`, `1 reward`, `1 journal entry`), a count of 0 is left out, and an empty store reads `There is nothing to erase.` (driven 2026-10-12: `This erases 5 quest and routine records, 4 coin entries, 1 rating or note, 1 reward, 1 journal entry. …`).
 - `prof-after` after `Erase everything` the history tables are empty except the new opening grant (`grant | 100 | Starting balance`), today is drawn again, the library keeps its rows and edits, and the name stays. The store now has no history and the erase clears `onboarding.done`, so the intro opens at once over Today (with the name filled in).
 
 ## How to get to it (user POV)
@@ -24,7 +24,7 @@ Preconditions: `V up --fresh`. The name is in `UserDefaults` (`profile.name`, `p
 
 ## Gotchas
 
-- The name and `profile.asked` are not in the store: `V up --fresh` uninstalls the app and asks again, but `simctl spawn … defaults write` writes a device-level plist that an uninstall does not clear (the reminder switches stayed on across a fresh install), so a leftover key can survive a fresh install.
-- The backup carries the name from schema 11; a restore fills it in only where the phone has none. Older backups have no name, so a restore of one onto a phone without a name still asks.
+- The name and `profile.asked` are not in the store: `V up --fresh` uninstalls the app and asks again, but `simctl spawn … defaults write` writes a device-level plist that an uninstall does not clear (the reminder switches stayed on across a fresh install; use `V pref`, which writes the container plist), so a leftover key can survive a fresh install.
+- The backup carries the name since schema 11; a restore fills it in only where the phone has none, and then also marks it asked (driven 2026-10-12, see [export-restore](./export-restore.md)). Older backups have no name, so a restore of one onto a phone without a name still asks.
 - Erase re-plans the reminder queue (`onImported`), so tonight's reminder comes back once today's entry is gone.
 - Erase is not something to demonstrate on the author's own phone store: export first.
