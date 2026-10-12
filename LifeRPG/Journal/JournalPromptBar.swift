@@ -1,10 +1,10 @@
 import LifeRPGCore
 import SwiftUI
 
-/// The bar above the keyboard: the fixed chips, scrolling sideways, and the word count at the
-/// right. A chip whose prompt is already in the entry is dimmed and does nothing (Core's
-/// `insertingPrompt` refuses it as well). `leading` holds the "Ask me something" pill and its
-/// divider, which stay put while the chips scroll beside them.
+/// The bar above the keyboard: the "Ask me something" pill, a `Questions` menu holding the fixed
+/// questions, and the word count at the right. A question already in the entry is dimmed in the
+/// menu and does nothing (Core's `insertingPrompt` refuses it as well). `leading` holds the pill and
+/// its divider.
 struct JournalPromptBar<Leading: View>: View {
     let model: JournalEditorModel
     @ViewBuilder var leading: Leading
@@ -12,15 +12,13 @@ struct JournalPromptBar<Leading: View>: View {
     var body: some View {
         HStack(spacing: 8) {
             leading
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    ForEach(JournalFixedKey.allCases, id: \.self) { key in chip(key) }
-                }
-            }
+            questionsMenu
+            Spacer(minLength: 4)
             Text(model.wordCountText).lr(.caption)
                 .foregroundStyle(LR.Color.inkSecondary)
                 .monospacedDigit()
-                .fixedSize()
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
                 .padding(.trailing, 20)
                 .padding(.leading, 4)
         }
@@ -31,25 +29,39 @@ struct JournalPromptBar<Leading: View>: View {
         .overlay(alignment: .top) { Rectangle().fill(LR.Color.hairline).frame(height: 1) }
     }
 
-    private func chip(_ key: JournalFixedKey) -> some View {
-        let used = model.isUsed(key)
-        let label = key.chipLabel(language: model.language)
-        return Button {
-            guard !used else { return }
-            Haptics.selection()
-            model.insert(key)
+    private var questionsMenu: some View {
+        Menu {
+            ForEach(JournalFixedKey.allCases, id: \.self) { key in
+                let used = model.isUsed(key)
+                Button {
+                    guard !used else { return }
+                    Haptics.selection()
+                    model.insert(key)
+                } label: {
+                    if used {
+                        Label(key.chipLabel(language: model.language), systemImage: "checkmark")
+                    } else {
+                        Text(key.chipLabel(language: model.language))
+                    }
+                }
+                .disabled(used)
+            }
         } label: {
-            Text(label).lr(.chipLabel).foregroundStyle(LR.Color.ink)
-                .lineLimit(1)
-                .padding(.horizontal, 14)
-                .frame(minHeight: 38)
-                .background(Capsule().fill(LR.Color.canvas))
-                .overlay(Capsule().strokeBorder(LR.Color.dotEmpty, lineWidth: 1))
-                .opacity(used ? 0.4 : 1)
-                .contentShape(Capsule())
+            HStack(spacing: 6) {
+                Text("Questions").lr(.chipLabel).lineLimit(1)
+                Image(systemName: "chevron.up")
+                    .font(.system(size: 10, weight: .semibold))
+                    .accessibilityHidden(true)
+            }
+            .foregroundStyle(LR.Color.ink)
+            .padding(.horizontal, 14)
+            .frame(minHeight: 38)
+            .background(Capsule().fill(LR.Color.canvas))
+            .overlay(Capsule().strokeBorder(LR.Color.dotEmpty, lineWidth: 1))
+            .contentShape(Capsule())
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel(label)
-        .accessibilityHint(used ? "Already in this entry" : "Adds this question at the cursor")
+        .fixedSize()
+        .accessibilityLabel("Questions")
+        .accessibilityHint("Pick a question to add at the cursor")
     }
 }
