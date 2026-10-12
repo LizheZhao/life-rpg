@@ -65,6 +65,32 @@ struct SavingsGoalTests {
         #expect(SavingsGoal.pace(ledger, today: today, in: tz) == 140)
     }
 
+    /// Fifteen days of real use, not four weeks: 1641 over 15 days is 765.8 a week, not 410.
+    @Test func paceDividesByTheDaysActuallyCovered() {
+        let ledger = [
+            entry(.grant, 1000, -40),
+            entry(.quest, 1000, -14),         // first real entry: day 1 of 15
+            entry(.quest, 700, -3),
+            entry(.reroll, -59, 0),
+        ]
+        let pace = SavingsGoal.pace(ledger, today: today, in: tz)
+        #expect(abs(pace - 765.8) < 0.001)
+    }
+
+    @Test func aFirstDayIsOneDayLong() {
+        #expect(SavingsGoal.pace([entry(.quest, 100, 0)], today: today, in: tz) == 700)
+    }
+
+    @Test func aLedgerOfOnlyTheGrantHasNoPace() {
+        #expect(SavingsGoal.pace([entry(.grant, 1000, -3)], today: today, in: tz) == 0)
+        #expect(SavingsGoal.pace([], today: today, in: tz) == 0)
+    }
+
+    @Test func historyOlderThanTheWindowStillDividesByTwentyEightDays() {
+        let ledger = [entry(.quest, 50, -90), entry(.quest, 280, -10)]
+        #expect(SavingsGoal.pace(ledger, today: today, in: tz) == 70)       // 280 over 4 weeks
+    }
+
     @Test func weeksLeft() {
         #expect(SavingsGoal.weeksLeft(price: 1000, balance: 400, pace: 150) == 4)
         #expect(SavingsGoal.weeksLeft(price: 1000, balance: 400, pace: 600) == 1)
@@ -81,7 +107,7 @@ struct SavingsGoalTests {
         #expect(debt?.fraction == 0)
         #expect(debt?.weeksLeft == nil)
 
-        let saving = try #require(SavingsGoal.progress(rewards: [meal], ledger: [entry(.quest, 400, -1)],
+        let saving = try #require(SavingsGoal.progress(rewards: [meal], ledger: [entry(.quest, 400, -27)],
                                                         today: today, in: tz))
         #expect(saving.price == 1000)
         #expect(saving.fraction == 0.4)

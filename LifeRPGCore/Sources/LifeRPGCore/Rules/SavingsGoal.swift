@@ -58,13 +58,18 @@ public enum SavingsGoal {
 
     /// Net coins per week over the last 28 days, today included: everything but the opening grant.
     /// Net rather than earned — rerolls and penalties really do push a goal back.
+    ///
+    /// Divided by the days the ledger actually covers, 28 at most: the first entry that is not the
+    /// grant starts the clock, so a fortnight of use is read as a fortnight, not as a quarter of a month.
     public static func pace(_ ledger: [LedgerEntry], today: String,
                             in timeZone: TimeZone = .current) -> Double {
         guard let from = DayKey.adding(-(paceWindow - 1), to: today, in: timeZone) else { return 0 }
-        let net = ledger
-            .filter { $0.kind != Economy.Kind.grant.rawValue && $0.dayKey >= from && $0.dayKey <= today }
-            .reduce(0) { $0 + $1.points }
-        return Double(net) / (Double(paceWindow) / 7)
+        let real = ledger.filter { $0.kind != Economy.Kind.grant.rawValue }
+        guard let first = real.map(\.dayKey).min() else { return 0 }
+        let net = real.filter { $0.dayKey >= from && $0.dayKey <= today }.reduce(0) { $0 + $1.points }
+        let sinceFirst = (DayKey.daysBetween(first, today, in: timeZone) ?? paceWindow) + 1
+        let covered = min(paceWindow, max(1, sinceFirst))
+        return Double(net) / (Double(covered) / 7)
     }
 
     /// `ceil((price − balance) / pace)`; 0 once affordable, nil when the pace is ≤ 0.
