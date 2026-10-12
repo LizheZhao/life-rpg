@@ -284,7 +284,6 @@ struct MomentCardFace: View {
     var clock: ReelClock = .frozen(0)
     var picked: Int?
     var onPick: (Int) -> Void = { _ in }
-    var onDone: () -> Void = {}
     /// Changes when a notice's content is swapped for another (a refused reroll), so it fades in place.
     var noticeKey = ""
 
@@ -524,7 +523,6 @@ struct MomentCardFace: View {
                     HStack(spacing: 6) { ratingButtons(3..<RatingScale.steps.count) }
                 }
             }
-            quietButton("Done", action: onDone)
         }
     }
 
@@ -613,6 +611,8 @@ struct MomentCard: View {
     private static let rollSeconds = 1.5
     private static let landedSeconds = 0.9
     private static let rateTimeoutSeconds = 8.0
+    /// How long a picked rating stays highlighted before the card closes itself.
+    private static let pickedLingerSeconds = 0.5
 
     private var payout: MomentPayout? {
         if case .payout(let p) = content { return p }
@@ -636,7 +636,7 @@ struct MomentCard: View {
             GeometryReader { geo in
                 ScrollView {
                     MomentCardFace(header: header, content: content, stage: phase, frames: frames,
-                                   clock: clock, picked: picked, onPick: pick, onDone: finish,
+                                   clock: clock, picked: picked, onPick: pick,
                                    noticeKey: noticeKey)
                         .background {
                             GeometryReader { proxy in
@@ -757,13 +757,15 @@ struct MomentCard: View {
         }
     }
 
-    /// Restarts on every pick. The card closes itself eventually, so one left open on a phone put
-    /// down mid-tap doesn't sit there (with a rating nobody has written yet) until the app is quit.
+    /// Restarts on every pick. A pick closes the card after a short pause; with no pick it closes
+    /// itself eventually, so one left open on a phone put down mid-tap doesn't sit there until the
+    /// app is quit.
     private var rateTimerID: Int? { payout != nil && phase == .rate ? (picked ?? 99) : nil }
 
     private func expireRate() async {
         guard rateTimerID != nil else { return }
-        try? await Task.sleep(for: .seconds(Self.rateTimeoutSeconds))
+        let wait = picked == nil ? Self.rateTimeoutSeconds : Self.pickedLingerSeconds
+        try? await Task.sleep(for: .seconds(wait))
         if !Task.isCancelled { finish() }
     }
 }
