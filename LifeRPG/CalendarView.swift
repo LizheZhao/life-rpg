@@ -4,7 +4,7 @@ import SwiftUI
 
 /// The month page (`PLAN.md` §9). Each day number sits in a ring that fills with the share of the
 /// day's quests and routines done (`CalendarMarks.progress`) and turns violet once the hidden quest
-/// is done too. Each epic is a rough, hand-drawn marker stroke behind the dates from the day it was drawn to the
+/// is done too, with a small dot under the date when the day has a journal entry. Each epic is a rough, hand-drawn marker stroke behind the dates from the day it was drawn to the
 /// day it was finished (`CalendarMarks.epicSpans`): grey while unfinished, and a colour different
 /// from the epic before once it is done. Everything else is in the day sheet. Tap a day for it.
 struct CalendarView: View {
@@ -41,6 +41,8 @@ struct CalendarView: View {
     /// The hand-drawn stroke: about half a ring tall, tilted a touch like a hand-held marker.
     private static let strokeHeight: CGFloat = 20
     private static let strokeTilt = Angle.degrees(-1.2)
+    /// The journal dot under the date, by `JournalMarks` level 1...3.
+    private static let dotSizes: [CGFloat] = [4, 5, 6]
 
     private static func highlighter(_ span: EpicSpan) -> Color {
         guard let index = span.doneIndex else { return unfinishedHighlighter }
@@ -83,15 +85,11 @@ struct CalendarView: View {
 
     // MARK: header
 
-    /// The page title with the round book that opens the entries list.
     private var titleRow: some View {
         HStack {
             Text("Calendar").lr(.pageTitle).foregroundStyle(LR.Color.ink)
                 .accessibilityAddTraits(.isHeader)
             Spacer(minLength: 8)
-            NavigationLink { JournalEntriesView(today: today) } label: { RoundIcon(systemName: "book") }
-                .buttonStyle(PressableCardStyle())
-                .accessibilityLabel("All journal entries")
         }
         .padding(.top, 8)
     }
@@ -218,7 +216,8 @@ struct CalendarView: View {
                     .foregroundStyle(isToday ? LR.Color.accent : LR.Color.ink)
             }
             .frame(width: Self.ringSize, height: Self.ringSize)
-            .padding(.vertical, 6)
+            .overlay(alignment: .bottom) { journalDot(level: future ? 0 : marks.journalLevel) }
+            .padding(.vertical, 8)
             .frame(maxWidth: .infinity)
             .contentShape(Rectangle())
             .opacity(future ? 0.35 : day.inMonth ? 1 : 0.4)
@@ -228,6 +227,16 @@ struct CalendarView: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(PresentationText.shortDate(day.dayKey) + (isToday ? ", today" : ""))
         .accessibilityValue(spokenMarks(marks, progress: progress, epic: epic, future: future))
+    }
+
+    /// A small dot under the ring for a day with writing, a little bigger for a longer entry. It
+    /// hangs in the cell's padding, so the ring and the epic stroke keep their place.
+    @ViewBuilder private func journalDot(level: Int) -> some View {
+        if level > 0 {
+            let size = Self.dotSizes[min(level, Self.dotSizes.count) - 1]
+            Circle().fill(LR.Color.promptRule).frame(width: size, height: size)
+                .offset(y: Self.dotSizes[Self.dotSizes.count - 1] + 1)
+        }
     }
 
     /// Open toward the top, filling clockwise; violet once the hidden quest is done as well.
@@ -300,12 +309,16 @@ struct CalendarView: View {
                     .fill(Self.highlighters[0].opacity(Self.highlighterOpacity))
                     .frame(width: 16, height: 9)
             }
+            LegendChip(text: "Journal entry") {
+                Circle().fill(LR.Color.promptRule).frame(width: 6, height: 6)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Legend: the ring around a day fills with the quests and routines done, "
             + "and turns violet when the hidden quest is done too. "
-            + "A highlighter stroke runs from an epic's first day to the day it was finished, grey until it is.")
+            + "A highlighter stroke runs from an epic's first day to the day it was finished, grey until it is. "
+            + "A small dot under the date marks a day with a journal entry.")
     }
 
     private func entriesLink(count: Int) -> some View {
