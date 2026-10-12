@@ -118,8 +118,7 @@ private struct DayDetailPage: View {
                 if !record.otherRatings.isEmpty {
                     // Both sources of `DayRecord.otherRatings`: a Library rating has no completion
                     // to attach to, and a late `Rate / note` hangs off an earlier day's card.
-                    section("Other ratings this day",
-                            caption: "Ratings you gave this day from the Library, or for something you did on an earlier day.") {
+                    section("Other ratings this day", caption: "Ratings given this day.") {
                         plainCard {
                             ForEach(Array(record.otherRatings.enumerated()), id: \.element.id) { index, r in
                                 if index > 0 { divider }
@@ -289,32 +288,41 @@ private struct DayDetailPage: View {
                 Spacer(minLength: 8)
                 Text("\(when) \u{00B7} \(words)").lr(.caption).monospacedDigit().foregroundStyle(LR.Color.sectionTitle)
             }
-            // The button below says all of it.
+            // The card below says all of it.
             .accessibilityHidden(true)
-            Button { presented = .read } label: {
-                VStack(alignment: .leading, spacing: 14) {
-                    Text(excerpt).lr(.journalExcerpt)
-                        .foregroundStyle(LR.Color.onNight)
-                        .lineLimit(3)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    HStack {
-                        Text("Read the whole entry").lr(.bodyStrong).foregroundStyle(LR.Color.nightAccent)
-                        Spacer(minLength: 8)
-                        Image(systemName: "chevron.right")
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(LR.Color.nightAccent)
-                            .accessibilityHidden(true)
-                    }
+            VStack(alignment: .leading, spacing: 14) {
+                Text(excerpt).lr(.journalExcerpt)
+                    .foregroundStyle(LR.Color.onNight)
+                    .lineLimit(3)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .accessibilityLabel("That night, \(when), \(words). \(excerpt)")
+                HStack(spacing: 10) {
+                    nightAction("Read", systemImage: "book", hint: "Opens the whole entry to read") { presented = .read }
+                    nightAction("Edit", systemImage: "pencil", hint: "Opens the entry to edit") { presented = .write }
+                    Spacer(minLength: 0)
                 }
-                .padding(.horizontal, 20).padding(.vertical, 18)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(RoundedRectangle(cornerRadius: LR.Radius.row, style: .continuous).fill(LR.Color.nightCard))
-                .contentShape(Rectangle())
             }
-            .buttonStyle(PressableCardStyle())
-            .accessibilityLabel("That night, \(when), \(words). \(excerpt)")
-            .accessibilityHint("Opens the whole entry to read")
+            .padding(.horizontal, 20).padding(.vertical, 18)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(RoundedRectangle(cornerRadius: LR.Radius.row, style: .continuous).fill(LR.Color.nightCard))
         }
+    }
+
+    private func nightAction(_ title: String, systemImage: String, hint: String,
+                             action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                Image(systemName: systemImage).font(.system(size: 14, weight: .semibold)).accessibilityHidden(true)
+                Text(title).lr(.bodyStrong)
+            }
+            .foregroundStyle(LR.Color.nightAccent)
+            .padding(.horizontal, 16)
+            .frame(minHeight: 44)
+            .background(Capsule().strokeBorder(LR.Color.nightAccent.opacity(0.6), lineWidth: 1))
+            .contentShape(Capsule())
+        }
+        .buttonStyle(PressableCardStyle())
+        .accessibilityHint(hint)
     }
 
     /// No entry that day: a flat outline in place of the dark card, and the way to write one unless
