@@ -96,25 +96,44 @@ public enum Feedback {
         rows.filter { $0.targetID == id }.sorted { $0.timestamp > $1.timestamp }
     }
 
-    /// Average rating per target over a window, best first. `since` is inclusive; pass nil for all
-    /// of history. Averaged rather than "newest wins" because the question this answers is what has
-    /// been landing well *lately*, which one good day shouldn't decide on its own.
-    public static func topRated(_ context: ModelContext,
-                                target: FeedbackTarget? = nil,
-                                since dayKey: String? = nil,
-                                limit: Int = 10) throws -> [(text: String, average: Double, count: Int)] {
-        var sums: [String: (total: Int, count: Int)] = [:]
-        for row in try context.fetch(FetchDescriptor<QuestRating>()) {
-            if let target, row.target != target { continue }
-            if let dayKey, row.dayKey < dayKey { continue }
-            let current = sums[row.textSnapshot] ?? (0, 0)
-            sums[row.textSnapshot] = (current.total + row.rating, current.count + 1)
+    /// How a library row has been rated overall: the mean of every rating it has, and how many.
+    public struct Standing: Equatable, Sendable {
+        public var average: Double
+        public var count: Int
+
+        public init(average: Double, count: Int) {
+            self.average = average
+            self.count = count
         }
-        return sums
-            .map { (text: $0.key, average: Double($0.value.total) / Double($0.value.count), count: $0.value.count) }
-            .sorted { ($0.average, $0.count, $1.text) > ($1.average, $1.count, $0.text) }
-            .prefix(max(0, limit))
-            .map { $0 }
+    }
+
+    /// Every row that has been rated, with its mean. Averaged rather than "newest wins": one good
+    /// day shouldn't decide on its own, and the ratings are an append-only log so all of them are
+    /// still there. A rating with no row behind it (a custom task) stands for nothing.
+    public static func standings(_ rows: [QuestRating]) -> [UUID: Standing] {
+        var sums: [UUID: (total: Int, count: Int)] = [:]
+        for row in rows {
+            guard let id = row.targetID else { continue }
+            let current = sums[id] ?? (0, 0)
+            sums[id] = (current.total + row.rating, current.count + 1)
+        }
+        return sums.mapValues { Standing(average: Double($0.total) / Double($0.count), count: $0.count) }
+    }
+
+    /// The Library's "Rated best" order: the best average first, then the one rated more often, then
+    /// A to Z. Rows with no rating come after all of those, A to Z.
+    public static func ranked<Row>(_ rows: [Row], id: (Row) -> UUID, text: (Row) -> String,
+                                   standings: [UUID: Standing]) -> [Row] {
+        func byName(_ a: Row, _ b: Row) -> Bool {
+            text(a).localizedStandardCompare(text(b)) == .orderedAscending
+        }
+        let rated = rows.filter { standings[id($0)] != nil }.sorted { a, b in
+            let (x, y) = (standings[id(a)]!, standings[id(b)]!)
+            if x.average != y.average { return x.average > y.average }
+            if x.count != y.count { return x.count > y.count }
+            return byName(a, b)
+        }
+        return rated + rows.filter { standings[id($0)] == nil }.sorted(by: byName)
     }
 
     public static func comments(_ rows: [QuestComment], for id: UUID) -> [QuestComment] {

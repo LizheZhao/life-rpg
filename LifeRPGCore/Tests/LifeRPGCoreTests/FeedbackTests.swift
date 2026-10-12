@@ -31,30 +31,39 @@ struct FeedbackTests {
                               dayKey: "2026-09-18").rating == -2)
     }
 
-    /// The window is what makes "lately" mean anything: an old bad score drops out of it.
-    @Test func topRatedHonoursTheWindow() throws {
+    @Test func aStandingIsTheAverageOfEveryRatingOfOneRow() throws {
         let ctx = try Fixtures.context()
-        Feedback.rate(ctx, target: .quest, id: UUID(), text: "sauna", rating: -2, dayKey: "2026-01-10")
-        Feedback.rate(ctx, target: .quest, id: UUID(), text: "sauna", rating: 2, dayKey: "2026-09-10")
-        Feedback.rate(ctx, target: .quest, id: UUID(), text: "cold plunge", rating: 1, dayKey: "2026-09-11")
+        let sauna = UUID(), plunge = UUID()
+        Feedback.rate(ctx, target: .quest, id: sauna, text: "sauna", rating: -2, dayKey: "2026-01-10")
+        Feedback.rate(ctx, target: .quest, id: sauna, text: "sauna", rating: 2, dayKey: "2026-09-10")
+        Feedback.rate(ctx, target: .quest, id: sauna, text: "sauna", rating: 2, dayKey: "2026-09-12")
+        Feedback.rate(ctx, target: .routine, id: plunge, text: "cold plunge", rating: 1, dayKey: "2026-09-11")
+        Feedback.rate(ctx, target: .quest, id: nil, text: "a custom task", rating: 2, dayKey: "2026-09-11")
         try ctx.save()
 
-        let allTime = try Feedback.topRated(ctx)
-        #expect(allTime.first?.text == "cold plunge")          // sauna averages 0 over all of history
-        let recent = try Feedback.topRated(ctx, since: "2026-09-01")
-        #expect(recent.first?.text == "sauna")                 // …but 2.0 since September
-        #expect(recent.first?.count == 1)
+        let standings = Feedback.standings(try ctx.fetch(FetchDescriptor<QuestRating>()))
+        #expect(standings.count == 2)                          // the custom task has no row to stand for
+        #expect(standings[sauna]?.count == 3)
+        #expect(abs((standings[sauna]?.average ?? 0) - 2.0 / 3.0) < 0.0001)
+        #expect(standings[plunge] == Feedback.Standing(average: 1, count: 1))
     }
 
-    @Test func routineFeedbackIsFilteredSeparately() throws {
-        let ctx = try Fixtures.context()
-        Feedback.rate(ctx, target: .quest, id: UUID(), text: "sauna", rating: 2, dayKey: "2026-09-10")
-        Feedback.rate(ctx, target: .routine, id: UUID(), text: "take out the trash", rating: -2,
-                      dayKey: "2026-09-10")
-        try ctx.save()
-
-        #expect(try Feedback.topRated(ctx, target: .quest).map(\.text) == ["sauna"])
-        #expect(try Feedback.topRated(ctx, target: .routine).map(\.text) == ["take out the trash"])
+    /// Best average first, then the more often rated, then A to Z; whatever has no rating follows, A to Z.
+    @Test func rowsAreRankedByAverageThenCountThenName() {
+        func id(_ n: Int) -> UUID { UUID(uuidString: "00000000-0000-0000-0000-00000000000\(n)")! }
+        let rows: [(id: UUID, text: String)] = [
+            (id(1), "Pushups"), (id(2), "Walk"), (id(3), "Stretch"), (id(4), "Read"),
+            (id(5), "Cook"), (id(6), "Sauna"), (id(7), "Dishes"),
+        ]
+        let standings: [UUID: Feedback.Standing] = [
+            id(1): .init(average: 2, count: 1),
+            id(2): .init(average: 2, count: 3),
+            id(3): .init(average: 1, count: 2),
+            id(4): .init(average: 1, count: 2),
+            id(6): .init(average: -1, count: 4),
+        ]
+        let ranked = Feedback.ranked(rows, id: \.id, text: \.text, standings: standings)
+        #expect(ranked.map(\.text) == ["Walk", "Pushups", "Read", "Stretch", "Sauna", "Cook", "Dishes"])
     }
 
     @Test func commentsReadNewestFirst() throws {
