@@ -57,7 +57,7 @@ struct JournalAskDayQuestionTests {
     @Test func aFailedModelOnADayWithFactsAsksAboutTheDay() async {
         let result = await resolve(F.signals(quests: [hard("Run 5 km")]))
         #expect(result == .fromDay("“Run 5 km” was a hard one. What was the toughest moment?",
-                                   toast: "Couldn't reach the guide, here's one about your day"))
+                                   toast: "Here's one about your day."))
     }
 
     @Test func aFailedModelOnAnEmptyDayStillFallsBackToAChip() async {
@@ -81,8 +81,8 @@ struct JournalAskDayQuestionTests {
     }
 
     @Test func theDayToastSaysWhereTheQuestionCameFrom() {
-        #expect(JournalAsk.dayFallbackToast(language: .en) == "Couldn't reach the guide, here's one about your day")
-        #expect(JournalAsk.dayFallbackToast(language: .zhHans) == "没能联系上向导，换一个关于今天的问题")
+        #expect(JournalAsk.dayFallbackToast(language: .en) == "Here's one about your day.")
+        #expect(JournalAsk.dayFallbackToast(language: .zhHans) == "换一个关于今天的问题")
         let notice = JournalAsk.notice(for: .fromDay("q?", toast: "t"), inserted: true,
                                        document: JournalDocument(), language: .en)
         #expect(notice == .toast("t"))

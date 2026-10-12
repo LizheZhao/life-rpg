@@ -45,7 +45,7 @@ public enum JournalEntryToday {
     }
 
     /// The card's line under its title.
-    public static let cardSubtitle = "A blank page. Pull in a question whenever you want one."
+    public static let cardSubtitle = "A blank page."
 
     /// The newest entry before `today`, for "Last night · 412 words" on the card while today
     /// has no row. `days` is `JournalEntryHistory.days`.

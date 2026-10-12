@@ -189,6 +189,6 @@ struct JournalEntryTodayTests {
     }
 
     @Test func theCardSubtitleIsTheDesigns() {
-        #expect(JournalEntryToday.cardSubtitle == "A blank page. Pull in a question whenever you want one.")
+        #expect(JournalEntryToday.cardSubtitle == "A blank page.")
     }
 }

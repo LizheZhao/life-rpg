@@ -434,7 +434,7 @@ struct JournalAskTests {
 
     // MARK: resolving
 
-    private let toast = "Couldn't reach the guide, here's a standard one"
+    private let toast = "Here's a standard one."
 
     @Test func aGoodAnswerFromTheModelIsTheQuestion() async {
         let wording = FakeWording(" \"What got in the way of the walk?\" \n")
@@ -1035,14 +1035,14 @@ struct JournalAskTests {
         let wording = FakeWording("今晚有哪一刻你想多留一会儿？")
         let signals = F.signals(quests: [F.quest("散步")])
         let result = await resolve(wording, document: JournalDocument(), signals: signals, language: .zhHans)
-        #expect(result == .fromDay("你今天完成了「散步」。当时是什么样的？", toast: "没能联系上向导，换一个关于今天的问题"))
+        #expect(result == .fromDay("你今天完成了「散步」。当时是什么样的？", toast: "换一个关于今天的问题"))
         #expect(wording.callCount == 0)
     }
 
     @Test func aChineseTapWithNothingToAskAboutGetsTheFirstChipWithoutTheModel() async {
         let wording = FakeWording("今晚有哪一刻你想多留一会儿？")
         let result = await resolve(wording, document: JournalDocument(), language: .zhHans)
-        #expect(result == .fallback(.favoriteMoment, toast: "没能联系上向导，换一个常用的问题"))
+        #expect(result == .fallback(.favoriteMoment, toast: "换一个常用的问题"))
         #expect(wording.callCount == 0)
     }
 
@@ -1134,18 +1134,18 @@ struct JournalAskTests {
     // MARK: what the editor says
 
     @Test func theTextsTheEditorShowsAreFixedInBothLanguages() {
-        #expect(JournalAsk.fallbackToast(language: .en) == "Couldn't reach the guide, here's a standard one")
-        #expect(JournalAsk.fallbackToast(language: .zhHans) == "没能联系上向导，换一个常用的问题")
+        #expect(JournalAsk.fallbackToast(language: .en) == "Here's a standard one.")
+        #expect(JournalAsk.fallbackToast(language: .zhHans) == "换一个常用的问题")
         #expect(JournalAsk.cappedTooltip(language: .en) == "Enough questions for one night")
         #expect(JournalAsk.cappedTooltip(language: .zhHans) == "今晚问得够多了")
         #expect(JournalAsk.exhaustedToast(language: .en)
-                == "Couldn't reach the guide, and every standard question is already in your entry")
-        #expect(JournalAsk.exhaustedToast(language: .zhHans) == "没能联系上向导，常用的问题也都已经在日记里了")
+                == "You've used every standard question.")
+        #expect(JournalAsk.exhaustedToast(language: .zhHans) == "常用的问题都用过了")
     }
 
     @Test func theFallbackToastFollowsTheLanguageOfTheRequest() async {
         let result = await resolve(FakeWording(nil as String?), document: JournalDocument(), language: .zhHans)
-        #expect(result == .fallback(.favoriteMoment, toast: "没能联系上向导，换一个常用的问题"))
+        #expect(result == .fallback(.favoriteMoment, toast: "换一个常用的问题"))
     }
 
     // MARK: insertion
@@ -1238,7 +1238,7 @@ struct JournalAskTests {
 
     @Test func exhaustedShowsItsToastAndCappedShowsNoneBecauseThePillAlreadySaysSo() {
         #expect(notice(.exhausted, inserted: false)
-                == .toast("Couldn't reach the guide, and every standard question is already in your entry"))
+                == .toast("You've used every standard question."))
         #expect(notice(.capped, inserted: false) == nil)
     }
 
@@ -1248,18 +1248,18 @@ struct JournalAskTests {
 
     @Test func aQuestionWhoseSpotIsGoneSaysSoInBothLanguages() {
         #expect(notice(.question(walkQuestion), inserted: false)
-                == .toast("The place you asked from is gone, so no question was added"))
+                == .toast("No question added."))
         #expect(notice(.question(walkQuestion), inserted: false, language: .zhHans)
-                == .toast("你提问的位置已经不在了，所以没有加入问题"))
+                == .toast("没有加入问题"))
     }
 
     @Test func aFallbackThatCouldNotBeInsertedBlamesTheSpotUnlessEveryStandardQuestionIsInNow() {
         #expect(notice(.fallback(.tomorrow, toast: toast), inserted: false)
-                == .toast("The place you asked from is gone, so no question was added"))
+                == .toast("No question added."))
         let all = JournalDocument(blocks: JournalFixedKey.allCases.enumerated().map {
             E.prompt($0.offset + 1, "q", source: .fixed, key: $0.element)
         })
         #expect(notice(.fallback(.tomorrow, toast: toast), inserted: false, document: all)
-                == .toast("Couldn't reach the guide, and every standard question is already in your entry"))
+                == .toast("You've used every standard question."))
     }
 }

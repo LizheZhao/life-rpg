@@ -15,7 +15,7 @@ struct JournalTrendsLockedTests {
     }
 
     @Test func theLockedPageSaysWhyAndListsWhatUnlocks() {
-        #expect(Locked.explanation == "Patterns need a week of entries before they mean anything. Short entries count.")
+        #expect(Locked.explanation == "Unlocks after 7 days of writing. Short entries count.")
         #expect(Locked.previews.map(\.title) == [
             "Words that defined the month",
             "Favorite quests",

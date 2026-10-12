@@ -22,7 +22,7 @@ extension JournalTrends {
             Progress(written: nightsWritten, of: Writing.unlockNights)
         }
 
-        public static let explanation = "Patterns need a week of entries before they mean anything. Short entries count."
+        public static let explanation = "Unlocks after 7 days of writing. Short entries count."
 
         /// What will appear once unlocked, in the order the page lists them.
         public static let previews: [Preview] = [

@@ -449,16 +449,15 @@ public enum JournalAsk {
 
     /// The block the cursor was in was removed while the model was thinking.
     public static func spotGoneToast(language: JournalLanguage) -> String {
-        language == .zhHans ? "你提问的位置已经不在了，所以没有加入问题"
-                            : "The place you asked from is gone, so no question was added"
+        language == .zhHans ? "没有加入问题" : "No question added."
     }
 
     public static func dayFallbackToast(language: JournalLanguage) -> String {
-        language == .zhHans ? "没能联系上向导，换一个关于今天的问题" : "Couldn't reach the guide, here's one about your day"
+        language == .zhHans ? "换一个关于今天的问题" : "Here's one about your day."
     }
 
     public static func fallbackToast(language: JournalLanguage) -> String {
-        language == .zhHans ? "没能联系上向导，换一个常用的问题" : "Couldn't reach the guide, here's a standard one"
+        language == .zhHans ? "换一个常用的问题" : "Here's a standard one."
     }
 
     /// The dimmed pill's tooltip, for `JournalAskResult.capped`.
@@ -468,7 +467,6 @@ public enum JournalAsk {
 
     /// For `JournalAskResult.exhausted`.
     public static func exhaustedToast(language: JournalLanguage) -> String {
-        language == .zhHans ? "没能联系上向导，常用的问题也都已经在日记里了"
-                            : "Couldn't reach the guide, and every standard question is already in your entry"
+        language == .zhHans ? "常用的问题都用过了" : "You've used every standard question."
     }
 }
