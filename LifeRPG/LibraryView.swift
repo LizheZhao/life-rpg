@@ -11,6 +11,14 @@ import SwiftUI
 struct LibraryView: View {
     let today: String
 
+    /// How the rows are laid out: under their tier or schedule, or in one list from the best rated down.
+    enum Sort: Hashable { case grouped, rated }
+
+    init(today: String, sort: Sort = .grouped) {
+        self.today = today
+        _sort = State(initialValue: sort)
+    }
+
     @Query(sort: \QuestTemplate.text) private var templates: [QuestTemplate]
     @Query(sort: \RoutineTask.text) private var routines: [RoutineTask]
     @Query private var ratings: [QuestRating]
@@ -18,7 +26,10 @@ struct LibraryView: View {
 
     @Environment(\.modelContext) private var context
     @State private var kind: FeedbackTarget = .quest
+    @State private var sort: Sort
     @State private var adding = false
+    /// The row just deleted, offered back for a few seconds.
+    @State private var justDeleted: JustDeleted?
     @State private var restoreError: String?
     // What the starter library has that this library doesn't (`StarterUpdate`), and the ids the user hid.
     @State private var offered: [StarterUpdate.Item] = []
@@ -32,8 +43,30 @@ struct LibraryView: View {
     @AppStorage("library.openRoutineGroups") private var openGroups =
         RoutineSchedulePresentation.Group.allCases.map(\.rawValue).joined(separator: ",")
 
+    private struct JustDeleted: Identifiable {
+        let id = UUID()
+        let entry: LibraryEntry
+    }
+
     private func matches(_ text: String) -> Bool {
         search.isEmpty || text.localizedCaseInsensitiveContains(search)
+    }
+
+    /// Every listed row of the shown kind, best rated first (`Feedback.ranked`); unrated ones follow.
+    private var ratedEntries: [LibraryEntry] {
+        let standings = Feedback.standings(ratings)
+        switch kind {
+        case .quest:
+            let rows = LibraryEdit.listed(templates).filter { matches($0.text) }
+            return Feedback.ranked(rows, id: \.id, text: \.text, standings: standings)
+                .map { LibraryEntry(template: $0) }
+        case .routine:
+            let lightIDs = Degrade.versionIDs(in: routines)
+            let rows = LibraryEdit.listed(routines).filter { matches($0.text) }
+            return Feedback.ranked(rows, id: \.id, text: \.text, standings: standings).map {
+                LibraryEntry(routine: $0, schedule: RoutineSchedulePresentation($0, isLightVersion: lightIDs.contains($0.id)))
+            }
+        }
     }
 
     private var questGroups: [(difficulty: Difficulty, rows: [QuestTemplate])] {
@@ -62,10 +95,12 @@ struct LibraryView: View {
     }
 
     private var isEmpty: Bool {
-        switch kind {
-        case .quest: questGroups.isEmpty && archivedEntries.isEmpty
-        case .routine: routineSections.isEmpty && archivedEntries.isEmpty
+        let shown = switch (sort, kind) {
+        case (.rated, _): ratedEntries.isEmpty
+        case (.grouped, .quest): questGroups.isEmpty
+        case (.grouped, .routine): routineSections.isEmpty
         }
+        return shown && archivedEntries.isEmpty
     }
 
     /// A search shows every section that has a match, open, and leaves the remembered state alone.
@@ -83,42 +118,18 @@ struct LibraryView: View {
 
     var body: some View {
         let latest = Feedback.latestRatings(ratings)
+        let standings = Feedback.standings(ratings)
         ScrollView {
             VStack(alignment: .leading, spacing: LR.Spacing.sectionGap) {
                 if !offered.isEmpty && search.isEmpty { starterOfferCard }
                 PillSegmentedControl(options: [("Quests", FeedbackTarget.quest), ("Routines", FeedbackTarget.routine)],
                                      selection: $kind, accessibilityLabel: "Library")
-                switch kind {
-                case .quest:
-                    ForEach(questGroups, id: \.difficulty) { group in
-                        let key = group.difficulty.rawValue
-                        let open = isOpen(openTiers, key)
-                        VStack(alignment: .leading, spacing: 10) {
-                            LibrarySectionHeader(title: group.difficulty.rawValue.capitalized,
-                                                 tint: QuestTint(group.difficulty), count: group.rows.count,
-                                                 noun: "quest", isOpen: open) { toggle($openTiers, key) }
-                            if open {
-                                ForEach(group.rows) { link(LibraryEntry(template: $0), latest: latest) }
-                                    .transition(.opacity)
-                            }
-                        }
-                    }
-                case .routine:
-                    ForEach(routineSections, id: \.group) { section in
-                        let key = section.group.rawValue
-                        let open = isOpen(openGroups, key)
-                        VStack(alignment: .leading, spacing: 10) {
-                            LibrarySectionHeader(title: section.group.title, tint: .routine,
-                                                 count: section.rows.count, noun: "routine",
-                                                 isOpen: open) { toggle($openGroups, key) }
-                            if open {
-                                ForEach(section.rows, id: \.routine.id) {
-                                    link(LibraryEntry(routine: $0.routine, schedule: $0.schedule), latest: latest)
-                                }
-                                .transition(.opacity)
-                            }
-                        }
-                    }
+                PillSegmentedControl(options: [("Grouped", Sort.grouped), ("Rated best", Sort.rated)],
+                                     selection: $sort, accessibilityLabel: "Order")
+                if sort == .rated {
+                    ForEach(ratedEntries, id: \.id) { link($0, latest: latest, standing: standings[$0.id]) }
+                } else {
+                    groupedRows(latest: latest)
                 }
                 archivedSection
                 if isEmpty {
@@ -142,6 +153,17 @@ struct LibraryView: View {
                 .accessibilityLabel("Add to library")
             }
         }
+        .overlay(alignment: .bottom) {
+            if let justDeleted {
+                UndoBar(message: "Deleted \u{201C}\(justDeleted.entry.text)\u{201D}") { undoDelete(justDeleted) }
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
+        .task(id: justDeleted?.id) {
+            guard justDeleted != nil else { return }
+            try? await Task.sleep(for: .seconds(6))
+            if !Task.isCancelled { withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) { justDeleted = nil } }
+        }
         .sheet(isPresented: $adding) { NewLibraryRowEditor() }
         .sheet(isPresented: $reviewingOffer) {
             StarterUpdateSheet(items: offered, onAdd: addFromStarter, onHide: hideOffered)
@@ -152,6 +174,41 @@ struct LibraryView: View {
                                                        set: { if !$0 { restoreError = nil } })) {
             Button("OK", role: .cancel) {}
         } message: { Text(restoreError ?? "") }
+    }
+
+    @ViewBuilder private func groupedRows(latest: [UUID: QuestRating]) -> some View {
+        switch kind {
+        case .quest:
+            ForEach(questGroups, id: \.difficulty) { group in
+                let key = group.difficulty.rawValue
+                let open = isOpen(openTiers, key)
+                VStack(alignment: .leading, spacing: 10) {
+                    LibrarySectionHeader(title: group.difficulty.rawValue.capitalized,
+                                         tint: QuestTint(group.difficulty), count: group.rows.count,
+                                         noun: "quest", isOpen: open) { toggle($openTiers, key) }
+                    if open {
+                        ForEach(group.rows) { link(LibraryEntry(template: $0), latest: latest, standing: nil) }
+                            .transition(.opacity)
+                    }
+                }
+            }
+        case .routine:
+            ForEach(routineSections, id: \.group) { section in
+                let key = section.group.rawValue
+                let open = isOpen(openGroups, key)
+                VStack(alignment: .leading, spacing: 10) {
+                    LibrarySectionHeader(title: section.group.title, tint: .routine,
+                                         count: section.rows.count, noun: "routine",
+                                         isOpen: open) { toggle($openGroups, key) }
+                    if open {
+                        ForEach(section.rows, id: \.routine.id) {
+                            link(LibraryEntry(routine: $0.routine, schedule: $0.schedule), latest: latest, standing: nil)
+                        }
+                        .transition(.opacity)
+                    }
+                }
+            }
+        }
     }
 
     /// One line at the top when the starter library has rows this library lacks.
@@ -229,15 +286,34 @@ struct LibraryView: View {
         }
     }
 
-    private func link(_ entry: LibraryEntry, latest: [UUID: QuestRating]) -> some View {
+    private func link(_ entry: LibraryEntry, latest: [UUID: QuestRating], standing: Feedback.Standing?) -> some View {
         let notes = Feedback.comments(comments, for: entry.id).count
         let rating = latest[entry.id]?.rating
         return NavigationLink {
-            LibraryDetailView(entry: entry, today: today)
+            LibraryDetailView(entry: entry, today: today, onDeleted: didDelete)
         } label: {
-            LibraryRow(entry: entry, notes: notes, rating: rating)
+            LibraryRow(entry: entry, notes: notes, rating: rating, standing: standing)
         }
         .buttonStyle(PressableCardStyle())
+    }
+
+    private func didDelete(_ entry: LibraryEntry) {
+        Haptics.selection()
+        withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) { justDeleted = JustDeleted(entry: entry) }
+        AccessibilityNotification.Announcement("Deleted \(entry.text). Undo is available.").post()
+    }
+
+    /// Brings the row back as it was: restore turns a row on, so one that was off is turned off again.
+    private func undoDelete(_ deleted: JustDeleted) {
+        let entry = deleted.entry
+        do {
+            try LibraryEdit.restore(entry.target, id: entry.id, in: context)
+            if !entry.isActive { try LibraryEdit.setActive(false, entry.target, id: entry.id, in: context) }
+            Haptics.selection()
+        } catch {
+            restoreError = "\(error)"
+        }
+        withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) { justDeleted = nil }
     }
 }
 
@@ -247,6 +323,8 @@ private struct LibraryRow: View {
     let entry: LibraryEntry
     let notes: Int
     let rating: Int?
+    /// Set when the list is ordered by rating: the average and how often it was rated.
+    let standing: Feedback.Standing?
 
     @Environment(\.dynamicTypeSize) private var typeSize
 
@@ -256,7 +334,7 @@ private struct LibraryRow: View {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack(alignment: .top, spacing: 12) { LibraryDisc(entry: entry); text }
                     HStack(spacing: 8) {
-                        if let rating { RatingBadge(value: rating) }
+                        badge
                         Spacer(minLength: 0)
                         chevron
                     }
@@ -265,7 +343,7 @@ private struct LibraryRow: View {
                 HStack(alignment: .center, spacing: 12) {
                     LibraryDisc(entry: entry)
                     text
-                    if let rating { RatingBadge(value: rating) }
+                    badge
                     chevron
                 }
             }
@@ -279,6 +357,21 @@ private struct LibraryRow: View {
         .accessibilityValue(spoken)
     }
 
+    @ViewBuilder private var badge: some View {
+        if let standing {
+            PillLabel(text: "\(Self.averageText(standing)) · \(standing.count)×",
+                      style: standing.average > 0 ? .tint(.trivial) : standing.average < 0 ? .clay : .plain)
+                .monospacedDigit()
+                .accessibilityHidden(true)
+        } else if let rating {
+            RatingBadge(value: rating)
+        }
+    }
+
+    private static func averageText(_ standing: Feedback.Standing) -> String {
+        standing.average.formatted(.number.precision(.fractionLength(1)).sign(strategy: .always()))
+    }
+
     private var text: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(entry.text).lr(.bodyStrong)
@@ -288,7 +381,7 @@ private struct LibraryRow: View {
                 FlowRow(spacing: 6) {
                     if entry.isMine { PillLabel(text: "Mine") }
                     if let schedule = entry.schedule { PillLabel(text: schedule.summary) }
-                    if !entry.isActive { PillLabel(text: "inactive") }
+                    if !entry.isActive { PillLabel(text: "off") }
                     if notes > 0 { PillLabel(text: "\(notes) note\(notes == 1 ? "" : "s")") }
                 }
             }
@@ -307,9 +400,10 @@ private struct LibraryRow: View {
     }
 
     private var spoken: String {
-        [entry.tierName, entry.schedule?.summary, entry.isActive ? nil : "inactive",
+        [entry.tierName, entry.schedule?.summary, entry.isActive ? nil : "off",
          notes > 0 ? "\(notes) note\(notes == 1 ? "" : "s")" : nil,
-         rating.map { "latest rating \($0 > 0 ? "+\($0)" : "\($0)")" }]
+         standing.map { "average rating \(Self.averageText($0)), rated \($0.count) time\($0.count == 1 ? "" : "s")" }
+            ?? rating.map { "latest rating \($0 > 0 ? "+\($0)" : "\($0)")" }]
             .compactMap { $0 }.joined(separator: ", ")
     }
 }
@@ -399,6 +493,8 @@ private struct LibraryEntry {
 private struct LibraryDetailView: View {
     let entry: LibraryEntry
     let today: String
+    /// Told when the row has been deleted, so the Library page can offer to undo it after this page closes.
+    let onDeleted: (LibraryEntry) -> Void
 
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
@@ -454,8 +550,10 @@ private struct LibraryDetailView: View {
                 name: live.text,
                 rename: { try LibraryEdit.rename($0, entry.target, id: entry.id, in: context) },
                 delete: {
+                    let gone = live
                     try LibraryEdit.archive(entry.target, id: entry.id, in: context)
                     deleted = true
+                    onDeleted(gone)
                 })
         }
         .sheet(isPresented: $editingSchedule) {
@@ -509,14 +607,9 @@ private struct LibraryDetailView: View {
                         .foregroundStyle(isActive ? LR.Color.ink : LR.Color.inkSecondary)
                         .fixedSize(horizontal: false, vertical: true)
                     FlowRow(spacing: 6) {
-                        if entry.target == .quest { LibraryTierPill(entry: entry) }
+                        if entry.target == .quest { LibraryTierPill(entry: live) }
                         if entry.isMine { PillLabel(text: "Mine") }
-                        if !isActive { PillLabel(text: "inactive") }
-                    }
-                    if !isActive {
-                        Text("Inactive — not drawn any more").lr(.caption)
-                            .foregroundStyle(LR.Color.inkSecondary)
-                            .fixedSize(horizontal: false, vertical: true)
+                        if !isActive { PillLabel(text: "off") }
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -524,13 +617,13 @@ private struct LibraryDetailView: View {
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(live.text)
-        .accessibilityValue([entry.tierName, isActive ? nil : "inactive, not drawn any more"]
+        .accessibilityValue([live.tierName, isActive ? nil : "off"]
             .compactMap { $0 }.joined(separator: ", "))
     }
 
     // MARK: settings
 
-    /// On or off, and a routine's difficulty. Both reach forward only: what is already on the page
+    /// On or off, and a quest's tier or a routine's difficulty. All reach forward only: what is already on the page
     /// keeps its own state and its own points (`LibraryEdit`).
     private var settingsSection: some View {
         section("Settings") {
@@ -541,8 +634,16 @@ private struct LibraryDetailView: View {
                     }
                     .tint(LR.Color.accent)
                     .frame(minHeight: 44)
-                    if !isActive {
-                        caption("Off: not drawn, scheduled or offered any more. What is already on today's page stays.")
+                    if let template {
+                        Rectangle().fill(LR.Color.divider).frame(height: 1).padding(.vertical, 6)
+                        Text("Tier").lr(.bodyStrong).foregroundStyle(LR.Color.ink)
+                        FlowRow(spacing: 6) {
+                            ForEach(LibrarySave.difficulties(for: .quest), id: \.self) { tier in
+                                DayChip(title: tier.rawValue.capitalized, selected: template.difficulty == tier,
+                                        label: tier.rawValue.capitalized) { setQuestTier(tier) }
+                            }
+                        }
+                        caption(NewLibraryRowEditor.tierNote(template.difficulty))
                     }
                     if let routine {
                         Rectangle().fill(LR.Color.divider).frame(height: 1).padding(.vertical, 6)
@@ -564,6 +665,15 @@ private struct LibraryDetailView: View {
     private func setActive(_ on: Bool) {
         do {
             try LibraryEdit.setActive(on, entry.target, id: entry.id, in: context)
+            editError = nil
+        } catch {
+            editError = "\(error)"
+        }
+    }
+
+    private func setQuestTier(_ difficulty: Difficulty) {
+        do {
+            try LibraryEdit.setDifficulty(difficulty, forQuest: entry.id, in: context)
             editError = nil
         } catch {
             editError = "\(error)"
@@ -645,7 +755,7 @@ private enum OpenSections {
 
 /// A section header in Settings' own style that opens and closes its list: a chevron that turns, the
 /// tier's colour as a dot (routine groups have none), the title and a hand count.
-private struct LibrarySectionHeader: View {
+struct LibrarySectionHeader: View {
     let title: String
     let tint: QuestTint?
     let count: Int

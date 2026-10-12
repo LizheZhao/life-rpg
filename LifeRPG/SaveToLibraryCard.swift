@@ -50,10 +50,10 @@ struct SaveToLibraryCard: View {
     private var summary: String {
         switch draft.kind {
         case .quest:
-            return "Joins the random pool; its tier (\(difficulty.rawValue.capitalized)) decides what it pays."
+            return NewLibraryRowEditor.tierNote(difficulty)
         case .routine:
             let pays = AdHoc.basePoints(for: difficulty).map { "pays \($0)" } ?? ""
-            return "\(ScheduleFields.when(draft)) · \(pays) · counts toward clearing the day."
+            return "\(ScheduleFields.when(draft)) · \(pays)."
         }
     }
 

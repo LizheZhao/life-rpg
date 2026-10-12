@@ -223,13 +223,13 @@ struct TrendsView: View {
     }
 
     private var ratingsLink: some View {
-        NavigationLink { RatingSummaryView(today: today) } label: {
+        NavigationLink { LibraryView(today: today, sort: .rated) } label: {
             InfoRowCard(systemImage: "star.bubble", disc: LR.Color.sectionCircle(.hidden), title: "Ratings",
-                        caption: "What has been landing well lately", chevron: true)
+                        caption: "Your library, best rated first", chevron: true)
         }
         .buttonStyle(PressableCardStyle())
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Ratings, what has been landing well lately")
+        .accessibilityLabel("Ratings, your library best rated first")
         .accessibilityAddTraits(.isButton)
     }
 

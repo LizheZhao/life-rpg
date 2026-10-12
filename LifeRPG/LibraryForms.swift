@@ -31,7 +31,7 @@ struct ScheduleFields: View {
             FormToggle(title: "Flexible: any day that week counts", isOn: $draft.flexible)
                 .disabled(locked != nil)
             if locked != nil {
-                Text("A session of this routine is still open. Finish or skip it to switch fixed and flexible or ask for fewer days a week.")
+                Text("Finish or skip the open one first.")
                     .lr(.caption).foregroundStyle(LR.Color.inkSecondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -207,7 +207,7 @@ struct LibraryScheduleEditor: View {
                         .padding(14)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .lrCard(.surface, radius: LR.Radius.row)
-                    Text("\(ScheduleFields.when(draft)). From tomorrow on: what is already on today's page keeps the day it was due.")
+                    Text("\(ScheduleFields.when(draft)).")
                         .lr(.caption).foregroundStyle(LR.Color.inkSecondary)
                         .fixedSize(horizontal: false, vertical: true)
                         .padding(.horizontal, 6)
@@ -342,17 +342,19 @@ struct NewLibraryRowEditor: View {
     private var summary: String {
         switch draft.kind {
         case .quest:
-            switch difficulty {
-            case .trivial:
-                return "A micro-action: three of them are drawn together as one slot, \(Difficulty.trivial.range.lowerBound) each."
-            case .epic:
-                return "Joins the pool the weekly epic is drawn from; pays \(Difficulty.epic.range.lowerBound)–\(Difficulty.epic.range.upperBound) when done."
-            default:
-                return "Joins the random pool; its tier (\(Self.name(difficulty))) decides what it pays."
-            }
+            return Self.tierNote(difficulty)
         case .routine:
             let pays = AdHoc.basePoints(for: difficulty).map { "pays \($0)" } ?? ""
-            return "\(ScheduleFields.when(draft)) · \(pays) · counts toward clearing the day."
+            return "\(ScheduleFields.when(draft)) · \(pays)."
+        }
+    }
+
+    /// What a quest of this tier pays, in a few words.
+    static func tierNote(_ difficulty: Difficulty) -> String {
+        switch difficulty {
+        case .trivial: "Pays \(Difficulty.trivial.range.lowerBound) each, drawn in threes."
+        case .epic: "Pays \(Difficulty.epic.range.lowerBound)\u{2013}\(Difficulty.epic.range.upperBound)."
+        default: "Pays by tier."
         }
     }
 
@@ -368,8 +370,8 @@ struct NewLibraryRowEditor: View {
 
 // MARK: - rename or delete a library row
 
-/// Behind the detail page's pencil: the row's name, and Delete. Delete asks once more on the same
-/// sheet with Cancel beside it, since a system dialog on iOS 26 hides its Cancel button.
+/// Behind the detail page's pencil: the row's name, and Delete. Delete archives at once; the Library
+/// page offers an Undo for a few seconds, and Archived keeps the row after that.
 struct LibraryManageSheet: View {
     let name: String
     /// Throws what `LibraryEdit.rename` throws; the message stays on the sheet.
@@ -379,7 +381,6 @@ struct LibraryManageSheet: View {
 
     @Environment(\.dismiss) private var dismiss
     @State private var text: String
-    @State private var confirmingDelete = false
     @State private var error: String?
 
     init(name: String, rename: @escaping (String) throws -> Void, delete: @escaping () throws -> Void) {
@@ -394,18 +395,15 @@ struct LibraryManageSheet: View {
 
     var body: some View {
         NavigationStack {
-            Group {
-                if confirmingDelete { deleteConfirmation } else { editor }
-            }
-            .background(LR.Color.canvas.ignoresSafeArea())
-            .navigationTitle(confirmingDelete ? "Delete" : "Edit")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }.foregroundStyle(LR.Color.ink)
+            editor
+                .background(LR.Color.canvas.ignoresSafeArea())
+                .navigationTitle("Edit")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Cancel") { dismiss() }.foregroundStyle(LR.Color.ink)
+                    }
                 }
-            }
-            .animation(.easeOut(duration: 0.2), value: confirmingDelete)
         }
         .presentationDetents([.medium])
         .presentationBackground(LR.Color.canvas)
@@ -420,19 +418,18 @@ struct LibraryManageSheet: View {
                     .lr(.bodyStrong).foregroundStyle(LR.Color.ink)
                     .frame(minHeight: 44)
                     .modifier(FieldCard())
-                Text("History keeps the words it was made with.").lr(.caption)
-                    .foregroundStyle(LR.Color.inkSecondary)
-                    .padding(.horizontal, 6)
 
-                VStack(alignment: .leading, spacing: 8) {
-                    Button { error = nil; confirmingDelete = true } label: {
-                        Label("Delete", systemImage: "trash").foregroundStyle(LR.Color.clay)
+                Button {
+                    do {
+                        try delete()
+                        dismiss()
+                    } catch {
+                        self.error = "\(error)"
                     }
-                    .buttonStyle(PillButtonStyle())
-                    Text("Deleting moves it to Archived, where it can be restored.").lr(.caption)
-                        .foregroundStyle(LR.Color.inkSecondary)
-                        .fixedSize(horizontal: false, vertical: true)
+                } label: {
+                    Label("Delete", systemImage: "trash").foregroundStyle(LR.Color.clay)
                 }
+                .buttonStyle(PillButtonStyle())
                 .padding(.top, 6)
 
                 if let error { BannerView(message: error) }
@@ -452,43 +449,5 @@ struct LibraryManageSheet: View {
                 }
             }
         }
-    }
-
-    private var deleteConfirmation: some View {
-        VStack(alignment: .leading, spacing: LR.Spacing.sectionGap) {
-            Text("Delete \u{201C}\(name)\u{201D}?").lr(.heading).foregroundStyle(LR.Color.ink)
-                .fixedSize(horizontal: false, vertical: true)
-            Text("It leaves the library and is never drawn or scheduled again. Your history, ratings and notes stay. You can bring it back from Archived at the bottom of the library.")
-                .lr(.caption).foregroundStyle(LR.Color.inkSecondary)
-                .fixedSize(horizontal: false, vertical: true)
-            if let error { BannerView(message: error) }
-            Spacer(minLength: 0)
-            HStack(spacing: 10) {
-                Button { confirmingDelete = false } label: {
-                    Text("Cancel").lr(.bodyStrong).foregroundStyle(LR.Color.ink)
-                        .frame(maxWidth: .infinity, minHeight: 52)
-                        .background(Capsule().fill(LR.Color.pillFill))
-                        .contentShape(Capsule())
-                }
-                .buttonStyle(PressableCardStyle())
-                Button {
-                    do {
-                        try delete()
-                        dismiss()
-                    } catch {
-                        self.error = "\(error)"
-                    }
-                } label: {
-                    Text("Delete").lr(.bodyStrong).foregroundStyle(LR.Color.onFill)
-                        .frame(maxWidth: .infinity, minHeight: 52)
-                        .background(Capsule().fill(LR.Color.clay))
-                        .contentShape(Capsule())
-                }
-                .buttonStyle(PressableCardStyle())
-            }
-        }
-        .padding(.horizontal, 16)
-        .padding(.top, 8)
-        .padding(.bottom, 12)
     }
 }
