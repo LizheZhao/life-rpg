@@ -85,29 +85,33 @@ final class DataTransfer {
     }
 
     func importMessage(_ s: JSONImport.Summary) -> String {
+        func n(_ count: Int, _ one: String, _ many: String) -> String { "\(count) \(count == 1 ? one : many)" }
         let days = [s.firstDayKey, s.lastDayKey].compactMap { $0 }
         var lines = [
             "Backup exported \(s.exportedAt.formatted(date: .abbreviated, time: .shortened))"
-                + (days.isEmpty ? "" : ", covering \(days.joined(separator: " – "))") + ".",
-            "\(s.dailyQuests) quests, \(s.routineOccurrences) routines, \(s.ledgerEntries) ledger entries, "
-                + "\(s.ratings) ratings, \(s.comments) comments, \(s.rewards) rewards.",
+                + (days.isEmpty ? "" : ", covering \(days.joined(separator: " \u{2013} "))") + ".",
+            [n(s.dailyQuests, "quest", "quests"), n(s.routineOccurrences, "routine", "routines"),
+             n(s.ledgerEntries, "ledger entry", "ledger entries"), n(s.ratings, "rating", "ratings"),
+             n(s.comments, "comment", "comments"), n(s.rewards, "reward", "rewards")]
+                .joined(separator: ", ") + ".",
             "Balance after restoring: \(s.balance).",
-            "Everything in this app's history is replaced by the backup.",
         ]
         if s.libraryQuests + s.libraryRoutines > 0 {
-            lines.append("The library is replaced too: \(s.libraryQuests) quest(s) and \(s.libraryRoutines) routine(s)"
+            lines.append("The library is replaced too: \(n(s.libraryQuests, "quest", "quests")) and "
+                         + n(s.libraryRoutines, "routine", "routines")
                          + (s.libraryArchived > 0 ? ", \(s.libraryArchived) of them deleted (kept under Archived)" : "") + ".")
         }
         if !s.unmatchedLibrary.isEmpty {
-            lines.append("\(s.unmatchedLibrary.count) quest(s) or routine(s) in the backup aren't in this library; "
-                         + "their history is kept but won't link back.")
+            let count = s.unmatchedLibrary.count
+            lines.append(count == 1 ? "1 item in the backup isn't in your library."
+                                    : "\(count) items in the backup aren't in your library.")
         }
         // An older backup (before the whole library was written): only put back, never taken from.
         let mine = s.userQuests + s.userRoutines
         if mine > 0 || s.libraryChanges > 0 {
-            lines.append("Your library: " + [mine > 0 ? "\(s.userQuests) quest(s) and \(s.userRoutines) routine(s) of your own, "
-                                              + "put back if missing" : nil,
-                                              s.libraryChanges > 0 ? "\(s.libraryChanges) default(s) turned off or re-priced" : nil]
+            lines.append("Your library: " + [mine > 0 ? "\(n(s.userQuests, "quest", "quests")) and "
+                                              + "\(n(s.userRoutines, "routine", "routines")) of your own, put back if missing" : nil,
+                                              s.libraryChanges > 0 ? "\(n(s.libraryChanges, "default", "defaults")) turned off or re-priced" : nil]
                 .compactMap { $0 }.joined(separator: "; ") + ".")
         }
         return lines.joined(separator: "\n\n")

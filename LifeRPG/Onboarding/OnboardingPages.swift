@@ -311,9 +311,9 @@ struct OnboardingRemindersPage: View {
                                 caption: "Wrap up your day.",
                                 isOn: binding(NotificationService.journalKey, $evening))
             if denied {
-                OpenSettingsHint(text: "LifeRPG isn't allowed to send notifications. You can change that in iOS Settings.")
+                OpenSettingsHint(text: "Notifications are off in iOS Settings.")
             }
-            Text("Change the times any time in Settings.")
+            Text("Change the times in Settings.")
                 .lr(.caption).foregroundStyle(LR.Color.inkSecondary)
         }
     }
@@ -356,7 +356,7 @@ struct OnboardingConnectPage: View {
                                 caption: "Workouts on your calendar tick themselves off.",
                                 isOn: Binding(get: { calendar }, set: { if $0 { connectCalendar() } }))
             if calendarDenied {
-                OpenSettingsHint(text: "LifeRPG can't read your calendar. You can change that in iOS Settings.")
+                OpenSettingsHint(text: "Calendar access is off in iOS Settings.")
             }
         }
         .task { health = await HealthService().hasAsked() }

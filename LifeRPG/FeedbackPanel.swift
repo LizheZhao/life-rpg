@@ -73,7 +73,7 @@ struct FeedbackPanel: View {
                 }
             }
             if let last = history.first {
-                caption("Latest: \(label(last.rating)), \(last.dayKey). Rating again adds a new entry; the old ones stay.")
+                caption("Latest: \(label(last.rating)), \(last.dayKey).")
             } else {
                 caption("Not rated yet.")
             }

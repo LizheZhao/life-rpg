@@ -43,7 +43,7 @@ struct WorkoutDetectionView: View {
                 }
                 .disabled(checking)
             } footer: {
-                footer("Each workout verifies one thing. Also checked every time the app comes to the foreground.")
+                footer("One workout counts for one quest.")
             }
             .listRowBackground(LR.Color.surface)
             if let check {
@@ -134,10 +134,6 @@ struct WorkoutDetectionView: View {
             }
         } header: {
             header("Calendars")
-        } footer: {
-            footer(selection == .all
-                   ? "Every calendar is read. Only events whose title contains a keyword count."
-                   : "Only the checked calendars are read.")
         }
         .listRowBackground(LR.Color.surface)
     }
@@ -149,7 +145,7 @@ struct WorkoutDetectionView: View {
         } header: {
             header("Keywords")
         } footer: {
-            footer("An event counts only if its title contains one of these keywords, so meetings do not count. All-day events never count. With no keywords, nothing is detected.")
+            footer("Events with these words in the title count. All-day events don't.")
         }
         .listRowBackground(LR.Color.surface)
     }
@@ -238,7 +234,7 @@ private struct CheckResultCard: View {
                     }
                 }
             }
-            Text(reason).lr(.caption).foregroundStyle(LR.Color.inkSecondary)
+            if let reason { Text(reason).lr(.caption).foregroundStyle(LR.Color.inkSecondary) }
             Rectangle().fill(LR.Color.divider).frame(height: 1)
             fact("Calendar events read", "\(check.eventsRead) since \(check.windowStart.formatted(.dateTime.month().day()))")
             fact("Matched a keyword", "\(check.matched)")
@@ -272,22 +268,14 @@ private struct CheckResultCard: View {
         return check.outcome == .matched ? "Nothing new verified" : "Nothing detected"
     }
 
-    private var reason: LocalizedStringKey {
+    private var reason: LocalizedStringKey? {
         switch check.outcome {
-        case .noCalendarAccess:
-            "Calendar access is off, so no events could be read. Allow it under Access."
-        case .noCalendarsSelected:
-            "No calendar is selected. Turn on All calendars or check at least one."
-        case .noKeywords:
-            "No keywords are set. An event only counts when its title contains one."
-        case .noEventsInWindow:
-            "The selected calendars have no events in this window."
-        case .noneMatched:
-            "Events were found, but none has a keyword in its title or sits in a selected calendar."
-        case .matched:
-            verifiedSome
-                ? "Each workout verifies one open item whose rule it satisfies."
-                : "Matching events were found, but no open quest or routine took them. A workout must be long enough for an item's rule and fall on its day."
+        case .noCalendarAccess: "Calendar access is off."
+        case .noCalendarsSelected: "No calendar is selected."
+        case .noKeywords: "No keywords are set."
+        case .noEventsInWindow: "No events in this window."
+        case .noneMatched: "No event matched."
+        case .matched: verifiedSome ? nil : "Found a workout, but nothing open fit it."
         }
     }
 }

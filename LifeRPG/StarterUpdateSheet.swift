@@ -35,7 +35,7 @@ struct StarterUpdateSheet: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: LR.Spacing.sectionGap) {
-                    Text("Added to your library as they are; nothing you changed or deleted comes back.")
+                    Text("Pick what you want.")
                         .lr(.caption).foregroundStyle(LR.Color.inkSecondary)
                         .fixedSize(horizontal: false, vertical: true)
                     if !quests.isEmpty { group("Quests", quests) }
