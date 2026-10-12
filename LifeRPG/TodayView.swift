@@ -271,7 +271,7 @@ struct TodayView: View {
     }
 
     private var levelState: LevelCardState {
-        LevelCardState(totalEarned: totalEarned, balance: balance, streak: streak, tier: tier,
+        LevelCardState(totalEarned: totalEarned, balance: balance, tier: tier,
                        randomSlots: todayContext?.randomSlots ?? 0, goal: goal)
     }
 
@@ -346,7 +346,7 @@ struct TodayView: View {
                 .accessibilityHint("Shows what each level unlocks")
             Spacer()
             HStack(spacing: 10) {
-                JournalBookButton(today: today) { journalSheet = .write }
+                if !showsJournalCard { JournalBookButton(today: today) { journalSheet = .write } }
                 Button { adding = true } label: {
                     Image(systemName: "plus")
                         .font(.system(size: 20, weight: .semibold))
@@ -431,7 +431,7 @@ struct TodayView: View {
         SectionTitle(title: "Today's quests",
                      count: SectionProgress(done: counted.filter(\.isDone).count, total: counted.count).handLabel)
         if randomQuests.isEmpty {
-            Text("No quests today — the pool is empty or fully on cooldown. The day is yours.")
+            Text("Nothing to draw today. The day is yours.")
                 .lr(.bodyStrong).foregroundStyle(LR.Color.inkSecondary)
                 .padding(16).frame(maxWidth: .infinity, alignment: .leading)
                 .lrCard(.surface, radius: LR.Radius.row)
@@ -616,8 +616,7 @@ struct TodayView: View {
         case .quest(let quest): return header(for: quest)
         case .trivialItem(let quest, let index):
             return MomentHeader(doodle: .sparkle, tint: .trivial,
-                                title: quest.trivialGroup.indices.contains(index) ? quest.trivialGroup[index] : "",
-                                subtitle: "Micro-actions pay once all three are ticked")
+                                title: quest.trivialGroup.indices.contains(index) ? quest.trivialGroup[index] : "")
         case .routine(let occurrence): return MomentHeader(routineState(occurrence, .today))
         case .ahead(let routine):
             let candidate = aheadState.items.lazy.compactMap { item -> AheadCandidateState? in
@@ -977,14 +976,14 @@ struct TodayView: View {
         switch spend {
         case .reroll(let q):
             q.slot == .epic
-                ? "Swap it for a different epic for \(price(spend)). It keeps the same deadline. Once extended, an epic can't be rerolled."
-                : "Swap it for a different \(q.slot.code) for \(price(spend)). The next reroll of this slot today costs more."
+                ? "Swap for a different epic, \(price(spend)). Same deadline."
+                : "Swap for a different \(q.slot.code), \(price(spend)). The next one costs more."
         case .extend:
-            "One more week, for \(price(spend)). The week it runs into gets no new epic, and it can't be rerolled or replaced any more."
+            "One more week, \(price(spend)). After that it can't be rerolled or replaced."
         case .cancelQuest:
-            "Drop it for \(price(spend)). It no longer blocks the hidden quest, but it earns nothing and doesn't count toward the streak."
+            "Drop it for \(price(spend)). It earns nothing and won't count for the streak."
         case .cancelRoutine:
-            "Drop it for \(price(spend)). No more overdue deductions, and it no longer blocks the hidden quest. Deductions already charged stay."
+            "Drop it for \(price(spend)). No more deductions."
         }
     }
 
@@ -1003,7 +1002,7 @@ struct TodayView: View {
             // Only a reroll can be refused this late (nothing left to draw); nothing was charged.
             if case .reroll = spend {
                 show(.refusal(RerollRefusal(header: header(for: spend, title: "Can't reroll"),
-                                            reason: "\(refused.description). Nothing was charged.")))
+                                            reason: refused.description)))
                 return
             }
             actionError = refused.description
@@ -1017,7 +1016,7 @@ struct TodayView: View {
         var rng = SystemRandomNumberGenerator()
         do {
             if try DayService.drawHidden(context, on: today, inputs: inputs, rng: &rng) == nil {
-                actionError = "No hidden quest available — the pool is empty or on cooldown."
+                actionError = "Nothing left to reveal."
             } else {
                 actionError = nil
             }

@@ -506,7 +506,7 @@ struct MomentCardFace: View {
     }
 
     static func note(_ breakdown: Scoring.Breakdown) -> String? {
-        if !breakdown.isRolled { return "the group scores \(breakdown.rolled) as a whole, not a roll" }
+        if !breakdown.isRolled { return "scored as a group" }
         if breakdown.multiplier > 1 { return String(format: "×%.1f low energy", breakdown.multiplier) }
         return nil
     }

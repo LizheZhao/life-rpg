@@ -29,7 +29,7 @@ public enum Purchase {
         public var description: String {
             switch self {
             case .inDebt(let balance):
-                "Balance is \(balance) — clear the debt by completing quests first"
+                "In debt (\(balance)). Earn it back first."
             case .tooExpensive(let cost, let balance):
                 "Costs \(cost), balance is \(balance)"
             case .alreadyCompleted:

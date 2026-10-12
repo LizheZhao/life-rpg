@@ -72,10 +72,10 @@ struct TodayPresentationTests {
         let q = DailyQuest()
         q.textSnapshot = "Cook a meal"; q.slot = .easy
         #expect(QuestCardState(q, tier: .normal).subtitle == nil)
-        #expect(QuestCardState(q, tier: .normal, libraryActive: false).subtitle == "Turned off · won't be drawn again")
+        #expect(QuestCardState(q, tier: .normal, libraryActive: false).subtitle == "Turned off")
         q.variantSnapshot = "pasta"
         #expect(QuestCardState(q, tier: .normal, libraryActive: false).subtitle
-                == "pasta · Turned off · won't be drawn again")
+                == "pasta · Turned off")
         // A micro group is three templates in one card: no single row to say it about.
         let group = DailyQuest()
         group.trivialGroup = ["a", "b", "c"]; group.trivialDone = [false, false, false]
@@ -207,7 +207,7 @@ struct TodayPresentationTests {
         let t = ReplacedRowState(trio)
         #expect(t.code == "T×3")
         #expect(t.title == "Floss · Make bed · Water plant")
-        #expect(t.note == "Dropped — the day was re-planned")
+        #expect(t.note == "Dropped on re-plan")
     }
 
     @Test func everyReplacedReasonHasANote() {
@@ -215,7 +215,7 @@ struct TodayPresentationTests {
             let q = slot("x"); q.replaced = true; q.replacedReason = reason
             return ReplacedRowState(q).note
         }
-        #expect(notes == ["Replaced", "Dropped — the day was re-planned", "Rerolled away", "Swapped", "Cancelled"])
+        #expect(notes == ["Replaced", "Dropped on re-plan", "Rerolled away", "Swapped", "Cancelled"])
     }
 
     // MARK: routine rows
@@ -356,7 +356,7 @@ struct TodayPresentationTests {
 
         let extra = occurrence("Water plants")
         extra.routineID = nil
-        #expect(row(extra).notes == ["Added today · extra, no penalty"])
+        #expect(row(extra).notes == ["Added today · extra"])
 
         let swapped = occurrence("Strength session")
         let taker = occurrence("Heavy lifting")
@@ -365,37 +365,37 @@ struct TodayPresentationTests {
         #expect(row(taker, occurrences: [swapped, taker]).notes == ["Replaces Strength session"])
     }
 
-    @Test func anExtraNeverRepeatsThatItDoesNotGateTheHiddenQuest() {
-        // `+` adds an extra that never gates (the add sheet says so); "extra, no penalty" is the whole note.
+    @Test func anExtraSaysExtraAndNothingAboutTheHiddenQuest() {
         let extra = occurrence("Water plants")
         extra.routineID = nil
         extra.countsForClear = false
-        #expect(row(extra).notes == ["Added today · extra, no penalty"])
-        #expect(row(extra).noteLine == "Added today · extra, no penalty")
+        #expect(row(extra).notes == ["Added today · extra"])
+        #expect(row(extra).noteLine == "Added today · extra")
 
-        // A slot taken over, or a routine from the library, keeps the note when it really doesn't gate.
+        // No note about gating, whatever the row does: the add sheet says it once.
         let slotQuest = slot("Walk 8,000 steps")
         let taker = occurrence("Call mum")
         taker.routineID = nil
         taker.replacesQuestID = slotQuest.id
         taker.countsForClear = false
         #expect(row(taker, quests: [slotQuest]).notes
-                == ["Added today · replaces Walk 8,000 steps", "Doesn't gate the hidden quest"])
+                == ["Added today · replaces Walk 8,000 steps"])
     }
 
     @Test func notesShareOneCaptionLine() {
         let o = occurrence("Strength session", due: "2026-09-30")
+        o.routineID = nil
         o.countsForClear = false
         let s = row(o, .thisWeek)
-        #expect(s.notes == ["Not done · due Wed Sep 30", "Doesn't gate the hidden quest"])
-        #expect(s.noteLine == "Not done · due Wed Sep 30 · Doesn't gate the hidden quest")
+        #expect(s.notes == ["Not done · due Wed Sep 30", "Added 2026-09-30 · extra"])
+        #expect(s.noteLine == "Not done · due Wed Sep 30 · Added 2026-09-30 · extra")
         #expect(row(occurrence("Take out the trash")).noteLine == nil)
     }
 
-    @Test func aRoutineThatDoesNotGateTheHiddenQuestSaysSo() {
+    @Test func aRoutineThatDoesNotGateTheHiddenQuestHasNoNoteAboutIt() {
         let o = occurrence("Check-in")
         o.countsForClear = false
-        #expect(row(o).notes == ["Doesn't gate the hidden quest"])
+        #expect(row(o).notes.isEmpty)
     }
 
     // MARK: epic
@@ -481,7 +481,7 @@ struct TodayPresentationTests {
 
     @Test func levelCardNumbers() {
         // Level 8 starts at 2940 earned and level 9 at 3840: 3528 earned leaves 312 to go.
-        let s = LevelCardState(totalEarned: 3528, balance: 1240, streak: 12, tier: .normal,
+        let s = LevelCardState(totalEarned: 3528, balance: 1240, tier: .normal,
                                randomSlots: 4, goal: nil)
         #expect(s.level == 8)
         #expect(s.pointsToNext == 312)
@@ -489,42 +489,46 @@ struct TodayPresentationTests {
         #expect(s.dotCount == 20)
         #expect(s.balance == 1240)
         #expect(!s.isNegative)
-        #expect(s.streakText == "12 day streak")
         #expect(s.tierText == "normal day")
         #expect(s.slotsText == "4 random slots")
         #expect(s.goal == nil)
         #expect(s.accessibilityLabel == "Level 8, 312 coins to level 9")
-        #expect(s.accessibilityValue == "1240 coins, 12 day streak, normal day, 4 random slots")
+        #expect(s.accessibilityValue == "1240 coins, normal day, 4 random slots")
     }
 
     @Test func levelCardEdgeCases() {
-        let s = LevelCardState(totalEarned: 0, balance: -12, streak: 0, tier: .veryLow, randomSlots: 1, goal: nil)
+        let s = LevelCardState(totalEarned: 0, balance: -12, tier: .veryLow, randomSlots: 1, goal: nil)
         #expect(s.level == 1)
         #expect(s.isNegative)
-        #expect(s.streakText == nil)
         #expect(s.tierText == "very low day")
         #expect(s.slotsText == "1 random slot")
         #expect(s.accessibilityValue == "-12 coins, very low day, 1 random slot")
-        let streak1 = LevelCardState(totalEarned: 0, balance: 0, streak: 1, tier: .high, randomSlots: 0, goal: nil)
-        #expect(streak1.streakText == "1 day streak")
-        #expect(streak1.tierText == "high day")
-        #expect(streak1.slotsText == "0 random slots")
+        let high = LevelCardState(totalEarned: 0, balance: 0, tier: .high, randomSlots: 0, goal: nil)
+        #expect(high.tierText == "high day")
+        #expect(high.slotsText == "0 random slots")
     }
 
     @Test func savingsGoalLine() {
         let open = SavingsGoal.Progress(name: "AirPods Pro", price: 900, balance: 640,
                                         fraction: 640.0 / 900.0, weeksLeft: 3)
-        let a = LevelCardState(totalEarned: 640, balance: 640, streak: 0, tier: .normal, randomSlots: 3, goal: open)
+        let a = LevelCardState(totalEarned: 640, balance: 640, tier: .normal, randomSlots: 3, goal: open)
         #expect(a.goal == .init(name: "AirPods Pro", text: "640 / 900 · ~3 wk", fraction: 640.0 / 900.0, ready: false))
 
         let noPace = SavingsGoal.Progress(name: "AirPods Pro", price: 900, balance: -30, fraction: 0, weeksLeft: nil)
-        let b = LevelCardState(totalEarned: 0, balance: -30, streak: 0, tier: .normal, randomSlots: 3, goal: noPace)
+        let b = LevelCardState(totalEarned: 0, balance: -30, tier: .normal, randomSlots: 3, goal: noPace)
         #expect(b.goal?.text == "0 / 900")
 
         let ready = SavingsGoal.Progress(name: "AirPods Pro", price: 900, balance: 950, fraction: 1, weeksLeft: 0)
-        let c = LevelCardState(totalEarned: 950, balance: 950, streak: 0, tier: .normal, randomSlots: 3, goal: ready)
+        let c = LevelCardState(totalEarned: 950, balance: 950, tier: .normal, randomSlots: 3, goal: ready)
         #expect(c.goal == .init(name: "AirPods Pro", text: "ready to redeem", fraction: 1, ready: true))
         #expect(c.accessibilityValue.hasSuffix("AirPods Pro, ready to redeem"))
+    }
+
+    @Test func theStreakIsNotOnTheLevelCard() {
+        let s = LevelCardState(totalEarned: 3528, balance: 1240, tier: .normal, randomSlots: 4, goal: nil)
+        #expect(!s.accessibilityValue.contains("streak"))
+        let g = TodayGreeting(dayKey: "2026-10-02", hour: 9, streak: 12)
+        #expect(g.handLine == "Fri · Oct 2 · 12 day streak")
     }
 
     // MARK: greeting

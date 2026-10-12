@@ -92,7 +92,6 @@ struct LevelCardView: View {
                 FlowRow(spacing: 6) {
                     PillLabel(text: state.tierText, dense: true)
                     PillLabel(text: state.slotsText, dense: true)
-                    if let streak = state.streakText { PillLabel(text: streak, dense: true) }
                 }
                 if let goal = state.goal { goalBlock(goal) }
             }

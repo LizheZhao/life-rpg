@@ -145,7 +145,7 @@ public struct QuestCardState: Equatable, Identifiable, Sendable {
         tint = quest.isHiddenSlot ? .hidden : QuestTint(quest.slot)
         title = quest.textSnapshot
         subtitle = [quest.variantSnapshot.flatMap { $0.isEmpty ? nil : $0 },
-                    libraryActive ? nil : "Turned off · won't be drawn again"]
+                    libraryActive ? nil : "Turned off"]
             .compactMap { $0 }.joined(separator: " · ").nilIfEmpty
         doodle = DoodleKey.forText(quest.textSnapshot)
         launchURL = quest.launchURLSnapshot.flatMap(URL.init(string:))
@@ -168,7 +168,7 @@ public struct ReplacedRowState: Equatable, Identifiable, Sendable {
         code = quest.isTrivialGroup ? "T×3" : quest.slot.code
         title = quest.isTrivialGroup ? quest.trivialGroup.joined(separator: " · ") : quest.textSnapshot
         switch quest.replacedReason {
-        case .replan: note = "Dropped — the day was re-planned"
+        case .replan: note = "Dropped on re-plan"
         case .cancelled: note = "Cancelled"
         case .rerolled: note = "Rerolled away"
         case .adHoc: note = "Replaced"
@@ -273,11 +273,8 @@ public struct RoutineRowState: Equatable, Identifiable, Sendable {
         } else if let replaced = occurrences.first(where: { $0.replacedByID == o.id }) {
             notes.append("Replaces \(replaced.displayText)")
         } else if o.routineID == nil {
-            notes.append("\(added) · extra, no penalty")
+            notes.append("\(added) · extra")
         }
-        // An extra (`AdHoc.add`) never gates by construction and says "extra" already.
-        let isExtra = AdHoc.isExtra(o, among: occurrences)
-        if !o.countsForClear, !isExtra { notes.append("Doesn't gate the hidden quest") }
         self.notes = notes
 
         let autoVerified = routine?.autoVerifyRule.map { !$0.isEmpty } ?? false
@@ -371,7 +368,6 @@ public struct LevelCardState: Equatable, Sendable {
     public let pointsToNext: Int
     public let filledDots: Int
     public let dotCount: Int
-    public let streakText: String?
     public let tierText: String
     public let slotsText: String
     public let goal: Goal?
@@ -381,14 +377,13 @@ public struct LevelCardState: Equatable, Sendable {
     /// Negative is shown in clay rather than clamped to zero: more honest.
     public var isNegative: Bool { balance < 0 }
 
-    public init(totalEarned: Int, balance: Int, streak: Int, tier: Tier, randomSlots: Int,
+    public init(totalEarned: Int, balance: Int, tier: Tier, randomSlots: Int,
                 goal progress: SavingsGoal.Progress?) {
         level = Economy.level(totalEarned: totalEarned)
         self.balance = balance
         pointsToNext = Economy.pointsToNextLevel(totalEarned: totalEarned)
         dotCount = 20
         filledDots = Economy.levelDots(totalEarned: totalEarned, count: 20)
-        streakText = streak > 0 ? "\(streak) day streak" : nil
         tierText = tier.dayText
         slotsText = "\(randomSlots) random slot\(randomSlots == 1 ? "" : "s")"
         goal = progress.map { goal in
@@ -403,7 +398,7 @@ public struct LevelCardState: Equatable, Sendable {
             return Goal(name: goal.name, text: text, fraction: goal.fraction, ready: goal.ready)
         }
         accessibilityLabel = "Level \(level), \(pointsToNext) coins to level \(level + 1)"
-        accessibilityValue = ["\(balance) coins", streakText, tierText, slotsText,
+        accessibilityValue = ["\(balance) coins", tierText, slotsText,
                               self.goal.map { "\($0.name), \($0.text)" }]
             .compactMap { $0 }.joined(separator: ", ")
     }

@@ -11,9 +11,9 @@ struct TodayCardsGallery: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 22) {
             group("Level card") {
-                LevelCardView(state: level(balance: 1240, streak: 12, goal: Self.goalOpen)) {}
-                LevelCardView(state: level(balance: -35, streak: 0, tier: .low, goal: nil)) {}
-                LevelCardView(state: level(balance: 950, streak: 3, goal: Self.goalReady)) {}
+                LevelCardView(state: level(balance: 1240, goal: Self.goalOpen)) {}
+                LevelCardView(state: level(balance: -35, tier: .low, goal: nil)) {}
+                LevelCardView(state: level(balance: 950, goal: Self.goalReady)) {}
             }
             group("Epic: open, extended, done, long title (tap a card to expand)") {
                 EpicCardView(state: epic(), actions: epicMenu) {}
@@ -94,9 +94,9 @@ struct TodayCardsGallery: View {
     private static let goalReady = SavingsGoal.Progress(name: "AirPods Pro", price: 900, balance: 950,
                                                         fraction: 1, weeksLeft: 0)
 
-    private func level(balance: Int, streak: Int, tier: Tier = .normal,
+    private func level(balance: Int, tier: Tier = .normal,
                        goal: SavingsGoal.Progress?) -> LevelCardState {
-        LevelCardState(totalEarned: 3528, balance: balance, streak: streak, tier: tier, randomSlots: 4, goal: goal)
+        LevelCardState(totalEarned: 3528, balance: balance, tier: tier, randomSlots: 4, goal: goal)
     }
 
     private func epic(title: String = "Ship the MCP eval set v1", extensions: Int = 0,
