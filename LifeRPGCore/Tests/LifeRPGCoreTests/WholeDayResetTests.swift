@@ -219,4 +219,38 @@ struct WholeDayResetTests {
         let o = try #require(try ctx.fetch(FetchDescriptor<RoutineOccurrence>()).first { $0.dueDayKey == thursday })
         #expect(o.penaltyApplied == 10 && !o.skipped)
     }
+
+    // MARK: a recovery day
+
+    /// The day keeps the recovery mark it was drawn with, as it keeps its tier: drawn again without
+    /// it, the reset day would ask for the heavy routine and be judged with penalties.
+    @Test func aRecoveryDayIsDrawnAgainAsARecoveryDay() throws {
+        let ctx = try Fixtures.context()
+        Fixtures.stockLibrary(ctx)
+        let heavy = routine(ctx, "Long run", spec: "FRI")
+        heavy.difficulty = .hard
+        try ctx.save()
+        let stretch = RecoveryPeriod(firstDayKey: friday, lastDayKey: "2026-09-30")
+        var rng = SeededRNG(seed: 4)
+        try DayService.ensureToday(ctx, now: Fixtures.date(friday), in: tz,
+                                   inputs: Recovery.applied(stretch, to: DayInputs(tier: .high), on: friday), rng: &rng)
+        try playEverything(ctx, on: friday, rng: &rng)
+
+        try reset(ctx)
+        let day = try #require(try DayService.dailyContext(for: friday, in: ctx))
+        #expect(day.isRecovery)
+        #expect(day.tier == .veryLow)
+        let quests = try DayService.quests(on: friday, in: ctx).filter { !$0.replaced && !$0.isHiddenSlot }
+        #expect(!quests.contains { $0.slot == .epic })
+        #expect(quests.map(\.slot.code).sorted() == ["E", "E", "T"])
+        #expect(try DayService.occurrences(dueOn: friday, in: ctx).allSatisfy { $0.routineID != heavy.id })
+    }
+
+    @Test func anOrdinaryDayStaysOrdinary() throws {
+        let ctx = try Fixtures.context()
+        Fixtures.stockLibrary(ctx)
+        _ = try opened(ctx, on: friday)
+        try reset(ctx)
+        #expect(try DayService.dailyContext(for: friday, in: ctx)?.isRecovery == false)
+    }
 }

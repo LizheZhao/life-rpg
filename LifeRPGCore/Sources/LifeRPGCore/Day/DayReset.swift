@@ -39,7 +39,9 @@ public enum DayReset {
     ///
     /// Other days stay as they are. So do the entries the day's opening made about the day before
     /// (a penalty or a skip is dated the day it was judged, but is booked against the earlier
-    /// occurrence, so deleting it would charge that occurrence again). The day keeps the tier it had.
+    /// occurrence, so deleting it would charge that occurrence again). The day keeps the tier it had,
+    /// and a recovery day stays one (`Recovery`): drawn again without its mark it would ask for the
+    /// heavy routines and be judged with penalties.
     ///
     /// Known limit: a routine from an earlier round that was *swapped* that day is not undone, as its
     /// replacement carries the earlier due day.
@@ -55,6 +57,7 @@ public enum DayReset {
         let inputs = dayContext.map { c -> DayInputs in
             var i = DayInputs(tier: c.tier, cycleDay: c.cycleDay, energy: c.energy, readiness: c.readiness)
             i.hrv = c.hrv; i.sleepHours = c.sleepHours; i.restingHR = c.restingHR
+            if c.isRecovery { i.recovery = RecoveryPeriod(firstDayKey: dayKey, lastDayKey: dayKey) }
             return i
         }
         var affected = Set<UUID>()
@@ -123,7 +126,7 @@ public enum DayReset {
         try Affinity.sync(context)
         try context.save()
 
-        // The day, generated again from the same body inputs.
+        // The day, generated again from the same body inputs and the same recovery mark.
         _ = try DayService.ensureToday(context, now: now, in: timeZone, inputs: inputs ?? DayInputs(), rng: &rng)
         return result
     }
