@@ -259,6 +259,18 @@ Built 2026-10-04 → 10-08 from `doc/JOURNAL_UX_SPEC.md` (copied from the user's
 - [x] Simulator evaluation (Debug → Ask evaluation, `JournalAskEvaluation`): 15 made-up days × 4 through `JournalAsk.resolve` with the Mac's model; reports in `build/`. The last run before this entry: 86–87 of 88 English taps ended on the model's question (about 1 in 5 after one retry), no yes/no or unsupported early left, the question names something from the day about 4 times in 5
 - [ ] Device check: the V8 store upgrade kept every row and the migrated turn days; the 05:00 automation runs unattended with the phone locked and creates exactly one Apple Journal entry; the App Intent appears in Shortcuts; Ask me something on the phone (model availability, wording, how long a tap takes, the `Last ask` line after a fallback); Chinese IME in the editor; the Trends page on real weeks of entries
 
+## Stage 5.11 — UX pass from two weeks of daily use
+
+Decided with the user (2026-10-12), from an audit of tap paths, of the copy, and of 15 days of the user's own export. The points rules were left as they are (to revisit with more data: cancel prices nobody pays, an uncapped custom ad-hoc task, the Lv 5 perk, hidden and epic income below `PLAN.md`'s estimates).
+
+- [x] Today: a picked rating closes the card after half a second (no `Done`); `+` → Custom has `Add & done` (`AdHoc.addAndComplete`) and the doodle grid behind `Change icon`; "Leave it" on the re-plan prompt is remembered for that day and tier (`Replan.Declined`); the book button hides while the evening card shows; the streak shows once, in the greeting
+- [x] Journal and calendar: the editor has one `Done` (closing with writing marks the entry done); the four fixed questions sit in a `Questions` menu and a question row has a visible remove; a dot under each day with an entry, and a legend chip; the calendar's header book icon is gone; the day sheet's night card has `Read` and `Edit`
+- [x] Library, Rewards, Settings: Delete archives at once with `Undo`; archived rewards can be restored (`Redemption.restore`); Reminders and the Journal settings are one page, `Journal & reminders`; a quest's tier can be changed (`LibraryEdit.setDifficulty(_:forQuest:)`); the rating summary became the Library's `Rated best` order (`Feedback.standings` / `ranked`, `RatingSummaryView` gone); "inactive" reads "off"
+- [x] `SavingsGoal.pace` divides by the days actually covered (at most 28), not always four weeks: with 15 days of history it had read 410 a week against a real 805
+- [x] Copy: about forty lines shortened or deleted (what does not happen, rules explained, captions repeating the control); prices, penalties and irreversible warnings kept
+- [x] Driven on the simulator: rating auto-close and its saved row, `Add & done`, the evening card and book button, the editor's `Done`, `Questions` and remove, the calendar dot and legend, `Read` / `Edit`, `Rated best`, the quest tier, Delete with `Undo`, the merged settings page. Not driven: the Rewards archive section, "Leave it" across a foreground, the Trends → Ratings link
+- [ ] Device check: the same paths with real use for a few days; whether 8 s is long enough before an unrated card closes
+
 ## Stage 6 — Backup and migration
 
 Done when: balance matches exactly
