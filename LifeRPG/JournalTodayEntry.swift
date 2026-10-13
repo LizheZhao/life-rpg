@@ -42,10 +42,12 @@ struct JournalTonightCard: View {
             }
             Text("Write about today").lr(.titleCard).foregroundStyle(LR.Color.onNight)
                 .padding(.top, 2)
-            Text(JournalEntryToday.cardSubtitle)
-                .lr(.caption).foregroundStyle(LR.Color.onNightSecondary)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.top, 4)
+            if let subtitle = JournalEntryToday.cardSubtitle(state) {
+                Text(subtitle)
+                    .lr(.caption).foregroundStyle(LR.Color.onNightSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, 4)
+            }
             HStack(alignment: .center, spacing: 12) {
                 Button(action: write) {
                     Label(JournalEntryToday.cardCopy(state), systemImage: "pencil")

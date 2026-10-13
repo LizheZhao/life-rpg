@@ -188,7 +188,11 @@ struct JournalEntryTodayTests {
                                             today: "2026-09-18") == nil)
     }
 
-    @Test func theCardSubtitleIsTheDesigns() {
-        #expect(JournalEntryToday.cardSubtitle == "A blank page.")
+    /// "A blank page." only while the page is blank: under "Written · 7 words" it read wrong.
+    @Test func theCardSubtitleIsOnlyForABlankPage() {
+        #expect(JournalEntryToday.cardSubtitle(.none) == "A blank page.")
+        #expect(JournalEntryToday.cardSubtitle(.draft(words: 0)) == "A blank page.")
+        #expect(JournalEntryToday.cardSubtitle(.draft(words: 3)) == nil)
+        #expect(JournalEntryToday.cardSubtitle(.done(words: 7)) == nil)
     }
 }

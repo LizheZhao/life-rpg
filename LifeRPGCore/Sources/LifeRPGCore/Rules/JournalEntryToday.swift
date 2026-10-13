@@ -44,8 +44,13 @@ public enum JournalEntryToday {
         }
     }
 
-    /// The card's line under its title.
-    public static let cardSubtitle = "A blank page."
+    /// The card's line under its title, only while the page is blank; the button says the rest.
+    public static func cardSubtitle(_ state: State) -> String? {
+        switch state {
+        case .none: "A blank page."
+        case .draft(let words), .done(let words): words == 0 ? "A blank page." : nil
+        }
+    }
 
     /// The newest entry before `today`, for "Last night · 412 words" on the card while today
     /// has no row. `days` is `JournalEntryHistory.days`.
