@@ -31,12 +31,13 @@ struct PaletteTests {
         // sage, steel blue, amber, crimson, dusk violet, then routine (beige grey) and epic (umber):
         // trivial, easy, medium, hard, hidden, routine, epic.
         #expect(Palette.tints.map { $0.token.light }
-                == [0x9CAF88, 0x4682B4, 0xFFBF00, 0xC8465A, 0x8A7BB3, 0xC9C4BB, 0x5D5750])
+                == [0x9CAF88, 0x4179A7, 0xFFBF00, 0xC8465A, 0x9386B9, 0xC9C4BB, 0x5D5750])
         #expect(Palette.tints.map { $0.token.dark }
                 == [0x86987A, 0x3F76A5, 0xD8A645, 0xB84A60, 0x7A6CA8, 0xB9B4AB, 0x716B63])
         #expect(Palette.tintRoutine == Palette.Token(light: 0xC9C4BB, dark: 0xB9B4AB))
         #expect(Palette.tintEpic == Palette.Token(light: 0x5D5750, dark: 0x716B63))
         #expect(Palette.onTintDark == Palette.Token(light: 0x25232F, dark: 0x1B1A22))
+        #expect(Palette.onTintHidden == Palette.Token(light: 0x25232F, dark: 0xFFFFFF))
     }
 
     @Test func theNightCardIsTheDesignsDarkCardAndItsInks() {
@@ -66,22 +67,19 @@ struct PaletteTests {
     }
 
     @Test func textOnATintIsChosenPerTint() {
-        // Dark on the light amber, sage and routine beige; white on steel blue, crimson, violet and
-        // the epic umber, both appearances.
+        // Dark on the light amber, sage and routine beige; white on steel blue, crimson and the epic
+        // umber, both appearances; on violet dark in light and white in dark, whichever clears 4.5.
         #expect(Palette.tints.map { Palette.ink(on: $0.tint) }
                 == [Palette.onTintDark, Palette.onTintWhite, Palette.onTintDark,
-                    Palette.onTintWhite, Palette.onTintWhite, Palette.onTintDark, Palette.onTintWhite])
+                    Palette.onTintWhite, Palette.onTintHidden, Palette.onTintDark, Palette.onTintWhite])
         #expect(Palette.onTintWhite.light == 0xFFFFFF && Palette.onTintWhite.dark == 0xFFFFFF)
     }
 
     // MARK: contrast
 
-    /// The sheet puts white on steel blue #4682B4 (4.11:1) and on dusk violet #8A7BB3 (3.77:1) in
-    /// light. Both miss 4.5 for 15 pt text and are kept as the user chose them, at the large-text
-    /// 3:1 floor. No other pair may be listed here.
-    private static let knownBelowAA: Set<String> = [
-        "light ink on tintEasy", "light ink on tintHidden",
-    ]
+    /// Empty since steel blue moved to #4179A7 and violet to #9386B9 with dark ink in light: every
+    /// text pair on a tint clears 4.5. Anything added here has to be an explicit decision.
+    private static let knownBelowAA: Set<String> = []
 
     @Test(arguments: Palette.Appearance.allCases)
     func everyTextPairClearsFourPointFive(appearance: Palette.Appearance) {
@@ -147,17 +145,11 @@ struct PaletteTests {
         #expect(abs(ratio(Palette.iconNeutral.dark, Palette.tabPill.dark) - 3.29) < 0.01)
     }
 
-    @Test func theTwoKnownPairsAreExactlyTheMeasuredOnes() {
-        let light = Palette.textPairs(.light).filter { Self.knownBelowAA.contains("light \($0.label)") }
-        #expect(light.count == 2)
-        #expect(abs(ratio(light[0].foreground, light[0].background) - 4.11) < 0.01)   // white on steel blue
-        #expect(abs(ratio(light[1].foreground, light[1].background) - 3.77) < 0.01)   // white on dusk violet
-    }
-
-    @Test func theOptionalNudgeWouldClearFourPointFive() {
-        // Not applied: the smallest change that lifts the two light pairs over AA.
-        #expect(ratio(0xFFFFFF, 0x4179A7) >= 4.5)
-        #expect(ratio(0x25232F, 0x9386B9) >= 4.5)
+    @Test func theNudgedTintsAreTheMeasuredOnes() {
+        #expect(abs(ratio(0xFFFFFF, Palette.tintEasy.light) - 4.65) < 0.01)      // white on steel blue
+        #expect(abs(ratio(0xFFFFFF, Palette.tintEasy.dark) - 4.83) < 0.01)
+        #expect(abs(ratio(Palette.onTintHidden.light, Palette.tintHidden.light) - 4.67) < 0.01)   // dark on violet
+        #expect(abs(ratio(Palette.onTintHidden.dark, Palette.tintHidden.dark) - 4.63) < 0.01)     // white on violet
     }
 
     @Test func theMeasuredRatiosOfTheRestOfTheSheet() {
