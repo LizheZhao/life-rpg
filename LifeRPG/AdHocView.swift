@@ -251,8 +251,8 @@ struct AdHocView: View {
     private func whereNote(_ o: RoutineOccurrence, flexible: Bool) -> String {
         if o.completedDayKey != nil { return "Done today" }
         if o.dueDayKey == today { return "Due today" }
-        return flexible ? "Open since \(o.dueDayKey) · any day this week"
-                        : "Overdue since \(o.dueDayKey)"
+        return flexible ? "Open since \(PresentationText.shortDate(o.dueDayKey)) · any day this week"
+                        : "Overdue since \(PresentationText.shortDate(o.dueDayKey))"
     }
 
     // MARK: custom tab
@@ -363,7 +363,7 @@ struct AdHocView: View {
             try Completion.completeRoutine(o, on: today, tier: tier, in: context)
             dismiss()
         } catch {
-            self.error = "\(error)"
+            self.error = ErrorText.message(error)
         }
         markingDone = nil
     }
@@ -393,7 +393,7 @@ struct AdHocView: View {
             }
             dismiss()
         } catch {
-            self.error = "\(error)"
+            self.error = ErrorText.message(error)
         }
     }
 }
@@ -449,7 +449,7 @@ struct EpicReplaceView: View {
                 VStack(alignment: .leading, spacing: LR.Spacing.sectionGap) {
                     ReplacesCard(
                         doodle: .flag, title: epic.textSnapshot, pill: "epic",
-                        note: "Free. Keeps the deadline (\(Epic.lastDayKey(of: epic) ?? "Sunday")).")
+                        note: "Free. Keeps the deadline (\(Epic.lastDayKey(of: epic).map { PresentationText.shortDate($0) } ?? "Sunday")).")
                     PillSegmentedControl(options: [("From library", Tab.library), ("Custom", Tab.custom)],
                                          selection: $tab, accessibilityLabel: "Source")
                     SectionTitle(title: "Epic")
@@ -510,7 +510,7 @@ struct EpicReplaceView: View {
             try Epic.replace(epic, with: pick, on: today, in: context)
             dismiss()
         } catch {
-            self.error = "\(error)"
+            self.error = ErrorText.message(error)
         }
     }
 }

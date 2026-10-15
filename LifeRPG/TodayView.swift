@@ -108,7 +108,7 @@ struct TodayView: View {
 
     private struct Moment {
         var title: String
-        var message: String
+        var stamp: MomentStamp
         var level: Int
         var streakBonusAt: Double
     }
@@ -335,6 +335,7 @@ struct TodayView: View {
         }
         .background(LR.Color.canvas.ignoresSafeArea())
         .reservingTabBarSpace()
+        .statusBarFade()
         .toolbar(.hidden, for: .navigationBar)
     }
 
@@ -347,15 +348,7 @@ struct TodayView: View {
             Spacer()
             HStack(spacing: 10) {
                 if !showsJournalCard { JournalBookButton(today: today) { journalSheet = .write } }
-                Button { adding = true } label: {
-                    Image(systemName: "plus")
-                        .font(.system(size: 20, weight: .semibold))
-                        .foregroundStyle(LR.Color.ink)
-                        .frame(width: 44, height: 44)
-                        .background(Circle().fill(LR.Color.surface))
-                }
-                .buttonStyle(PressableCardStyle())
-                .accessibilityLabel("Add for today")
+                HeaderIconButton(systemImage: "plus", label: "Add for today") { adding = true }
             }
         }
     }
@@ -533,7 +526,7 @@ struct TodayView: View {
             try Degrade.choose(light: !occurrence.usedDegraded, for: occurrence, in: context)
             actionError = nil
         } catch {
-            actionError = "\(error)"
+            actionError = ErrorText.message(error)
         }
     }
 
@@ -670,7 +663,7 @@ struct TodayView: View {
             .notice(MomentNotice(message: refusal.reason, primary: "OK",
                                  confirm: { show(nil) }, dismiss: { show(nil) }))
         case .moment(let moment):
-            .notice(MomentNotice(message: moment.message, primary: "Nice",
+            .notice(MomentNotice(stamp: moment.stamp, primary: "Nice",
                                  confirm: { dismiss(moment) }, dismiss: { dismiss(moment) }))
         case .reveal(let roll):
             .payout(MomentPayout(id: roll.id, amount: roll.amount) { value in
@@ -738,20 +731,25 @@ struct TodayView: View {
             return
         }
         var titles: [String] = []
-        var lines: [String] = []
+        var streakLines: [String] = []
         for b in bonuses {
             let days = StreakMilestone.threshold(of: b).map { "\($0) days in a row" } ?? "Streak bonus"
             titles.append(days)
-            lines.append("\(days) · +\(b.points)")
+            streakLines.append("\(days) · +\(b.points) coins")
         }
+        let stamp: MomentStamp
         if levelUp {
             titles.append("Level \(level)")
-            let perks = Perks.newlyUnlocked(from: from, to: level)
-            lines.append(perks.isEmpty ? "Reached level \(level)."
-                                       : "Unlocked:\n" + perks.map { "· \($0.summary)" }.joined(separator: "\n"))
+            let perks = Perks.newlyUnlocked(from: from, to: level).map(\.summary)
+            stamp = MomentStamp(hand: "level up", mark: "\(from) → \(level)",
+                                lines: perks + streakLines, major: true)
+        } else {
+            let mark = bonuses.last.flatMap(StreakMilestone.threshold(of:)).map { "\($0) days" } ?? "streak"
+            stamp = MomentStamp(hand: "streak", mark: mark,
+                                lines: bonuses.map { "+\($0.points) coins" })
         }
         show(.moment(Moment(title: titles.joined(separator: " · "),
-                            message: lines.joined(separator: "\n\n"),
+                            stamp: stamp,
                             level: level,
                             streakBonusAt: bonuses.last.map { $0.timestamp.timeIntervalSince1970 }
                                 ?? announcedStreakBonusAt)))
@@ -799,7 +797,7 @@ struct TodayView: View {
             Haptics.impact(.medium)
             actionError = nil
         } catch {
-            actionError = "\(error)"
+            actionError = ErrorText.message(error)
         }
         show(next)
     }
@@ -913,7 +911,7 @@ struct TodayView: View {
                 try LibraryEdit.setActive(!on, subject.target, id: subject.id, in: context)
                 actionError = nil
             } catch {
-                actionError = "\(error)"
+                actionError = ErrorText.message(error)
             }
         }
     }
@@ -927,7 +925,7 @@ struct TodayView: View {
                 try AdHoc.removeExtra(o, in: context)
                 actionError = nil
             } catch {
-                actionError = "\(error)"
+                actionError = ErrorText.message(error)
             }
         }
     }
@@ -977,7 +975,7 @@ struct TodayView: View {
         case .reroll(let q):
             q.slot == .epic
                 ? "Swap for a different epic, \(price(spend)). Same deadline."
-                : "Swap for a different \(q.slot.code), \(price(spend)). The next one costs more."
+                : "Swap for a different \(q.slot.word) quest, \(price(spend)). The next one costs more."
         case .extend:
             "One more week, \(price(spend)). After that it can't be rerolled or replaced."
         case .cancelQuest:
@@ -1005,9 +1003,9 @@ struct TodayView: View {
                                             reason: refused.description)))
                 return
             }
-            actionError = refused.description
+            actionError = ErrorText.message(refused)
         } catch {
-            actionError = "\(error)"
+            actionError = ErrorText.message(error)
         }
         show(nil)
     }
@@ -1021,7 +1019,7 @@ struct TodayView: View {
                 actionError = nil
             }
         } catch {
-            actionError = "\(error)"
+            actionError = ErrorText.message(error)
         }
     }
 }

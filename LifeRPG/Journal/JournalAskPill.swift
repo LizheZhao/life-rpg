@@ -33,7 +33,8 @@ struct JournalAskPill: View {
                 .frame(minHeight: 38)
                 .background(Capsule().fill(LR.Color.nightCard))
                 .opacity(capped ? 0.4 : 1)
-                .contentShape(Capsule())
+                .padding(.vertical, 3)
+                .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .fixedSize()

@@ -63,11 +63,11 @@ struct JournalPageTextTests {
                                     document: EntryFixtures.doc(EntryFixtures.text(1, "one two three")),
                                     isDone: false, writtenAt: Date())
         let facts = JournalDayFacts(completed: 3, tierText: Tier.normal.dayText)
-        #expect(JournalPageText.chips(entry: entry, facts: facts) == ["3 words", "3 quests done", "normal day"])
+        #expect(JournalPageText.chips(entry: entry, facts: facts) == ["3 words", "3 quests done", "Normal energy"])
         #expect(JournalPageText.chips(entry: entry, facts: JournalDayFacts(completed: 1, tierText: nil))
                 == ["3 words", "1 quest done"])
         #expect(JournalPageText.chips(entry: entry, facts: nil) == ["3 words"])
-        #expect(JournalPageText.chips(entry: entry, facts: JournalDayFacts(completed: 0, tierText: "low day"))
-                == ["3 words", "low day"])
+        #expect(JournalPageText.chips(entry: entry, facts: JournalDayFacts(completed: 0, tierText: "Low energy"))
+                == ["3 words", "Low energy"])
     }
 }

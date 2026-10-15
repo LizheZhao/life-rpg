@@ -17,6 +17,7 @@ struct OnboardingView: View {
     @AppStorage(ProfileKeys.name) private var storedName = ""
     @State private var page = Page.name
     @State private var name = ""
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         VStack(spacing: 0) {
@@ -30,7 +31,7 @@ struct OnboardingView: View {
                 OnboardingConnectPage().tag(Page.connect)
             }
             .tabViewStyle(.page(indexDisplayMode: .never))
-            .animation(.easeInOut(duration: 0.25), value: page)
+            .animation(reduceMotion ? nil : .easeInOut(duration: 0.25), value: page)
             controls
         }
         .background(LR.Color.canvas.ignoresSafeArea())
@@ -49,7 +50,7 @@ struct OnboardingView: View {
                     .frame(width: p == page ? 18 : 6, height: 6)
             }
         }
-        .animation(.easeInOut(duration: 0.2), value: page)
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: page)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Page \(page.rawValue + 1) of \(Page.allCases.count)")
     }
@@ -62,7 +63,7 @@ struct OnboardingView: View {
                 quiet(storedName.isEmpty ? "Skip" : "Not now") { name = storedName; next() }
             case .quests, .loot, .journal:
                 ConfirmBar(title: "Next", enabled: true, action: next)
-                quiet("Skip intro") { withAnimation { page = .reminders } }
+                quiet("Skip to setup") { withAnimation(reduceMotion ? nil : .default) { page = .reminders } }
             case .reminders:
                 ConfirmBar(title: "Next", enabled: true, action: next)
                 quiet("") {}.hidden()
@@ -84,7 +85,7 @@ struct OnboardingView: View {
     private func next() {
         guard let following = Page(rawValue: page.rawValue + 1) else { return finish() }
         Haptics.selection()
-        withAnimation { page = following }
+        withAnimation(reduceMotion ? nil : .default) { page = following }
     }
 
     /// A name typed and then swiped past still counts; an empty field keeps whatever was there.

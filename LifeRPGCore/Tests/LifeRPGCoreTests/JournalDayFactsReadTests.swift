@@ -20,7 +20,7 @@ struct JournalDayFactsReadTests {
         try ctx.save()
         let facts = try JournalDayFacts.read(dayKey: friday, in: ctx)
         #expect(facts.completed == 1)
-        #expect(facts.tierText == "low day")
+        #expect(facts.tierText == "Low energy")
         #expect(try JournalDayFacts.read(dayKey: "2026-01-01", in: ctx) == JournalDayFacts(completed: 0, tierText: nil))
     }
 }

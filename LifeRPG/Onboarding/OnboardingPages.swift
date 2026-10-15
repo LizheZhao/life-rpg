@@ -140,7 +140,7 @@ struct OnboardingLootPage: View {
                     .frame(maxWidth: .infinity, minHeight: 72)
                     .accessibilityLabel("Pays 15 coins")
             }
-            Text("Spend coins on rewards you set, or reroll a quest. Your day resets at 5 am.")
+            Text("Spend coins on rewards you set, or reroll a quest. Routines left undone cost coins, and Sunday night settles the week. Your day resets at 5 am.")
                 .lr(.caption).foregroundStyle(LR.Color.inkSecondary)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.top, 4)

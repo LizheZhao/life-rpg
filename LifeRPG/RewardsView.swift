@@ -62,6 +62,9 @@ struct RewardsView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: LR.Spacing.sectionGap) {
+                    PageHeader(title: "Rewards") {
+                        HeaderIconButton(systemImage: "plus", label: "Add a reward") { editing = Editing(reward: nil) }
+                    }
                     if let actionError { BannerView(message: actionError) }
                     balanceCard
                     if let repairable { freezeSection(repairable) }
@@ -70,20 +73,14 @@ struct RewardsView: View {
                     redeemedSection
                     archivedSection
                 }
-                .padding(.horizontal, 16)
+                .padding(.horizontal, LR.Spacing.inset)
+                .padding(.top, 4)
                 .padding(.bottom, 8)
             }
             .reservingTabBarSpace()
             .background(LR.Color.canvas.ignoresSafeArea())
-            .navigationTitle("Rewards")
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button { editing = Editing(reward: nil) } label: {
-                        Image(systemName: "plus").foregroundStyle(LR.Color.ink)
-                    }
-                    .accessibilityLabel("Add a reward")
-                }
-            }
+            .statusBarFade()
+            .toolbar(.hidden, for: .navigationBar)
             .sheet(item: $editing) { e in
                 RewardEditor(reward: e.reward)
             }
@@ -128,7 +125,7 @@ struct RewardsView: View {
                                                today: today, balance: balance, cost: cost)
         return VStack(alignment: .leading, spacing: 10) {
             SectionTitle(title: "Streak")
-            RewardCard(doodle: .sparkle, title: "Missed \(day)",
+            RewardCard(doodle: .sparkle, title: "Missed \(PresentationText.shortDate(day))",
                        caption: "Keeps the streak alive.",
                        pills: [], blocked: blocked,
                        buttonTitle: "Freeze · \(cost == 0 ? "free" : "\(cost)")",
@@ -192,7 +189,7 @@ struct RewardsView: View {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(entry.note).lr(.bodyStrong).foregroundStyle(LR.Color.ink)
                                     .fixedSize(horizontal: false, vertical: true)
-                                Text(entry.dayKey).lr(.caption).monospacedDigit()
+                                Text(PresentationText.shortDate(entry.dayKey)).lr(.caption)
                                     .foregroundStyle(LR.Color.inkSecondary)
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -202,7 +199,7 @@ struct RewardsView: View {
                         .padding(12)
                         .accessibilityElement(children: .ignore)
                         .accessibilityLabel(entry.note)
-                        .accessibilityValue("\(entry.dayKey), \(entry.points) coins")
+                        .accessibilityValue("\(PresentationText.shortDate(entry.dayKey)), \(entry.points) coins")
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -262,7 +259,7 @@ struct RewardsView: View {
     private func header(for c: Confirm) -> MomentHeader {
         switch c {
         case .redeem(let r): MomentHeader(doodle: DoodleKey.forText(r.name), tint: nil, title: r.name)
-        case .freeze(let day): MomentHeader(doodle: .sparkle, tint: nil, title: "Missed \(day)", subtitle: "Streak freeze")
+        case .freeze(let day): MomentHeader(doodle: .sparkle, tint: nil, title: "Missed \(PresentationText.shortDate(day))", subtitle: "Streak freeze")
         }
     }
 
@@ -285,8 +282,8 @@ struct RewardsView: View {
     private func message(for c: Confirm, cost: Int) -> String {
         let price = cost == 0 ? "Free" : "\(cost) coins"
         switch c {
-        case .redeem: return price
-        case .freeze(let day): return "\(price). Covers \(day)."
+        case .redeem: return cost == 0 ? price : "\(price). Leaves \(balance - cost)."
+        case .freeze(let day): return "\(price). Covers \(PresentationText.shortDate(day))."
         }
     }
 
@@ -312,13 +309,13 @@ struct RewardsView: View {
             }
             actionError = nil
         } catch {
-            actionError = "\(error)"
+            actionError = ErrorText.message(error)
         }
         show(nil)
     }
 
     private func archive(_ r: Reward) {
-        do { try Redemption.archive(r, in: context) } catch { actionError = "\(error)" }
+        do { try Redemption.archive(r, in: context) } catch { actionError = ErrorText.message(error) }
     }
 
     private func restore(_ r: Reward) {
@@ -327,7 +324,7 @@ struct RewardsView: View {
             Haptics.selection()
             actionError = nil
         } catch {
-            actionError = "\(error)"
+            actionError = ErrorText.message(error)
         }
     }
 
@@ -335,7 +332,7 @@ struct RewardsView: View {
         do {
             if r.isGoal { try SavingsGoal.unpin(r, in: context) } else { try SavingsGoal.pin(r, in: context) }
         } catch {
-            actionError = "\(error)"
+            actionError = ErrorText.message(error)
         }
     }
 }
@@ -623,7 +620,7 @@ private struct RewardEditor: View {
             }
             dismiss()
         } catch {
-            self.error = "\(error)"
+            self.error = ErrorText.message(error)
         }
     }
 }

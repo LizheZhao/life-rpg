@@ -118,7 +118,7 @@ struct RootView: View {
         do {
             try Replan.apply(context, on: change.dayKey, inputs: inputs, rng: &rng)
         } catch {
-            generationError = "\(error)"
+            generationError = ErrorText.message(error, otherwise: "Couldn't re-plan today. Try again.")
         }
         replan = nil
         replanInputs = nil
@@ -203,7 +203,7 @@ struct RootView: View {
                 replanInputs = inputs
             }
         } catch {
-            generationError = "\(error)"
+            generationError = ErrorText.message(error, otherwise: "Couldn't set up today. It tries again when you come back to the app.")
         }
         let verifiedAfter = (try? AutoVerify.verifiedItems(on: todayKey, in: context)) ?? []
         workoutCheck = WorkoutCheck.make(checkedAt: Date(), windowStart: from,

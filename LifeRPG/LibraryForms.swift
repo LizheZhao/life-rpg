@@ -239,7 +239,7 @@ struct LibraryScheduleEditor: View {
             try LibraryEdit.setSchedule(draft, forRoutine: routineID, in: context)
             dismiss()
         } catch {
-            self.error = "\(error)"
+            self.error = ErrorText.message(error)
         }
     }
 }
@@ -363,7 +363,7 @@ struct NewLibraryRowEditor: View {
             try draft.save(text: text, difficulty: difficulty, in: context)
             dismiss()
         } catch {
-            self.error = "\(error)"
+            self.error = ErrorText.message(error)
         }
     }
 }
@@ -424,7 +424,7 @@ struct LibraryManageSheet: View {
                         try delete()
                         dismiss()
                     } catch {
-                        self.error = "\(error)"
+                        self.error = ErrorText.message(error)
                     }
                 } label: {
                     Label("Delete", systemImage: "trash").foregroundStyle(LR.Color.clay)
@@ -445,7 +445,7 @@ struct LibraryManageSheet: View {
                     try rename(trimmed)
                     dismiss()
                 } catch {
-                    self.error = "\(error)"
+                    self.error = ErrorText.message(error)
                 }
             }
         }

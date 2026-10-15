@@ -97,6 +97,13 @@ private struct JournalEditorPage: View {
         switch block {
         case .text(let id, let text):
             JournalTextField(blockID: id, text: text, isAnswer: false, focus: model.focusRequest, model: model)
+                .overlay(alignment: .topLeading) {
+                    // A blank page says where to start; it goes with the first character.
+                    if text.isEmpty, model.document.blocks.count == 1 {
+                        Text("What happened today?").lr(.journalBody).foregroundStyle(LR.Color.inkSecondary)
+                            .allowsHitTesting(false).accessibilityHidden(true)
+                    }
+                }
         case .prompt(let id, let question, let answer, _, _):
             JournalPromptLayout(question: question,
                                 remove: { model.removeQuestion(id) }) {
@@ -135,9 +142,10 @@ struct JournalPromptLayout<Answer: View>: View {
                         Button(action: remove) {
                             Image(systemName: "xmark")
                                 .font(.system(size: 11, weight: .semibold))
-                                .foregroundStyle(LR.Color.promptInk.opacity(0.7))
-                                .frame(width: 32, height: 24)
+                                .foregroundStyle(LR.Color.promptInk)
+                                .frame(width: 44, height: 44)
                                 .contentShape(Rectangle())
+                                .padding(.vertical, -10)
                         }
                         .buttonStyle(.plain)
                         .accessibilityLabel("Remove question")

@@ -88,10 +88,10 @@ public enum Palette {
     // MARK: tints (trivial, easy, medium, hard, hidden, routine, epic)
 
     public static let tintTrivial = Token(light: 0x9CAF88, dark: 0x86987A)   // sage
-    public static let tintEasy = Token(light: 0x4682B4, dark: 0x3F76A5)      // steel blue
+    public static let tintEasy = Token(light: 0x4179A7, dark: 0x3F76A5)      // steel blue
     public static let tintMedium = Token(light: 0xFFBF00, dark: 0xD8A645)    // amber
     public static let tintHard = Token(light: 0xC8465A, dark: 0xB84A60)      // crimson
-    public static let tintHidden = Token(light: 0x8A7BB3, dark: 0x7A6CA8)    // dusk violet
+    public static let tintHidden = Token(light: 0x9386B9, dark: 0x7A6CA8)    // dusk violet
     /// Routine rows: the light beige grey (the user's own pick).
     public static let tintRoutine = Token(light: 0xC9C4BB, dark: 0xB9B4AB)
     /// The weekly epic: the dark umber (the user's own pick).
@@ -99,8 +99,11 @@ public enum Palette {
 
     /// Title, caption, `⋯` and open ring on amber, sage and the routine beige.
     public static let onTintDark = Token(light: 0x25232F, dark: 0x1B1A22)
-    /// The same on steel blue, crimson, violet and the epic umber: white in both appearances.
+    /// The same on steel blue, crimson and the epic umber: white in both appearances.
     public static let onTintWhite = Token(light: 0xFFFFFF, dark: 0xFFFFFF)
+    /// The same on violet: the light violet is too pale for white (3.31) and the dark one too deep
+    /// for the dark ink (3.73), so dark in light, white in dark — 4.67 and 4.63.
+    public static let onTintHidden = Token(light: 0x25232F, dark: 0xFFFFFF)
 
     /// A pill on a tinted row: a solid chip, so the range or `+N` keeps its shape on every tint.
     public static let chip = Token(light: 0xFFFFFF, dark: 0x14141A)
@@ -128,12 +131,14 @@ public enum Palette {
     }
 
     /// What is drawn on a tint, per tint: dark on the light amber, sage and routine beige, white on
-    /// the rest (the sheet's rule, extended to the two warm greys by their measured contrast). One
-    /// colour serves the title, the caption and the glyphs.
+    /// steel blue, crimson and umber (the sheet's rule, extended to the two warm greys by their
+    /// measured contrast), and `onTintHidden` on violet. One colour serves the title, the caption
+    /// and the glyphs.
     public static func ink(on tint: QuestTint) -> Token {
         switch tint {
         case .trivial, .medium, .routine: onTintDark
-        case .easy, .hard, .hidden, .epic: onTintWhite
+        case .easy, .hard, .epic: onTintWhite
+        case .hidden: onTintHidden
         }
     }
 
@@ -146,7 +151,7 @@ public enum Palette {
         ("tintTrivial", tintTrivial), ("tintEasy", tintEasy), ("tintMedium", tintMedium),
         ("tintHard", tintHard), ("tintHidden", tintHidden),
         ("tintRoutine", tintRoutine), ("tintEpic", tintEpic),
-        ("onTintDark", onTintDark), ("onTintWhite", onTintWhite),
+        ("onTintDark", onTintDark), ("onTintWhite", onTintWhite), ("onTintHidden", onTintHidden),
         ("chip", chip), ("pillFill", pillFill),
         ("clay", clay), ("clayBg", clayBg), ("avatarPink", avatarPink),
         ("nightCard", nightCard), ("onNight", onNight), ("onNightSecondary", onNightSecondary),

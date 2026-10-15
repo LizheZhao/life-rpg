@@ -130,7 +130,7 @@ struct AheadStackTests {
         let dueToday = routine("Grocery shopping", base: 10)
         let s = state([earlier, dueToday],
                       [occurrence(earlier, due: "2026-09-30"), occurrence(dueToday, due: friday)])
-        #expect(s.billText == "−10 Sun night")          // Strength's 50% of 20, not Grocery's 5 on top
+        #expect(s.billText == "−10 if not done by Sunday")          // Strength's 50% of 20, not Grocery's 5 on top
         #expect(s.accessibilityLabel == "Ahead this week, 1 open, minus 10 coins Sunday night")
     }
 
@@ -151,7 +151,7 @@ struct AheadStackTests {
         #expect(s.doneCount == 1)
         #expect(s.summary == "2 open")
         // Half of the open session's 20 base points: what `Overdue.weekly` will charge on Sunday.
-        #expect(s.billText == "−10 Sun night")
+        #expect(s.billText == "−10 if not done by Sunday")
         #expect(s.accessibilityLabel == "Ahead this week, 2 open, 1 done, minus 10 coins Sunday night")
     }
 }

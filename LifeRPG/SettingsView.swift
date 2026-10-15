@@ -47,9 +47,16 @@ struct SettingsView: View {
         })
     }
 
+    @State private var developerOpen = false
+
     var body: some View {
         NavigationStack(path: $path) {
             List {
+                PageHeader(title: "Settings")
+                    .listRowInsets(EdgeInsets(top: 0, leading: 4, bottom: 0, trailing: 4))
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
+
                 Section {
                     Button { editingName = true } label: {
                         HStack {
@@ -152,21 +159,21 @@ struct SettingsView: View {
                 }
                 .listRowBackground(LR.Color.surface)
 
+                // Tools for building the app, folded away so they don't sit beside everyday settings.
                 Section {
-                    Button { path.append(.design) } label: {
-                        row("Design gallery", systemImage: "paintpalette", tint: .medium, pushes: true)
+                    DisclosureGroup(isExpanded: $developerOpen) {
+                        Button { path.append(.design) } label: {
+                            row("Design gallery", systemImage: "paintpalette", tint: .medium, pushes: true)
+                        }
+                        .accessibilityHint("Opens the sample components")
+                        Button { path.append(.debug) } label: {
+                            row("Debug", systemImage: "wrench.and.screwdriver", tint: .hard, pushes: true)
+                        }
+                        .accessibilityHint("Opens row counts, the data audit and test tools")
+                    } label: {
+                        Text("Design gallery and Debug").lr(.bodyStrong).foregroundStyle(LR.Color.inkSecondary)
                     }
-                    .accessibilityHint("Opens the sample components")
-                } header: {
-                    header("Design")
-                }
-                .listRowBackground(LR.Color.surface)
-
-                Section {
-                    Button { path.append(.debug) } label: {
-                        row("Debug", systemImage: "wrench.and.screwdriver", tint: .hard, pushes: true)
-                    }
-                    .accessibilityHint("Opens row counts, the data audit and test tools")
+                    .tint(LR.Color.inkSecondary)
                 } header: {
                     header("Developer")
                 }
@@ -183,9 +190,12 @@ struct SettingsView: View {
                 }
             }
             .listRowSeparatorTint(LR.Color.divider)
+            // The list's own top margin would put the title lower than the other tabs' `PageHeader`.
+            .contentMargins(.top, 4, for: .scrollContent)
             .scrollContentBackground(.hidden)
             .background(LR.Color.canvas)
-            .navigationTitle("Settings")
+            .statusBarFade()
+            .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(for: Page.self) { page in
                 switch page {
                 case .library:

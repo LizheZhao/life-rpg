@@ -73,7 +73,7 @@ struct FeedbackPanel: View {
                 }
             }
             if let last = history.first {
-                caption("Latest: \(label(last.rating)), \(last.dayKey).")
+                caption("Latest: \(label(last.rating)), \(PresentationText.shortDate(last.dayKey)).")
             } else {
                 caption("Not rated yet.")
             }
@@ -116,7 +116,7 @@ struct FeedbackPanel: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(c.comment).lr(.bodyStrong).foregroundStyle(LR.Color.ink)
                             .fixedSize(horizontal: false, vertical: true)
-                        Text(c.dayKey).lr(.caption).monospacedDigit().foregroundStyle(LR.Color.inkSecondary)
+                        Text(PresentationText.shortDate(c.dayKey)).lr(.caption).foregroundStyle(LR.Color.inkSecondary)
                     }
                     .padding(12)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -134,7 +134,7 @@ struct FeedbackPanel: View {
             VStack(spacing: 0) {
                 ForEach(Array(history.enumerated()), id: \.element.id) { index, r in
                     if index > 0 { divider }
-                    let when = r.questID == nil ? r.dayKey : "\(r.dayKey) · right after doing it"
+                    let when = r.questID == nil ? PresentationText.shortDate(r.dayKey) : "\(PresentationText.shortDate(r.dayKey)) · right after doing it"
                     HStack(alignment: .center, spacing: 12) {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(label(r.rating)).lr(.bodyStrong).foregroundStyle(LR.Color.ink)
@@ -180,7 +180,7 @@ struct FeedbackPanel: View {
             error = nil
             return true
         } catch {
-            self.error = "\(error)"
+            self.error = ErrorText.message(error)
             return false
         }
     }

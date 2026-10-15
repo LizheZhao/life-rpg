@@ -249,7 +249,7 @@ public struct RoutineRowState: Equatable, Identifiable, Sendable {
         if o.usedDegraded { pills.append(PillState("light version", .plain)) }
         if let day = overdueDay { pills.append(PillState("overdue · day \(day)", .clay)) }
         let owes = open && sundayBill > 0 ? sundayBill : 0
-        if owes > 0 { pills.append(PillState("−\(owes) Sun night", .clay)) }
+        if owes > 0 { pills.append(PillState("−\(owes) if not done by Sunday", .clay)) }
         if open, !libraryActive { pills.append(PillState("turned off", .plain)) }
         self.pills = pills
 
@@ -266,10 +266,10 @@ public struct RoutineRowState: Equatable, Identifiable, Sendable {
         if let done = o.completedDayKey, done < o.dueDayKey {
             notes.append("Done ahead · counts for \(PresentationText.shortDate(o.dueDayKey))")
         }
-        let added = o.dueDayKey == today ? "Added today" : "Added \(o.dueDayKey)"
+        let added = o.dueDayKey == today ? "Added today" : "Added \(PresentationText.shortDate(o.dueDayKey))"
         if let questID = o.replacesQuestID {
             let replaced = quests.first { $0.id == questID }
-            notes.append("\(added) · replaces \(replaced.map(Self.slotText) ?? "a random slot")")
+            notes.append("\(added) · replaces \(replaced.map(Self.slotText) ?? "a quest")")
         } else if let replaced = occurrences.first(where: { $0.replacedByID == o.id }) {
             notes.append("Replaces \(replaced.displayText)")
         } else if o.routineID == nil {
@@ -385,7 +385,7 @@ public struct LevelCardState: Equatable, Sendable {
         dotCount = 20
         filledDots = Economy.levelDots(totalEarned: totalEarned, count: 20)
         tierText = tier.dayText
-        slotsText = "\(randomSlots) random slot\(randomSlots == 1 ? "" : "s")"
+        slotsText = "\(randomSlots) quest\(randomSlots == 1 ? "" : "s") today"
         goal = progress.map { goal in
             let text: String
             if goal.ready {
@@ -433,10 +433,10 @@ extension Tier {
     /// The tier as the Today page words it, and as the journal's reading page does, so one rule.
     public var dayText: String {
         switch self {
-        case .veryLow: "very low day"
-        case .low: "low day"
-        case .normal: "normal day"
-        case .high: "high day"
+        case .veryLow: "Running low"
+        case .low: "Low energy"
+        case .normal: "Normal energy"
+        case .high: "High energy"
         }
     }
 }

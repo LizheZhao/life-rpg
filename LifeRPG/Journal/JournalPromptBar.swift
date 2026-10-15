@@ -58,7 +58,8 @@ struct JournalPromptBar<Leading: View>: View {
             .frame(minHeight: 38)
             .background(Capsule().fill(LR.Color.canvas))
             .overlay(Capsule().strokeBorder(LR.Color.dotEmpty, lineWidth: 1))
-            .contentShape(Capsule())
+            .padding(.vertical, 3)
+            .contentShape(Rectangle())
         }
         .fixedSize()
         .accessibilityLabel("Questions")

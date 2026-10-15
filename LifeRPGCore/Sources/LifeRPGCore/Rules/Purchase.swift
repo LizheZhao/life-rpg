@@ -31,7 +31,7 @@ public enum Purchase {
             case .inDebt(let balance):
                 "In debt (\(balance)). Earn it back first."
             case .tooExpensive(let cost, let balance):
-                "Costs \(cost), balance is \(balance)"
+                "Costs \(cost) coins, you have \(balance)"
             case .alreadyCompleted:
                 "Already completed"
             case .notAvailable:
