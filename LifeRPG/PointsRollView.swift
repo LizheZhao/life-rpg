@@ -82,12 +82,68 @@ struct MomentAsk {
 /// A priced confirmation, an explanation or an announcement: a paragraph, one ink pill and,
 /// where there is a way out, a quiet one.
 struct MomentNotice {
+    /// A level-up or a streak milestone: the one moment a notice is stamped rather than said.
+    var stamp: MomentStamp?
     var message: String?
     let primary: String
     var quiet: String?
     let confirm: () -> Void
     /// The dim and VoiceOver's escape gesture.
     let dismiss: () -> Void
+}
+
+/// What a level-up or streak milestone stamps onto its card: a hand label, the big mark, and what
+/// it unlocked.
+struct MomentStamp {
+    let hand: String
+    let mark: String
+    var lines: [String] = []
+    /// A level-up; a streak milestone is the smaller stamp.
+    var major = false
+}
+
+/// The mark lands like a rubber stamp, once: oversized and tilted, then pressed flat with a heavy
+/// tap. Reduce Motion fades it in instead.
+private struct StampView: View {
+    let stamp: MomentStamp
+    @State private var pressed = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        VStack(spacing: 8) {
+            HandText(stamp.hand, .hand, balanced: true).foregroundStyle(LR.Color.accent)
+            HandText(stamp.mark, stamp.major ? .handDisplay : .handTitle, balanced: true)
+                .foregroundStyle(LR.Color.ink)
+                .scaleEffect(pressed || reduceMotion ? 1 : 1.5)
+                .rotationEffect(.degrees(pressed || reduceMotion ? -3 : -12))
+                .opacity(pressed ? 1 : 0)
+            if !stamp.lines.isEmpty {
+                VStack(alignment: .leading, spacing: 6) {
+                    ForEach(stamp.lines, id: \.self) { line in
+                        HStack(alignment: .firstTextBaseline, spacing: 8) {
+                            Image(systemName: "checkmark").font(.caption.weight(.bold))
+                                .foregroundStyle(LR.Color.accent).accessibilityHidden(true)
+                            Text(line).lr(.caption).foregroundStyle(LR.Color.ink)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                }
+                .padding(12)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(LR.Color.tabPill))
+                .opacity(pressed ? 1 : 0)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .accessibilityElement(children: .combine)
+        .task {
+            withAnimation(reduceMotion ? .easeOut(duration: 0.2) : .spring(response: 0.32, dampingFraction: 0.55)) {
+                pressed = true
+            }
+            if !reduceMotion { try? await Task.sleep(for: .milliseconds(140)) }
+            stamp.major ? Haptics.impact(.heavy) : Haptics.impact(.rigid)
+        }
+    }
 }
 
 /// A payout that is already written to the ledger. The card only describes it.
@@ -284,6 +340,8 @@ struct MomentCardFace: View {
     var clock: ReelClock = .frozen(0)
     var picked: Int?
     var onPick: (Int) -> Void = { _ in }
+    /// Closes a payout's rating without a pick; nil leaves the row out (the gallery's still frames).
+    var onSkip: (() -> Void)?
     /// Changes when a notice's content is swapped for another (a refused reroll), so it fades in place.
     var noticeKey = ""
 
@@ -457,6 +515,7 @@ struct MomentCardFace: View {
 
     private func noticeBody(_ notice: MomentNotice) -> some View {
         VStack(spacing: 6) {
+            if let stamp = notice.stamp { StampView(stamp: stamp).padding(.bottom, 6) }
             if let message = notice.message {
                 Text(message).lr(.caption).foregroundStyle(LR.Color.inkSecondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -523,6 +582,7 @@ struct MomentCardFace: View {
                     HStack(spacing: 6) { ratingButtons(3..<RatingScale.steps.count) }
                 }
             }
+            if let onSkip { quietButton("Skip", action: onSkip) }
         }
     }
 
@@ -610,7 +670,6 @@ struct MomentCard: View {
     private static let frameCount = 16
     private static let rollSeconds = 1.5
     private static let landedSeconds = 0.9
-    private static let rateTimeoutSeconds = 8.0
     /// How long a picked rating stays highlighted before the card closes itself.
     private static let pickedLingerSeconds = 0.5
 
@@ -636,7 +695,7 @@ struct MomentCard: View {
             GeometryReader { geo in
                 ScrollView {
                     MomentCardFace(header: header, content: content, stage: phase, frames: frames,
-                                   clock: clock, picked: picked, onPick: pick,
+                                   clock: clock, picked: picked, onPick: pick, onSkip: finish,
                                    noticeKey: noticeKey)
                         .background {
                             GeometryReader { proxy in
@@ -757,15 +816,13 @@ struct MomentCard: View {
         }
     }
 
-    /// Restarts on every pick. A pick closes the card after a short pause; with no pick it closes
-    /// itself eventually, so one left open on a phone put down mid-tap doesn't sit there until the
-    /// app is quit.
-    private var rateTimerID: Int? { payout != nil && phase == .rate ? (picked ?? 99) : nil }
+    /// Restarts on every pick, and a pick closes the card after a short pause. With no pick the card
+    /// waits: rating is never on a clock (WCAG 2.2.1), and "Not yet" or the dim close it.
+    private var rateTimerID: Int? { payout != nil && phase == .rate ? picked : nil }
 
     private func expireRate() async {
         guard rateTimerID != nil else { return }
-        let wait = picked == nil ? Self.rateTimeoutSeconds : Self.pickedLingerSeconds
-        try? await Task.sleep(for: .seconds(wait))
+        try? await Task.sleep(for: .seconds(Self.pickedLingerSeconds))
         if !Task.isCancelled { finish() }
     }
 }

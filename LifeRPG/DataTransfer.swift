@@ -38,7 +38,7 @@ final class DataTransfer {
             importPlan = try JSONImport.plan(try Data(contentsOf: url), against: context)
             error = nil
         } catch {
-            self.error = "Import failed: \(error)"
+            self.error = ErrorText.message(error, otherwise: "Couldn't import that file.")
         }
     }
 
@@ -47,7 +47,7 @@ final class DataTransfer {
             eraseCounts = try EraseRecords.preview(in: context)
             error = nil
         } catch {
-            self.error = "Couldn't read the records: \(error)"
+            self.error = ErrorText.message(error, otherwise: "Couldn't read the records.")
         }
     }
 
@@ -64,7 +64,7 @@ final class DataTransfer {
             error = nil
             onDone()
         } catch {
-            self.error = "Erase failed: \(error)"
+            self.error = ErrorText.message(error, otherwise: "Couldn't erase the records.")
         }
     }
 
@@ -80,7 +80,7 @@ final class DataTransfer {
             error = nil
             onImported()
         } catch {
-            self.error = "Import failed: \(error)"
+            self.error = ErrorText.message(error, otherwise: "Couldn't import that file.")
         }
     }
 
@@ -124,7 +124,7 @@ final class DataTransfer {
             pendingExport = try build()
             exporting = true
         } catch {
-            self.error = "Export failed: \(error)"
+            self.error = ErrorText.message(error, otherwise: "Couldn't export the records.")
         }
     }
 }
@@ -157,7 +157,7 @@ private struct DataTransferModifier: ViewModifier {
                           document: transfer.pendingExport,
                           contentType: transfer.pendingExport?.contentType ?? .json,
                           defaultFilename: transfer.pendingExport?.filename) { result in
-                if case .failure(let error) = result { transfer.error = "Export failed: \(error)" }
+                if case .failure(let error) = result { transfer.error = ErrorText.message(error, otherwise: "Couldn't export the records.") }
                 transfer.pendingExport = nil
             }
             // Behind the card the page is not reachable, for VoiceOver either.
@@ -182,9 +182,9 @@ private struct DataTransferModifier: ViewModifier {
                     MomentCard(header: MomentHeader(doodle: .notebook, tint: nil,
                                                     title: "Erase all records?", clay: true),
                                content: .notice(MomentNotice(
-                                   message: counts.message,
+                                   message: counts.message + "\n\nExport to JSON first if you might want them back.",
                                    primary: "Erase everything",
-                                   quiet: "Not yet",
+                                   quiet: "Keep my records",
                                    confirm: {
                                        transfer.performErase(context, onDone: onImported)
                                        transfer.eraseCounts = nil

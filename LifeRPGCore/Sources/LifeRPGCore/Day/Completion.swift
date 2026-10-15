@@ -23,12 +23,13 @@ public enum Completion {
         public var description: String {
             switch self {
             case .alreadyCompleted: "already completed"
-            case .trivialGroupIncomplete(let n): "\(n) item(s) of the T group still undone"
-            case .indexOutOfRange: "no such T group item"
+            case .trivialGroupIncomplete(let n): "\(n) small task\(n == 1 ? "" : "s") still to do"
+            case .indexOutOfRange: "that small task is gone"
             case .skipped: "already skipped"
             case .replaced: "replaced by an ad-hoc routine"
             case .nothingAhead: "nothing left to do ahead this week"
-            case .outsideRound(let due, let day): "due \(due), can't be completed on \(day)"
+            case .outsideRound(let due, let day):
+                "due \(PresentationText.shortDate(due)), so it can't be done on \(PresentationText.shortDate(day))"
             }
         }
     }

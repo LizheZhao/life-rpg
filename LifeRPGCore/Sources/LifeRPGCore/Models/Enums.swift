@@ -26,6 +26,9 @@ public enum Difficulty: String, Codable, CaseIterable, Sendable {
         }
     }
 
+    /// The difficulty in a sentence ("a different easy quest"), where the badge's letter would be jargon.
+    public var word: String { rawValue }
+
     public var range: ClosedRange<Int> {
         switch self {
         case .trivial: 4...4

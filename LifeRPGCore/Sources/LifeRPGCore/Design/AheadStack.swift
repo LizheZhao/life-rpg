@@ -90,6 +90,6 @@ public struct AheadState: Equatable, Sendable {
         let weekly = DayKey.weekKey(of: today, in: timeZone)
             .map { Overdue.weekly(routines, occurrences: occurrences, weekKey: $0, recovery: recovery, in: timeZone) }
         bill = open.map { weekly?.points(for: $0) ?? 0 }.reduce(0, +)
-        billText = bill > 0 ? "−\(bill) Sun night" : nil
+        billText = bill > 0 ? "−\(bill) if not done by Sunday" : nil
     }
 }

@@ -447,7 +447,8 @@ struct PillSegmentedControl<Value: Hashable>: View {
                             Capsule().fill(LR.Color.fill).matchedGeometryEffect(id: "selected", in: slider)
                         }
                     }
-                    .contentShape(Capsule())
+                    .frame(minHeight: 44)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .accessibilityAddTraits(selected ? .isSelected : [])
@@ -487,5 +488,62 @@ struct InfoRowCard: View {
         .padding(.horizontal, 16).padding(.vertical, 14)
         .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
         .lrCard(.surface, radius: LR.Radius.row)
+    }
+}
+
+// MARK: - page chrome
+
+/// Every tab's title, in one face, size and place, with room for one trailing control.
+struct PageHeader<Trailing: View>: View {
+    let title: String
+    @ViewBuilder var trailing: Trailing
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 12) {
+            Text(title).lr(.pageTitle).foregroundStyle(LR.Color.ink)
+                .accessibilityAddTraits(.isHeader)
+            Spacer(minLength: 8)
+            trailing
+        }
+        .padding(.top, 8)
+    }
+}
+
+extension PageHeader where Trailing == EmptyView {
+    init(title: String) { self.init(title: title) { EmptyView() } }
+}
+
+/// The round 44 pt button a page header or the Today bar carries, e.g. +.
+struct HeaderIconButton: View {
+    let systemImage: String
+    let label: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: systemImage)
+                .font(.system(size: 20, weight: .semibold))
+                .foregroundStyle(LR.Color.ink)
+                .frame(width: 44, height: 44)
+                .background(Circle().fill(LR.Color.surface))
+        }
+        .buttonStyle(PressableCardStyle())
+        .accessibilityLabel(label)
+    }
+}
+
+extension View {
+    /// Content scrolled up fades into the page under the status bar instead of running under the clock.
+    func statusBarFade() -> some View {
+        overlay(alignment: .top) {
+            VStack(spacing: 0) {
+                Color.clear.frame(height: 0).background(LR.Color.canvas.ignoresSafeArea(edges: .top))
+                LinearGradient(colors: [LR.Color.canvas, LR.Color.canvas.opacity(0)],
+                               startPoint: .top, endPoint: .bottom)
+                    .frame(height: 8)
+            }
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+        }
     }
 }

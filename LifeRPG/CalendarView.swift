@@ -67,11 +67,12 @@ struct CalendarView: View {
                     legend
                     entriesLink(count: journalDays.count)
                 }
-                .padding(.horizontal, 16)
+                .padding(.horizontal, LR.Spacing.inset)
                 .padding(.top, 4)
             }
             .reservingTabBarSpace()
             .background(LR.Color.canvas.ignoresSafeArea())
+            .statusBarFade()
             .toolbar(.hidden, for: .navigationBar)
             .sheet(item: $selected) { day in
                 DayDetailView(dayKey: day.id, today: today, sections: $daySections)
@@ -86,12 +87,7 @@ struct CalendarView: View {
     // MARK: header
 
     private var titleRow: some View {
-        HStack {
-            Text("Calendar").lr(.pageTitle).foregroundStyle(LR.Color.ink)
-                .accessibilityAddTraits(.isHeader)
-            Spacer(minLength: 8)
-        }
-        .padding(.top, 8)
+        PageHeader(title: "Calendar")
     }
 
     private var header: some View {

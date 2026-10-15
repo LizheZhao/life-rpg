@@ -38,7 +38,7 @@ public enum AdHoc {
             switch self {
             case .notReplaceable: "this slot can't be replaced"
             case .emptyText: "the task needs a description"
-            case .noBasePoints: "pick E, M or H"
+            case .noBasePoints: "pick easy, medium or hard"
             case .alreadyOnToday: "that routine is already on today's page"
             case .routineNotReplaceable: "this routine can't be replaced"
             case .tooLight(let minimum): "pick something worth at least \(minimum) points"

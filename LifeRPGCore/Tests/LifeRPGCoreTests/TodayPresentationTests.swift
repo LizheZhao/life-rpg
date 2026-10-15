@@ -39,9 +39,9 @@ struct TodayPresentationTests {
 
     @Test func anOpenRowNamesWhatSundayNightWillChargeAgainstIt() {
         let o = occurrence("Grocery shopping", base: 10)
-        #expect(row(o, sundayBill: 5).pills.contains(.init("−5 Sun night", .clay)))
+        #expect(row(o, sundayBill: 5).pills.contains(.init("−5 if not done by Sunday", .clay)))
         #expect(row(o, sundayBill: 5).accessibilityLabel.contains("minus 5 coins Sunday night"))
-        #expect(!row(o).pills.contains { $0.text.contains("Sun night") })
+        #expect(!row(o).pills.contains { $0.text.contains("by Sunday") })
         #expect(!row(o, sundayBill: 0).accessibilityLabel.contains("Sunday night"))
     }
 
@@ -49,10 +49,10 @@ struct TodayPresentationTests {
         let done = occurrence("Done")
         done.completedDayKey = "2026-10-02"
         done.awardedPoints = 20
-        #expect(!row(done, sundayBill: 5).pills.contains { $0.text.contains("Sun night") })
+        #expect(!row(done, sundayBill: 5).pills.contains { $0.text.contains("by Sunday") })
         let skipped = occurrence("Skipped")
         skipped.skipped = true
-        #expect(!row(skipped, sundayBill: 5).pills.contains { $0.text.contains("Sun night") })
+        #expect(!row(skipped, sundayBill: 5).pills.contains { $0.text.contains("by Sunday") })
     }
 
     // MARK: turned off in the library
@@ -348,11 +348,11 @@ struct TodayPresentationTests {
         adHoc.routineID = nil
         adHoc.replacesQuestID = slotQuest.id
         #expect(row(adHoc, quests: [slotQuest]).notes == ["Added today · replaces Walk 8,000 steps"])
-        #expect(row(adHoc).notes == ["Added today · replaces a random slot"])
+        #expect(row(adHoc).notes == ["Added today · replaces a quest"])
 
         adHoc.dueDayKey = "2026-10-01"
         #expect(row(adHoc, .overdue, quests: [slotQuest]).notes
-                == ["Added 2026-10-01 · replaces Walk 8,000 steps"])
+                == ["Added Thu Oct 1 · replaces Walk 8,000 steps"])
 
         let extra = occurrence("Water plants")
         extra.routineID = nil
@@ -387,8 +387,8 @@ struct TodayPresentationTests {
         o.routineID = nil
         o.countsForClear = false
         let s = row(o, .thisWeek)
-        #expect(s.notes == ["Not done · due Wed Sep 30", "Added 2026-09-30 · extra"])
-        #expect(s.noteLine == "Not done · due Wed Sep 30 · Added 2026-09-30 · extra")
+        #expect(s.notes == ["Not done · due Wed Sep 30", "Added Wed Sep 30 · extra"])
+        #expect(s.noteLine == "Not done · due Wed Sep 30 · Added Wed Sep 30 · extra")
         #expect(row(occurrence("Take out the trash")).noteLine == nil)
     }
 
@@ -489,23 +489,23 @@ struct TodayPresentationTests {
         #expect(s.dotCount == 20)
         #expect(s.balance == 1240)
         #expect(!s.isNegative)
-        #expect(s.tierText == "normal day")
-        #expect(s.slotsText == "4 random slots")
+        #expect(s.tierText == "Normal energy")
+        #expect(s.slotsText == "4 quests today")
         #expect(s.goal == nil)
         #expect(s.accessibilityLabel == "Level 8, 312 coins to level 9")
-        #expect(s.accessibilityValue == "1240 coins, normal day, 4 random slots")
+        #expect(s.accessibilityValue == "1240 coins, Normal energy, 4 quests today")
     }
 
     @Test func levelCardEdgeCases() {
         let s = LevelCardState(totalEarned: 0, balance: -12, tier: .veryLow, randomSlots: 1, goal: nil)
         #expect(s.level == 1)
         #expect(s.isNegative)
-        #expect(s.tierText == "very low day")
-        #expect(s.slotsText == "1 random slot")
-        #expect(s.accessibilityValue == "-12 coins, very low day, 1 random slot")
+        #expect(s.tierText == "Running low")
+        #expect(s.slotsText == "1 quest today")
+        #expect(s.accessibilityValue == "-12 coins, Running low, 1 quest today")
         let high = LevelCardState(totalEarned: 0, balance: 0, tier: .high, randomSlots: 0, goal: nil)
-        #expect(high.tierText == "high day")
-        #expect(high.slotsText == "0 random slots")
+        #expect(high.tierText == "High energy")
+        #expect(high.slotsText == "0 quests today")
     }
 
     @Test func savingsGoalLine() {

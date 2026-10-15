@@ -45,6 +45,20 @@ This review covers `LifeRPG/` on `v0.1`. It ran as two independent passes: a des
 - Show difficulty as a title.
 - Map each error to one plain sentence plus a "Copy details" button.
 
+**Done (2026-10-15), code only.** The device check is still open. One correction to the review: the ~30 `"\(error)"` banners were mostly not raw. Core's `Failure` types already had readable descriptions. The real problems were lower-case fragments, dayKeys inside them, "T group" and "E, M or H", and the raw text of any non-Core error (for example a SwiftData save).
+
+What changed:
+- **Errors.** Core's `ErrorText.message(_:otherwise:)` (`Design/ErrorText.swift`) makes a `UserFacingError` reason into a sentence, and gives one plain line for anything else. Every app banner uses it except Debug and the startup screens. DataTransfer and day generation pass their own `otherwise`. No "Copy details" button was added.
+- **Dates.** Error descriptions, Rewards (freeze, ledger), AdHoc, FeedbackPanel and the "Added …" note go through `PresentationText.shortDate`. It has no year, which can be ambiguous in a ledger that spans years.
+- **Tier.** `Tier.dayText` is now "Running low", "Low energy", "Normal energy" or "High energy". The new wording is used everywhere the old "very low day / normal day" was: the level card, the day sheet, and the journal chips.
+- **Today labels.**
+  - The slots pill reads "N quests today".
+  - The bill pill reads "−N if not done by Sunday", on the row and on the Ahead stack.
+  - The reroll prompt reads "a different easy quest", using `Difficulty.word`.
+- **Body card** in Day detail:
+  - It shows a tier-word pill and Energy to 2 decimals.
+  - "Routines · quests" replaces "Routine load · random slots".
+
 ### P1-b — Onboarding sells only the gains [onboard]
 **What's wrong:**
 - `OnboardingPages.swift:131-143` promises "Every clear pays coins".
@@ -52,6 +66,12 @@ This review covers `LifeRPG/` on `v0.1`. It ran as two independent passes: a des
 - "Skip intro" jumps to page 5 of 6.
 
 **Fix:** add one line about costs to the loot page, and show a one-time explainer the first time a clay pill appears.
+
+**Done (2026-10-15), code only.**
+- The loot page now also says "Routines left undone cost coins, and Sunday night settles the week."
+- "Skip intro" is now "Skip to setup". It still goes to page 5 on purpose, because the reminders and Health/Calendar pages must be seen.
+- Page changes respect Reduce Motion.
+- Not done: the one-time explainer the first time a clay pill appears.
 
 ### P2-a — The payout peak is diluted, level-up has no ceremony, and the rating timeout fails VoiceOver users [delight]
 **What's wrong:**
@@ -65,6 +85,14 @@ This review covers `LifeRPG/` on `v0.1`. It ran as two independent passes: a des
 - Make the rating a quiet optional row.
 - Give level-up a real ceremony.
 
+**Done (2026-10-15), code only, direction A.**
+- The rating card no longer closes itself. A quiet "Skip" row sits under the thumbs, and a pick still closes the card after 0.5 s.
+- Level-up and streak milestones now show a `MomentStamp` (`PointsRollView.swift`). The hand label ("level up" / "streak") sits above a big Caveat mark ("7 → 8" / "14 days") that lands like a rubber stamp: oversized and tilted, then pressed flat.
+  - Unlocked perks and streak bonuses are listed under the mark with checkmarks.
+  - The haptic is heavy for a level-up and rigid for a streak.
+  - With Reduce Motion on, the mark fades in instead.
+- It is still the shared centered card, not a separate full screen.
+
 ### P2-b — Page chrome is inconsistent (seen in the screenshots) [layout]
 **What's wrong:**
 - Today has no backdrop behind the status bar. When scrolled, the clock sits over the epic card, and at XL text it sits over "Today's quests".
@@ -77,6 +105,15 @@ This review covers `LifeRPG/` on `v0.1`. It ran as two independent passes: a des
 - Build one `PageHeader` shared by all five tabs.
 - Put a material or fade behind the top safe area.
 - Pick one content inset.
+
+**Done (2026-10-15), code only.**
+- `PageHeader`, `HeaderIconButton` and `statusBarFade()` are new in `DesignSystem/Components.swift`.
+- Calendar, Trends, Rewards and Settings all use `PageHeader`.
+  - Rewards and Settings dropped the system `navigationTitle`.
+  - Rewards' + is the same 44 pt circle as Today's.
+  - Trends' period picker now sits under the title.
+- Every tab fades content under the status bar.
+- Page insets use `LR.Spacing.inset` (22, as this doc's design says) instead of hard-coded 16.
 
 ### P2-c — IA, touch targets and contrast [audit]
 **IA:**
@@ -101,6 +138,12 @@ This review covers `LifeRPG/` on `v0.1`. It ran as two independent passes: a des
 - Accent hand labels on the page: 3.96.
 - sectionTitle: 4.17–4.32.
 - Today's date in the calendar: light blue on a gray brush.
+
+**Partly done (2026-10-15), code only.**
+- **IA:** kept as it is, by decision.
+- **Debug and Design gallery:** folded into one collapsed Developer section. `#if DEBUG` would not hide them, because the app is installed as a Debug build.
+- **Touch targets:** every hit area listed above is now 44 pt, with the visual size unchanged.
+- **Contrast: correction.** These pairs are documented in `UI_DESIGN.md` as deliberate choices. `sectionTitle` and the accent hand labels are large text, so 3:1 is their bar, and they pass. Only white on tintEasy (4.11) and white on tintHidden (3.77), behind 15 pt titles, really miss 4.5. The fix `UI_DESIGN.md` named is now applied: tintEasy #4179A7 (white 4.65), tintHidden #9386B9 with dark ink in light (4.67) and white in dark (4.63, a new `onTintHidden` token). `knownBelowAA` is empty.
 
 ## Persona red flags
 
@@ -136,6 +179,12 @@ This review covers `LifeRPG/` on `v0.1`. It ran as two independent passes: a des
   - `SaveToLibraryCard.swift:37`
 - These use `lineLimit(1)` with no text shrink, so they risk truncation at large text sizes: `SettingsView.swift:60`, `LibraryView.swift:840`, `CalendarView.swift:214`, `JournalPromptBar.swift:20,51`.
 - The epic card expands through `.onTapGesture` rather than a Button (`TodayCards.swift:337`).
+
+**Done (2026-10-15):**
+- The Redeem confirmation says what is left.
+- The empty journal editor shows "What happened today?".
+- Erase suggests exporting first, and its cancel reads "Keep my records".
+- Onboarding page changes respect Reduce Motion.
 
 ## Open questions
 

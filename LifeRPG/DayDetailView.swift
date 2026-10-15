@@ -232,7 +232,7 @@ private struct DayDetailPage: View {
     private func bodyCard(_ c: DailyContext) -> some View {
         let facts: [(label: String, value: String)] = [
             ("Readiness", "\(c.readiness)"),
-            ("Energy", c.energy.formatted(.number.precision(.fractionLength(3)))),
+            ("Energy", c.energy.formatted(.number.precision(.fractionLength(2)))),
             ("HRV", c.hrv.map { "\(Int($0.rounded())) ms" } ?? "—"),
             ("Sleep", c.sleepHours.map { $0.formatted(.number.precision(.fractionLength(1))) + " h" } ?? "—"),
             ("Resting HR", c.restingHR.map { "\(Int($0.rounded())) bpm" } ?? "—"),
@@ -240,8 +240,7 @@ private struct DayDetailPage: View {
         return section("Body") {
             VStack(alignment: .leading, spacing: 12) {
                 HStack(spacing: 8) {
-                    Text("Tier").lr(.caption).foregroundStyle(LR.Color.inkSecondary)
-                    PillLabel(text: c.tier.rawValue)
+                    PillLabel(text: c.tier.dayText)
                     if let note = cycleNote(c) { PillLabel(text: note) }
                 }
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 130), alignment: .topLeading)],
@@ -254,7 +253,7 @@ private struct DayDetailPage: View {
                     }
                 }
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Routine load · random slots").lr(.caption).foregroundStyle(LR.Color.inkSecondary)
+                    Text("Routines · quests").lr(.caption).foregroundStyle(LR.Color.inkSecondary)
                     Text("\(c.routineLoad) · \(c.randomSlots)").lr(.bodyStrong).monospacedDigit()
                         .foregroundStyle(LR.Color.ink)
                 }
@@ -263,9 +262,9 @@ private struct DayDetailPage: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .lrCard(.surface, radius: LR.Radius.card)
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel("Body, tier \(c.tier.rawValue)" + (cycleNote(c).map { ", \($0)" } ?? ""))
+            .accessibilityLabel("Body, \(c.tier.dayText)" + (cycleNote(c).map { ", \($0)" } ?? ""))
             .accessibilityValue((facts.map { "\($0.label) \($0.value)" }
-                + ["Routine load, random slots \(c.routineLoad), \(c.randomSlots)"]).joined(separator: ", "))
+                + ["Routines \(c.routineLoad), quests \(c.randomSlots)"]).joined(separator: ", "))
         }
     }
 

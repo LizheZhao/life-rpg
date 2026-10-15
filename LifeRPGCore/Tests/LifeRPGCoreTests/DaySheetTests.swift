@@ -71,7 +71,7 @@ struct DaySheetTests {
         #expect(header.weekday == "Thursday")
         #expect(header.date == "October 1")
         #expect(header.coins == "+120 coins")
-        #expect(header.dayType == "normal day")
+        #expect(header.dayType == "Normal energy")
     }
 
     @Test func coinsAreSignedAndOneIsSingular() {
@@ -82,7 +82,7 @@ struct DaySheetTests {
 
     @Test func aDayWithoutContextHasNoDayTypeTag() {
         #expect(DaySheet.header(dayKey: day, net: 0, tier: nil, language: .en, timeZone: tz).dayType == nil)
-        #expect(DaySheet.header(dayKey: day, net: 0, tier: .veryLow, language: .en, timeZone: tz).dayType == "very low day")
+        #expect(DaySheet.header(dayKey: day, net: 0, tier: .veryLow, language: .en, timeZone: tz).dayType == "Running low")
     }
 
     // MARK: when it opens

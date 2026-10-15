@@ -24,7 +24,7 @@ public enum LibrarySave {
             switch self {
             case .emptyText: "the task needs a description"
             case .textTaken: "the library already has one with these words"
-            case .noDifficulty: "a routine is E, M or H"
+            case .noDifficulty: "pick easy, medium or hard"
             case .noWeekday: "pick at least one day"
             }
         }

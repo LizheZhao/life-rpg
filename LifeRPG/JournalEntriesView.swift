@@ -55,7 +55,7 @@ struct JournalEntriesView: View {
                             .padding(.top, 28)
                     }
                 }
-                .padding(.horizontal, 16)
+                .padding(.horizontal, LR.Spacing.inset)
                 .padding(.top, 18)
             }
             .scrollDismissesKeyboard(.interactively)

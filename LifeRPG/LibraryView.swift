@@ -282,7 +282,7 @@ struct LibraryView: View {
             try LibraryEdit.restore(entry.target, id: entry.id, in: context)
             Haptics.selection()
         } catch {
-            restoreError = "\(error)"
+            restoreError = ErrorText.message(error)
         }
     }
 
@@ -311,7 +311,7 @@ struct LibraryView: View {
             if !entry.isActive { try LibraryEdit.setActive(false, entry.target, id: entry.id, in: context) }
             Haptics.selection()
         } catch {
-            restoreError = "\(error)"
+            restoreError = ErrorText.message(error)
         }
         withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) { justDeleted = nil }
     }
@@ -667,7 +667,7 @@ private struct LibraryDetailView: View {
             try LibraryEdit.setActive(on, entry.target, id: entry.id, in: context)
             editError = nil
         } catch {
-            editError = "\(error)"
+            editError = ErrorText.message(error)
         }
     }
 
@@ -676,7 +676,7 @@ private struct LibraryDetailView: View {
             try LibraryEdit.setDifficulty(difficulty, forQuest: entry.id, in: context)
             editError = nil
         } catch {
-            editError = "\(error)"
+            editError = ErrorText.message(error)
         }
     }
 
@@ -685,7 +685,7 @@ private struct LibraryDetailView: View {
             try LibraryEdit.setDifficulty(difficulty, forRoutine: entry.id, in: context)
             editError = nil
         } catch {
-            editError = "\(error)"
+            editError = ErrorText.message(error)
         }
     }
 

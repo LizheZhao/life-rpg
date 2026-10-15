@@ -56,19 +56,11 @@ struct TrendsView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
-                    if case .locked = page?.content {
-                        Color.clear.frame(height: 44)
-                    } else {
-                        HStack {
-                            Spacer(minLength: 0)
-                            PeriodPicker(period: $period)
-                        }
-                        .padding(.top, 4)
-                    }
-                    Text("Trends").lr(.pageTitle).foregroundStyle(LR.Color.ink)
-                        .padding(.top, 14)
-                        .accessibilityAddTraits(.isHeader)
+                    PageHeader(title: "Trends")
                     subtitleRow.padding(.top, 4)
+                    if case .locked = page?.content {} else {
+                        PeriodPicker(period: $period).padding(.top, 14)
+                    }
                     if let page {
                         switch page.content {
                         case .locked(let locked): lockedContent(locked).padding(.top, 28)
@@ -77,11 +69,13 @@ struct TrendsView: View {
                     }
                     if !entries.isEmpty { entriesLink.padding(.top, 8) }
                 }
-                .padding(.horizontal, 16)
+                .padding(.horizontal, LR.Spacing.inset)
+                .padding(.top, 4)
                 .padding(.bottom, 12)
             }
             .reservingTabBarSpace()
             .background(LR.Color.canvas.ignoresSafeArea())
+            .statusBarFade()
             .toolbar(.hidden, for: .navigationBar)
             .task(id: key) {
                 // Let the page draw (and a tab switch finish) before the work.
@@ -125,7 +119,7 @@ struct TrendsView: View {
             Image(systemName: symbol)
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(LR.Color.iconNeutral)
-                .frame(width: 36, height: 36)
+                .frame(width: 44, height: 44)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -530,7 +524,8 @@ private struct PeriodPicker: View {
                                     .matchedGeometryEffect(id: "selected", in: slider)
                             }
                         }
-                        .contentShape(Capsule())
+                        .frame(minHeight: 44)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .accessibilityAddTraits(selected ? .isSelected : [])

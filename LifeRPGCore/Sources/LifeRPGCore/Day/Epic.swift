@@ -37,7 +37,7 @@ public enum Epic {
             switch self {
             case .notAnEpic: "not an epic"
             case .alreadyCompleted: "already completed"
-            case .expired(let last): "ran out on \(last)"
+            case .expired(let last): "ran out on \(PresentationText.shortDate(last))"
             case .maxExtensions: "already extended as many times as allowed"
             case .blocked(let b): b.description
             case .extended: "an extended epic can't be swapped"

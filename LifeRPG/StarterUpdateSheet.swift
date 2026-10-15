@@ -108,7 +108,7 @@ struct StarterUpdateSheet: View {
             try onAdd(picked)
             dismiss()
         } catch {
-            self.error = "\(error)"
+            self.error = ErrorText.message(error)
         }
     }
 }
